@@ -18,7 +18,7 @@ import com.music.PurelyPlayer.model.Playlist
 import com.music.PurelyPlayer.model.Song
 import com.music.PurelyPlayer.model.toEntity
 import com.music.PurelyPlayer.model.toSong
-import com.music.PurelyPlayer.ui.utils.BlurUtil
+import com.music.pureplayer.ui.utils.BlurUtil
 import kotlinx.coroutines.*
 import java.io.File
 import java.io.FileOutputStream
@@ -312,6 +312,27 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             // 2. 从当前内存列表中移除，这样 UI 才会立刻刷新
             // 假设你的 playlists 是一个 MutableStateList 或者 MutableList
             playlists.remove(playlist)
+        }
+    }
+    fun updatePlaylistSongs(playlistId: String, newSongIds: List<Long>) {
+        viewModelScope.launch {
+            // 1. 既然参数已经是 String，直接比较即可，toString() 是为了防止 it.id 可能是其他类型
+            val index = playlists.indexOfFirst { it.id.toString() == playlistId }
+
+            if (index != -1) {
+                // 2. 更新内存中的列表对象
+                val updatedPlaylist = playlists[index].copy(songIds = newSongIds)
+                playlists[index] = updatedPlaylist
+
+                // 3. 写入数据库
+                // 🚩 注意：请确保你的 PlaylistEntity 里的 id 字段也是 String 类型
+                // 如果 Entity 里的 id 是 Long，这里依然会因为 UUID 无法存入而报错
+                try {
+                    playlistDao.insertPlaylist(updatedPlaylist.toEntity())
+                } catch (e: Exception) {
+                    android.util.Log.e("PurelyPlayer", "数据库更新失败: ${e.message}")
+                }
+            }
         }
     }
 }

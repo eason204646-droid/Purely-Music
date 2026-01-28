@@ -147,9 +147,26 @@ fun MainScreen(viewModel: PlayerViewModel) {
                             playlist = playlist,
                             viewModel = viewModel,
                             onBack = { navController.popBackStack() },
-                            onNavigateToPlayer = { navController.navigate("player") }
+                            onNavigateToPlayer = { navController.navigate("player") },
+                            // 🚩 修复点 1：在这里传入跳转逻辑
+                            onNavigateToEditPlaylist = { id ->
+                                navController.navigate("edit_playlist/$id")
+                            }
                         )
                     }
+                }
+                composable(
+                    route = "edit_playlist/{playlistId}",
+                    arguments = listOf(navArgument("playlistId") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val playlistId = backStackEntry.arguments?.getString("playlistId") ?: ""
+
+                    // 🚩 修复点：直接传递 String，不再尝试转 Long
+                    EditPlaylistScreen(
+                        playlistId = playlistId,
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() }
+                    )
                 }
 
                 composable("player") {

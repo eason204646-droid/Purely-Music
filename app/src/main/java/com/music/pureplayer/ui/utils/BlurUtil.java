@@ -1,4 +1,4 @@
-package com.music.PurelyPlayer.ui.utils;
+package com.music.pureplayer.ui.utils;
 
 import android.graphics.Bitmap;
 
