@@ -60,7 +60,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation(libs.engage.core)
-
+    implementation("androidx.tracing:tracing:1.2.0")
     // 统一版本号
     val navVersion = "2.7.7"
     implementation("androidx.navigation:navigation-compose:$navVersion")
