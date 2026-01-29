@@ -1,4 +1,8 @@
 开源的安卓音乐播放器 purelyplayer
+
+
+
+
 一些预览图
 <img width="308" height="642" alt="image" src="https://github.com/user-attachments/assets/f14a75b6-d5ea-4d98-a13b-7fbbe07865da" />
 <img width="300" height="639" alt="image" src="https://github.com/user-attachments/assets/24167232-4ab1-4eee-8cd8-4c59b3f992c9" />
