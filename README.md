@@ -4,7 +4,8 @@
 
 注
 用于播放界面背景的虚化程序BlurUtil.java 使用 GitHub 开源项目anroid-image-blur
-####核心功能
+
+核心功能
 1.主页设计：包含近播放的歌曲以及所有的歌曲
 
 <img width="307" height="648" alt="studio64_2htQXzedCQ" src="https://github.com/user-attachments/assets/09454161-ea42-44c4-a10a-fc5d54ff77d6" />
