@@ -125,6 +125,7 @@
 //See the Mulan PSL v2 for more details.
 package com.music.PurelyPlayer.ui // 1. 确保包名一致
 
+import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -146,11 +147,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.media3.common.util.UnstableApi
 import coil.compose.AsyncImage
 import com.music.PurelyPlayer.model.Song       // 2. 这里的 model 路径也要改
 import com.music.PurelyPlayer.viewmodel.PlayerViewModel // 3. 这里的 viewmodel 路径也要改
 import com.music.PurelyPlayer.R                // 4. 资源文件引用
 
+@OptIn(UnstableApi::class)
 @Composable
 fun HomeScreen(viewModel: PlayerViewModel, onNavigateToPlayer: () -> Unit) {
     Column(
