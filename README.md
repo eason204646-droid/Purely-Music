@@ -43,8 +43,8 @@
 
 ### 编译运行
 1.  克隆仓库：
-    ```bash
-    git clone [https://github.com/your-username/PurelyPlayer.git](https://github.com/your-username/PurelyPlayer.git)
+    `[``bash
+    git clone [https://github.com/eason204646-droid/Purely-Music.git]((https://github.com/eason204646-droid/Purely-Music.git))]
     ```
 2.  使用 Android Studio 打开项目。
 3.  同步 Gradle 并直接运行 `app` 模块。
