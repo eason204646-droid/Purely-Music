@@ -1,5 +1,7 @@
 # PurelyPlayer 🎵
 
+> 📌 **提示**：若要查看最新代码，请前往 [master 分支](https://github.com/eason204646-droid/Purely-Music/tree/master)。
+
 一款基于 Jetpack Compose 构建的极简风格本地音乐播放器。专注于丝滑的交互体验与沉浸式的歌词展示。
 
 ![License](https://img.shields.io/badge/License-MulanPSL--2.0-blue.svg)
