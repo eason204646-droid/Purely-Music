@@ -278,6 +278,7 @@ fun SongItem(song: Song, onClick: () -> Unit) {
 }
 
 // MiniPlayer 组件 (由 MainActivity 调用)
+@OptIn(UnstableApi::class)
 @Composable
 fun MiniPlayer(viewModel: PlayerViewModel, onClick: () -> Unit) {
     val currentSong = viewModel.currentSong ?: return

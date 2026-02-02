@@ -125,11 +125,13 @@
 //See the Mulan PSL v2 for more details.
 package com.music.PurelyPlayer.ui
 
+import androidx.annotation.OptIn
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -142,10 +144,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.media3.common.util.UnstableApi
 // 导入对应的包
 import com.music.PurelyPlayer.viewmodel.PlayerViewModel
 import com.music.PurelyPlayer.model.LrcLine
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
 
+@OptIn(UnstableApi::class)
 @Composable
 fun LyricView(
     viewModel: PlayerViewModel,
@@ -154,39 +160,50 @@ fun LyricView(
     val lyrics = viewModel.lyricLines
     val currentIndex = viewModel.currentLyricIndex
     val listState = rememberLazyListState()
-
-    val configuration = LocalConfiguration.current
     val density = LocalDensity.current
 
-    // 🚩 使用 BoxWithConstraints 动态获取实际容器高度，比配置高度更准
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 28.dp),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.TopStart
     ) {
-        val halfScreenHeightPx = with(density) { maxHeight.toPx() / 2 }
+        val containerHeightPx = with(density) { maxHeight.toPx() }
+        val containerHeightDp = maxHeight
 
-        // 监听索引，执行居中滚动
+        // 🚩 目标位置：屏幕上方 1/4 (25%) 处
+        val targetLinePx = containerHeightPx * 0.25f
+        val targetLineDp = containerHeightDp * 0.25f
+
+        // 估算单行行高（包含文字和间距）用于平滑偏移
+        val lineHeightPx = with(density) { 56.dp.toPx() }
+
         LaunchedEffect(currentIndex) {
             if (lyrics.isNotEmpty() && currentIndex in lyrics.indices) {
                 listState.animateScrollToItem(
                     index = currentIndex,
-                    // 🚩 关键：这里的偏移量应该是负的“一半高度”减去大概一行歌词的高度
-                    scrollOffset = (-halfScreenHeightPx + with(density) { 40.dp.toPx() }).toInt()
+                    // 🚩 偏移计算：将当前项的顶部对齐到 1/4 处，并向上修正半行高度实现垂直居中于该线
+                    scrollOffset = (-targetLinePx + (lineHeightPx / 2)).toInt()
                 )
             }
         }
 
         if (lyrics.isEmpty()) {
-            Text(text = "暂无歌词", color = Color.Gray, textAlign = TextAlign.Center)
+            Text(
+                text = "暂无歌词",
+                color = Color.Gray.copy(alpha = 0.5f),
+                modifier = Modifier.align(Alignment.Center)
+            )
         } else {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.Start,
-                // 🚩 顶部和底部留出足够空间，确保首尾能居中
-                contentPadding = PaddingValues(top = maxHeight / 2, bottom = maxHeight / 2),
+                horizontalAlignment = Alignment.Start, // 靠左对齐
+                // 🚩 重点：顶部留 1/4，底部留 3/4。
+                contentPadding = PaddingValues(
+                    top = targetLineDp,
+                    bottom = containerHeightDp - targetLineDp
+                ),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 itemsIndexed(
@@ -196,15 +213,29 @@ fun LyricView(
                     val isCurrent = index == currentIndex
 
                     val fontSize by animateFloatAsState(targetValue = if (isCurrent) 24f else 18f, label = "fontSize")
-                    val textAlpha by animateFloatAsState(targetValue = if (isCurrent) 1f else 0.5f, label = "textAlpha")
+                    val textAlpha by animateFloatAsState(targetValue = if (isCurrent) 1f else 0.4f, label = "textAlpha")
+
+                    // 🚩 定义一个发光模糊半径的动画，当前行会有 12f 的光晕，非当前行无光晕
+                    val shadowBlur by animateFloatAsState(
+                        targetValue = if (isCurrent) 12f else 0f,
+                        label = "shadowBlur"
+                    )
 
                     Text(
                         text = line.content,
                         fontSize = fontSize.sp,
-                        lineHeight = (fontSize * 1.5f).sp,
+                        lineHeight = (fontSize * 1.4f).sp,
                         fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isCurrent) Color.White else Color.White.copy(alpha = 0.5f),
+                        color = Color.White,
                         textAlign = TextAlign.Start,
+                        style = LocalTextStyle.current.copy(
+                            // 🚩 核心：添加发光阴影效果
+                            shadow = if (isCurrent) Shadow(
+                                color = Color.White.copy(alpha = 0.6f), // 发光颜色：带透明度的白
+                                offset = Offset(0f, 0f),                // 偏移为0，光晕均匀向四周扩散
+                                blurRadius = shadowBlur                 // 模糊半径
+                            ) else null
+                        ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .alpha(textAlpha)

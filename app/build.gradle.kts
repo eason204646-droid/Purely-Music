@@ -10,14 +10,14 @@ plugins {
 
 android {
     namespace = "com.music.PurelyPlayer"
-    compileSdk = 35 // 🚩 建议修改为 35，36 目前兼容性风险极高
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.music.PurelyPlayer"
         minSdk = 26
         targetSdk = 34 // 🚩 同步建议修改为 35
-        versionCode = 3
-        versionName = "1.3"
+        versionCode = 4
+        versionName = "1.3.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

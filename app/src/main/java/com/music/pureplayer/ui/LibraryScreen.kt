@@ -325,14 +325,14 @@ fun ImportMusicDialog(
                     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
                     val annotatedString = androidx.compose.ui.text.buildAnnotatedString {
                         append("可以从 ")
-                        pushStringAnnotation(tag = "URL", annotation = "https://www.lrcgc.com/")
+                        pushStringAnnotation(tag = "URL", annotation = "https://xiaojiangclub.com/")
                         withStyle(
                             style = androidx.compose.ui.text.SpanStyle(
                                 color = MaterialTheme.colorScheme.primary,
                                 textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
                             )
                         ) {
-                            append("https://www.lrcgc.com/")
+                            append("https://xiaojiangclub.com/")
                         }
                         pop()
                         append(" 等网站下载")

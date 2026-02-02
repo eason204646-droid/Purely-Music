@@ -131,8 +131,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 // 🚩 1. 必须在 entities 中加入 PlaylistEntity::class
-// 🚩 2. version 必须升为 2，因为表结构变了
-@Database(entities = [SongEntity::class, PlaylistEntity::class], version = 3, exportSchema = false)
+@Database(entities = [SongEntity::class, PlaylistEntity::class], version = 4, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun songDao(): SongDao
