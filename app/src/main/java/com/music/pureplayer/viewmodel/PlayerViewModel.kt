@@ -126,6 +126,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+
     private val context = application.applicationContext
     private val songDao = AppDatabase.getDatabase(application).songDao()
     private val playlistDao = AppDatabase.getDatabase(application).playlistDao()
@@ -163,6 +164,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // 初始化 MediaSession
         mediaSession = MediaSessionCompat(context, "PurelyPlayer").apply {
             isActive = true
+            // 🚩 核心修复：添加回调监听系统指令
+            setCallback(object : MediaSessionCompat.Callback() {
+                override fun onPlay() { togglePlayPause() }
+                override fun onPause() { togglePlayPause() }
+                override fun onSkipToNext() { playNext() }
+                override fun onSkipToPrevious() { playPrevious() }
+                override fun onSeekTo(pos: Long) { seekTo(pos.toFloat()) } // 支持系统进度条拖动
+            })
         }
         refreshData()
         startTimer()
@@ -280,8 +289,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             while (true) {
                 if (isPlaying) {
                     currentPosition = mediaPlayer?.currentPosition?.toLong() ?: 0L
+                    // 🚩 核心修复：每秒钟同步一次给系统，确保锁屏进度条在走
+                    updatePlaybackState(true)
                 }
-                delay(500)
+                delay(1000) // 1秒同步一次即可，减少性能开销
             }
         }
     }
@@ -334,8 +345,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun updatePlaybackState(playing: Boolean) {
         val state = if (playing) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
         val stateBuilder = PlaybackStateCompat.Builder()
+            // 🚩 核心修复：传入 currentPosition，系统进度条才会显示正确位置
             .setState(state, currentPosition, 1.0f)
-            .setActions(PlaybackStateCompat.ACTION_PLAY_PAUSE or PlaybackStateCompat.ACTION_SKIP_TO_NEXT or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
+            .setActions(
+                PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                        PlaybackStateCompat.ACTION_PLAY or
+                        PlaybackStateCompat.ACTION_PAUSE or
+                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                        PlaybackStateCompat.ACTION_SEEK_TO // 🚩 核心修复：启用进度条拖动权限
+            )
         mediaSession?.setPlaybackState(stateBuilder.build())
     }
 
