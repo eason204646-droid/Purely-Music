@@ -16,8 +16,8 @@ android {
         applicationId = "com.music.PurelyPlayer"
         minSdk = 26
         targetSdk = 34 // 🚩 同步建议修改为 35
-        versionCode = 4
-        versionName = "1.3.1"
+        versionCode = 6
+        versionName = "1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

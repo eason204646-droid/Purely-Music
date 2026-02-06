@@ -98,6 +98,38 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
     }
+
+    // 从歌单中删除歌曲
+    fun removeSongFromPlaylist(playlistId: String, songId: Long) {
+        viewModelScope.launch {
+            val index = playlists.indexOfFirst { it.id.toString() == playlistId }
+            if (index != -1) {
+                val updatedSongIds = playlists[index].songIds.filter { it != songId }
+                val updatedPlaylist = playlists[index].copy(songIds = updatedSongIds)
+                playlists[index] = updatedPlaylist
+                playlistDao.insertPlaylist(updatedPlaylist.toEntity())
+            }
+        }
+    }
+
+    // 添加歌曲到歌单
+    fun addSongsToPlaylist(playlistId: String, songIds: List<Long>) {
+        viewModelScope.launch {
+            val index = playlists.indexOfFirst { it.id.toString() == playlistId }
+            if (index != -1) {
+                val currentSongIds = playlists[index].songIds.toMutableList()
+                songIds.forEach { songId ->
+                    if (!currentSongIds.contains(songId)) {
+                        currentSongIds.add(songId)
+                    }
+                }
+                val updatedPlaylist = playlists[index].copy(songIds = currentSongIds)
+                playlists[index] = updatedPlaylist
+                playlistDao.insertPlaylist(updatedPlaylist.toEntity())
+            }
+        }
+    }
+
     private fun copyFile(uri: Uri, fileName: String): String? {
         return try {
             val input = context.contentResolver.openInputStream(uri)
@@ -159,6 +191,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     var tempMusicUri by mutableStateOf<Uri?>(null)
     var tempCoverUri by mutableStateOf<Uri?>(null)
     var tempLrcUri by mutableStateOf<Uri?>(null)
+
+    // 编辑歌曲状态
+    var editingSong by mutableStateOf<Song?>(null)
+    var editTitle by mutableStateOf("")
+    var editArtist by mutableStateOf("")
+    var editCoverUri by mutableStateOf<Uri?>(null)
+    var editLrcUri by mutableStateOf<Uri?>(null)
+
+    // 添加歌曲到歌单的状态
+    var showAddSongDialog by mutableStateOf(false)
+    var selectedPlaylistForAdd by mutableStateOf<String?>(null)
+    var selectedSongsForAdd by mutableStateOf<Set<Long>>(emptySet())
 
     init {
         // 初始化 MediaSession
@@ -327,6 +371,72 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    // 开始编辑歌曲
+    fun startEditSong(song: Song) {
+        editingSong = song
+        editTitle = song.title
+        editArtist = song.artist
+        editCoverUri = song.coverUri?.let { Uri.parse(it) }
+        editLrcUri = song.lrcPath?.let { Uri.parse(it) }
+    }
+
+    // 保存编辑的歌曲
+    fun saveEditedSong() {
+        val song = editingSong ?: return
+        if (editTitle.isBlank()) return
+
+        viewModelScope.launch {
+            // 如果更换了封面或歌词，需要复制新文件
+            val newCoverPath = editCoverUri?.let { uri ->
+                if (uri.toString() != song.coverUri) {
+                    copyFile(uri, "cov_${System.currentTimeMillis()}.jpg")
+                } else {
+                    song.coverUri
+                }
+            }
+
+            val newLrcPath = editLrcUri?.let { uri ->
+                if (uri.toString() != song.lrcPath) {
+                    copyFile(uri, "lrc_${System.currentTimeMillis()}.lrc")
+                } else {
+                    song.lrcPath
+                }
+            }
+
+            val updatedSong = song.copy(
+                title = editTitle,
+                artist = editArtist,
+                coverUri = newCoverPath,
+                lrcPath = newLrcPath
+            )
+
+            songDao.updateSong(updatedSong.toEntity())
+            refreshData()
+
+            // 如果正在播放这首歌，更新当前歌曲信息
+            if (currentSong?.id == song.id) {
+                currentSong = updatedSong
+                updateMediaSession(updatedSong)
+            }
+
+            // 清理编辑状态
+            editingSong = null
+            editTitle = ""
+            editArtist = ""
+            editCoverUri = null
+            editLrcUri = null
+        }
+    }
+
+    // 取消编辑
+    fun cancelEditSong() {
+        editingSong = null
+        editTitle = ""
+        editArtist = ""
+        editCoverUri = null
+        editLrcUri = null
+    }
+
     // --- 系统通知栏同步 ---
     private fun updateMediaSession(song: Song) {
         val metadataBuilder = MediaMetadataCompat.Builder()
@@ -360,7 +470,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun updateBlurBackground(path: String?) {
         viewModelScope.launch(Dispatchers.IO) {
-            val bitmap = path?.let { if (File(it).exists()) BitmapFactory.decodeFile(it) else null }
+            val bitmap = if (path != null && File(path).exists()) {
+                BitmapFactory.decodeFile(path)
+            } else {
+                // 加载默认封面
+                val resourceId = context.resources.getIdentifier("default_cover", "drawable", context.packageName)
+                BitmapFactory.decodeResource(context.resources, resourceId)
+            }
             val blurred = bitmap?.let { BlurUtil.doBlur(it, 8, 20) }
             withContext(Dispatchers.Main) { blurredBackground = blurred }
         }

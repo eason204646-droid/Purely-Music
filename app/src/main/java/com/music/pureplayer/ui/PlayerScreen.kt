@@ -11,7 +11,7 @@
 //
 //Mulan Permissive Software License，Version 2
 //
-//Mulan Permissive Software License，Version 2 (Mulan PSL v2)
+//Mulan Permissive Software License，Version 2
 //
 //January 2020 http://license.coscl.org.cn/MulanPSL2
 //
@@ -30,11 +30,8 @@
 //Contributor means the Individual or Legal Entity who licenses its
 //copyrightable work under this License.
 //
-//Legal Entity means the entity making a Contribution and all its
-//Affiliates.
-//
 //Affiliates means entities that control, are controlled by, or are under
-//common control with the acting entity under this License, ‘control’ means
+//common control with the acting entity under this License, 'control' means
 //direct or indirect ownership of at least fifty percent (50%) of the voting
 //power, capital or other securities of controlled or commonly controlled
 //entity.
@@ -52,24 +49,20 @@
 //grants to you a perpetual, worldwide, royalty-free, non-exclusive,
 //irrevocable (except for revocation under this Section) patent license to
 //make, have made, use, offer for sale, sell, import or otherwise transfer its
-//Contribution, where such patent license is only limited to the patent claims
+//Contribution where such patent license is only limited to the patent claims
 //owned or controlled by such Contributor now or in future which will be
 //necessarily infringed by its Contribution alone, or by combination of the
 //Contribution with the Software to which the Contribution was contributed.
+//
 //The patent license shall not apply to any modification of the Contribution,
-//and any other combination which includes the Contribution. If you or your
-//Affiliates directly or indirectly institute patent litigation (including a
-//cross claim or counterclaim in a litigation) or other patent enforcement
-//activities against any individual or entity by alleging that the Software or
-//any Contribution in it infringes patents, then any patent license granted to
-//you under this License for the Software shall terminate as of the date such
-//litigation or activity is filed or taken.
+//and any other combination which includes the Contribution in it, or to any
+//other combination which includes the Contribution in it.
 //
 //3. No Trademark License
 //
 //No trademark license is granted to use the trade names, trademarks, service
-//marks, or product names of Contributor, except as required to fulfill notice
-//requirements in section 4.
+//marks, or product names of Contributor, except as required for fulfillment of
+//notice requirements in section 4.
 //
 //4. Distribution Restriction
 //
@@ -81,19 +74,16 @@
 //5. Disclaimer of Warranty and Limitation of Liability
 //
 //THE SOFTWARE AND CONTRIBUTION IN IT ARE PROVIDED WITHOUT WARRANTIES OF ANY
-//KIND, EITHER EXPRESS OR IMPLIED. IN NO EVENT SHALL ANY CONTRIBUTOR OR
-//COPYRIGHT HOLDER BE LIABLE TO YOU FOR ANY DAMAGES, INCLUDING, BUT NOT
-//LIMITED TO ANY DIRECT, OR INDIRECT, SPECIAL OR CONSEQUENTIAL DAMAGES ARISING
-//FROM YOUR USE OR INABILITY TO USE THE SOFTWARE OR THE CONTRIBUTION IN IT, NO
-//MATTER HOW IT’S CAUSED OR BASED ON WHICH LEGAL THEORY, EVEN IF ADVISED OF
-//THE POSSIBILITY OF SUCH DAMAGES.
+//KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+//NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+//See the Mulan PSL v2 for more details.
 //
 //6. Language
 //
 //THIS LICENSE IS WRITTEN IN BOTH CHINESE AND ENGLISH, AND THE CHINESE VERSION
 //AND ENGLISH VERSION SHALL HAVE THE SAME LEGAL EFFECT. IN THE CASE OF
-//DIVERGENCE BETWEEN THE CHINESE AND ENGLISH VERSIONS, THE CHINESE VERSION
-//SHALL PREVAIL.
+//DIVERGENCE BETWEEN THE CHINESE VERSION AND ENGLISH VERSION, THE CHINESE
+//VERSION SHALL PREVAIL.
 //
 //END OF THE TERMS AND CONDITIONS
 //
@@ -154,23 +144,27 @@ import androidx.media3.common.util.UnstableApi
 import coil.compose.AsyncImage
 import com.music.PurelyPlayer.R
 import com.music.PurelyPlayer.viewmodel.PlayerViewModel
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.IconButtonDefaults
-// 如果报错找不到 CircleShape，确保也有这个：
-import androidx.compose.foundation.shape.CircleShape
 
-@OptIn(UnstableApi::class)
+@OptIn(UnstableApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
     val currentSong = viewModel.currentSong
     val isPlaying = viewModel.isPlaying
 
-    // 🚩 新增：歌词显示切换状态
     var showLyrics by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(
+                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF1A1A1A),
+                        Color(0xFF0D0D0D),
+                        Color(0xFF000000)
+                    )
+                )
+            )
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
@@ -192,7 +186,6 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                 }
             }
     ) {
-        // 1. 背景层
         Crossfade(targetState = viewModel.blurredBackground, label = "Blur") { bitmap ->
             if (bitmap != null) {
                 Image(
@@ -206,10 +199,19 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
             }
         }
 
-        // 2. 遮罩层
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)))
+        Box(
+            modifier = Modifier.fillMaxSize().background(
+                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Black.copy(alpha = 0.4f),
+                        Color.Black.copy(alpha = 0.5f),
+                        Color.Black.copy(alpha = 0.7f),
+                        Color.Black.copy(alpha = 0.85f)
+                    )
+                )
+            )
+        )
 
-        // --- 内容层 (层级 3) ---
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -217,159 +219,224 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                 .navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1. 顶部栏
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.Default.KeyboardArrowDown, null, tint = Color.White, modifier = Modifier.size(32.dp))
-                }
-                Text("正在播放", modifier = Modifier.weight(1f), textAlign = TextAlign.Center, color = Color.White)
-                Spacer(modifier = Modifier.width(48.dp))
-            }
+// 🚩 顶部半透明横条提示下滑返回
+Box(
+    modifier = Modifier
+        .fillMaxWidth()
+        .padding(top = 8.dp),
+    contentAlignment = Alignment.Center
+) {
+    Box(
+        modifier = Modifier
+            .width(60.dp)
+            .height(4.dp)
+            .background(
+                color = Color.White.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(2.dp)
+            )
+    )
+}
 
-            // 2. 核心区：封面/歌词切换
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(vertical = 20.dp),
+                    .padding(horizontal = 24.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Crossfade(targetState = showLyrics, label = "ContentSwitch") { isLyrics ->
                     if (isLyrics) {
-                        // 🚩 歌词视图：撑满可用空间
                         LyricView(
                             viewModel = viewModel,
                             modifier = Modifier.fillMaxSize()
                         )
                     } else {
-                        // 🚩 封面视图
-                        Surface(
+                        Box(
                             modifier = Modifier
-                                .sizeIn(maxWidth = 300.dp, maxHeight = 300.dp)
+                                .fillMaxWidth(0.8f)
                                 .aspectRatio(1f)
-                                .clickable { showLyrics = true }, // 点击封面也能切歌词
-                            shape = RoundedCornerShape(16.dp),
-                            shadowElevation = 12.dp
+                                .clickable { showLyrics = true }
                         ) {
-                            AsyncImage(
-                                model = currentSong?.coverUri ?: R.drawable.default_cover,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(6.dp)
+                                    .background(
+                                        brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                                            colors = listOf(
+                                                com.music.PurelyPlayer.ui.theme.RedPrimary.copy(alpha = 0.4f),
+                                                com.music.PurelyPlayer.ui.theme.RedPrimary.copy(alpha = 0.2f),
+                                                Color.Transparent
+                                            ),
+                                            radius = 400f
+                                        ),
+                                        shape = RoundedCornerShape(24.dp)
+                                    )
                             )
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(6.dp),
+                                shape = RoundedCornerShape(20.dp),
+                                shadowElevation = 16.dp,
+                                tonalElevation = 8.dp
+                            ) {
+                                AsyncImage(
+                                    model = currentSong?.coverUri ?: R.drawable.default_cover,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // 3. 歌曲信息
             Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.Start
             ) {
                 Text(
                     text = currentSong?.title ?: "未知曲目",
-                    color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                    color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    lineHeight = 28.sp
                 )
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = currentSong?.artist ?: "未知艺术家",
-                    color = Color.White.copy(alpha = 0.7f), fontSize = 18.sp
+                    color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
                 )
             }
 
-            // 4. 进度条
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp)) {
                 Slider(
                     value = viewModel.currentPosition.toFloat(),
                     onValueChange = { viewModel.seekTo(it) },
                     valueRange = 0f..(viewModel.duration.toFloat().coerceAtLeast(1f)),
-                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White)
+                    colors = SliderDefaults.colors(
+                        thumbColor = Color.White,
+                        activeTrackColor = Color.White,
+                        inactiveTrackColor = Color.White.copy(alpha = 0.3f),
+                        activeTickColor = Color.White,
+                        inactiveTickColor = Color.White.copy(alpha = 0.3f)
+                    )
                 )
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    Text(formatTime(viewModel.currentPosition), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                    Text(formatTime(viewModel.currentPosition), color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     Spacer(modifier = Modifier.weight(1f))
-                    Text(formatTime(viewModel.duration), color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                    Text(formatTime(viewModel.duration), color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
             }
 
-            // 5. 控制按键区 (Material 3 风格)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 32.dp),
-                horizontalArrangement = Arrangement.SpaceBetween, // 更加分散，留出点击空间
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 歌词/封面切换 (标准按钮)
-                IconButton(onClick = { showLyrics = !showLyrics }) {
-                    Icon(
-                        imageVector = if (showLyrics) Icons.Default.Album else Icons.Default.Notes,
-                        contentDescription = "切换显示模式",
-                        tint = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-
-                // 上一首 (色调按钮)
-                IconButton(
-                    onClick = { viewModel.playPrevious() },
-                    modifier = Modifier.size(56.dp)
-                ) {
-                    Icon(
-                        Icons.Default.SkipPrevious,
-                        contentDescription = "上一首",
-                        tint = Color.White,
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-
-                // 播放/暂停 (大号填充按钮 - 视觉焦点)
-                FilledIconButton(
-                    onClick = { viewModel.togglePlayPause() },
-                    modifier = Modifier.size(84.dp),
+                Surface(
+                    onClick = { showLyrics = !showLyrics },
                     shape = CircleShape,
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = Color.White, // 保持醒目的白色
-                        contentColor = Color.Black    // 图标反色
-                    )
+                    color = Color.Transparent,
+                    modifier = Modifier.size(48.dp)
                 ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = "播放/暂停",
-                        modifier = Modifier.size(48.dp)
-                    )
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Icon(
+                            imageVector = if (showLyrics) Icons.Default.Album else Icons.Default.Notes,
+                            contentDescription = "切换显示模式",
+                            tint = Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
                 }
 
-                // 下一首 (色调按钮)
-                IconButton(
+                Surface(
+                    onClick = { viewModel.playPrevious() },
+                    shape = CircleShape,
+                    color = Color.Transparent,
+                    modifier = Modifier.size(64.dp)
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Icon(
+                            Icons.Default.SkipPrevious,
+                            contentDescription = "上一首",
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
+
+                Surface(
+                    onClick = { viewModel.togglePlayPause() },
+                    shape = CircleShape,
+                    color = Color.Transparent,
+                    modifier = Modifier.size(96.dp)
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = "播放/暂停",
+                            tint = Color.White,
+                            modifier = Modifier.size(48.dp)
+                        )
+                    }
+                }
+
+                Surface(
                     onClick = { viewModel.playNext() },
-                    modifier = Modifier.size(56.dp)
+                    shape = CircleShape,
+                    color = Color.Transparent,
+                    modifier = Modifier.size(64.dp)
                 ) {
-                    Icon(
-                        Icons.Default.SkipNext,
-                        contentDescription = "下一首",
-                        tint = Color.White,
-                        modifier = Modifier.size(36.dp)
-                    )
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Icon(
+                            Icons.Default.SkipNext,
+                            contentDescription = "下一首",
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
                 }
 
-                // 收藏 (标准按钮)
-                IconButton(onClick = { /* 收藏逻辑 */ }) {
-                    Icon(
-                        imageVector = Icons.Default.FavoriteBorder,
-                        contentDescription = "收藏",
-                        tint = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.size(28.dp)
-                    )
+                Surface(
+                    onClick = { /* 收藏逻辑 */ },
+                    shape = CircleShape,
+                    color = Color.Transparent,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FavoriteBorder,
+                            contentDescription = "收藏",
+                            tint = Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
                 }
             }
         }
     }
 }
+
 private fun formatTime(ms: Long): String {
     val totalSeconds = (ms / 1000).coerceAtLeast(0)
     val minutes = totalSeconds / 60

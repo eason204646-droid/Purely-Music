@@ -139,6 +139,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlaylistAdd
@@ -180,6 +181,15 @@ fun LibraryScreen(
             viewModel = viewModel,
             onPickCover = onPickCover,
             onPickLrc = onPickLrc // 🚩 传入对话框
+        )
+    }
+
+    // 编辑歌曲对话框
+    if (viewModel.editingSong != null) {
+        EditSongDialog(
+            viewModel = viewModel,
+            onPickCover = onPickCover,
+            onPickLrc = onPickLrc
         )
     }
 
@@ -369,50 +379,198 @@ fun ImportMusicDialog(
     )
 }
 
+// 编辑歌曲信息对话框
+@androidx.annotation.OptIn(UnstableApi::class)
+@Composable
+fun EditSongDialog(
+    viewModel: PlayerViewModel,
+    onPickCover: () -> Unit,
+    onPickLrc: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = { viewModel.cancelEditSong() },
+        title = { Text("编辑歌曲信息", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                TextField(
+                    value = viewModel.editTitle,
+                    onValueChange = { viewModel.editTitle = it },
+                    label = { Text("歌曲名称") },
+                    singleLine = true
+                )
+                TextField(
+                    value = viewModel.editArtist,
+                    onValueChange = { viewModel.editArtist = it },
+                    label = { Text("歌手") },
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 封面选择
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = onPickCover) { Text("更换封面") }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    if (viewModel.editCoverUri != null) {
+                        AsyncImage(
+                            model = viewModel.editCoverUri,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) { Icon(Icons.Default.MusicNote, contentDescription = null) }
+                    }
+                }
+
+                // 歌词选择
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(onClick = onPickLrc) { Text("更换歌词 (LRC)") }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        if (viewModel.editLrcUri != null) {
+                            Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Text("已选择", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+
+                    // 歌词下载链接
+                    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                    val annotatedString = androidx.compose.ui.text.buildAnnotatedString {
+                        append("可以从 ")
+                        pushStringAnnotation(tag = "URL", annotation = "https://xiaojiangclub.com/")
+                        withStyle(
+                            style = androidx.compose.ui.text.SpanStyle(
+                                color = MaterialTheme.colorScheme.primary,
+                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                            )
+                        ) {
+                            append("https://xiaojiangclub.com/")
+                        }
+                        pop()
+                        append(" 等网站下载")
+                    }
+
+                    androidx.compose.foundation.text.ClickableText(
+                        text = annotatedString,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            fontSize = 11.sp
+                        ),
+                        modifier = Modifier.padding(top = 4.dp, start = 4.dp),
+                        onClick = { offset ->
+                            annotatedString.getStringAnnotations(tag = "URL", start = offset, end = offset)
+                                .firstOrNull()?.let { annotation ->
+                                    uriHandler.openUri(annotation.item)
+                                }
+                        }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                if (viewModel.editTitle.isNotBlank()) {
+                    viewModel.saveEditedSong()
+                }
+            }) { Text("保存") }
+        },
+        dismissButton = {
+            TextButton(onClick = { viewModel.cancelEditSong() }) { Text("取消") }
+        }
+    )
+}
+
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PlaylistItem(playlist: Playlist, viewModel: PlayerViewModel, onClick: () -> Unit) {
     // 控制菜单显示状态
     var expanded by remember { mutableStateOf(false) }
+    var isHovered by remember { mutableStateOf(false) }
 
     Box {
         Column(
             modifier = Modifier
-                .width(120.dp)
+                .width(130.dp)
                 // 🚩 仅将 clickable 改为 combinedClickable 以支持长按
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = { expanded = true }
                 )
         ) {
-            AsyncImage(
-                model = playlist.coverUri ?: R.drawable.default_cover,
-                contentDescription = null,
+            Box(
                 modifier = Modifier
-                    .size(120.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentScale = ContentScale.Crop
-            )
+                    .size(130.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                            colors = listOf(
+                                com.music.PurelyPlayer.ui.theme.RedLight,
+                                com.music.PurelyPlayer.ui.theme.RedPrimary
+                            )
+                        )
+                    )
+            ) {
+                AsyncImage(
+                    model = playlist.coverUri ?: R.drawable.default_cover,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(16.dp)),
+                    contentScale = ContentScale.Crop
+                )
+
+                // 歌曲数量徽章
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.Black.copy(alpha = 0.6f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "${playlist.songIds.size}",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
             Text(
                 text = playlist.name,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 8.dp)
+                modifier = Modifier.padding(top = 10.dp),
+                color = MaterialTheme.colorScheme.onBackground
             )
         }
 
         // 🚩 长按弹出的删除选项
         DropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
         ) {
             DropdownMenuItem(
-                text = { Text("删除歌单", color = Color.Red) },
-                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red) },
+                text = { Text("删除歌单", color = com.music.PurelyPlayer.ui.theme.RedPrimary) },
+                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = com.music.PurelyPlayer.ui.theme.RedPrimary) },
                 onClick = {
                     viewModel.deletePlaylist(playlist)
                     expanded = false
@@ -460,6 +618,14 @@ fun SongGridItem(song: Song, viewModel: PlayerViewModel, onNavigateToPlayer: () 
                 text = { Text("收藏") },
                 leadingIcon = { Icon(Icons.Default.FavoriteBorder, null) },
                 onClick = { expanded = false }
+            )
+            DropdownMenuItem(
+                text = { Text("编辑") },
+                leadingIcon = { Icon(Icons.Default.Edit, null) },
+                onClick = {
+                    viewModel.startEditSong(song)
+                    expanded = false
+                }
             )
             DropdownMenuItem(
                 text = { Text("删除", color = Color.Red) },

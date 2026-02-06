@@ -282,11 +282,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
                             playlist = playlist,
                             viewModel = viewModel,
                             onBack = { navController.popBackStack() },
-                            onNavigateToPlayer = { navController.navigate("player") },
-                            // 🚩 修复点 1：在这里传入跳转逻辑
-                            onNavigateToEditPlaylist = { id ->
-                                navController.navigate("edit_playlist/$id")
-                            }
+                            onNavigateToPlayer = { navController.navigate("player") }
                         )
                     }
                 }

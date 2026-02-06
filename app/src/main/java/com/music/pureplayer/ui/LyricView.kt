@@ -165,7 +165,7 @@ fun LyricView(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 28.dp),
+            .padding(horizontal = 0.dp),
         contentAlignment = Alignment.TopStart
     ) {
         val containerHeightPx = with(density) { maxHeight.toPx() }
@@ -237,7 +237,6 @@ fun LyricView(
                             ) else null
                         ),
                         modifier = Modifier
-                            .fillMaxWidth()
                             .alpha(textAlpha)
                             .padding(vertical = 4.dp)
                     )
