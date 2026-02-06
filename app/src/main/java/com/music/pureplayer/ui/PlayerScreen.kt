@@ -150,7 +150,6 @@ import com.music.PurelyPlayer.viewmodel.PlayerViewModel
 fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
     val currentSong = viewModel.currentSong
     val isPlaying = viewModel.isPlaying
-
     var showLyrics by remember { mutableStateOf(false) }
 
     Box(
@@ -186,6 +185,7 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                 }
             }
     ) {
+        // --- 背景层 (Crossfade 模糊图) ---
         Crossfade(targetState = viewModel.blurredBackground, label = "Blur") { bitmap ->
             if (bitmap != null) {
                 Image(
@@ -199,19 +199,14 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
             }
         }
 
-        Box(
-            modifier = Modifier.fillMaxSize().background(
-                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Black.copy(alpha = 0.4f),
-                        Color.Black.copy(alpha = 0.5f),
-                        Color.Black.copy(alpha = 0.7f),
-                        Color.Black.copy(alpha = 0.85f)
-                    )
-                )
+        // --- 遮罩层 ---
+        Box(modifier = Modifier.fillMaxSize().background(
+            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                colors = listOf(Color.Black.copy(alpha = 0.4f), Color.Black.copy(alpha = 0.85f))
             )
-        )
+        ))
 
+        // --- 内容层 ---
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -219,220 +214,128 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                 .navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-// 🚩 顶部半透明横条提示下滑返回
-Box(
-    modifier = Modifier
-        .fillMaxWidth()
-        .padding(top = 8.dp),
-    contentAlignment = Alignment.Center
-) {
-    Box(
-        modifier = Modifier
-            .width(60.dp)
-            .height(4.dp)
-            .background(
-                color = Color.White.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(2.dp)
-            )
-    )
-}
+            // 顶部提示条
+            Box(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.width(60.dp).height(4.dp).background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(2.dp)))
+            }
 
+            // 1. 歌词/封面显示区域 (保持较大权重)
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .weight(3.0f) // 稍微增加权重
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Crossfade(targetState = showLyrics, label = "ContentSwitch") { isLyrics ->
                     if (isLyrics) {
-                        LyricView(
-                            viewModel = viewModel,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        LyricView(viewModel = viewModel, modifier = Modifier.fillMaxSize())
                     } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.8f)
-                                .aspectRatio(1f)
-                                .clickable { showLyrics = true }
+                        // ... 保持原有封面 Surface 代码不变 ...
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(0.8f).aspectRatio(1f).clickable { showLyrics = true },
+                            shape = RoundedCornerShape(20.dp),
+                            shadowElevation = 16.dp
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(6.dp)
-                                    .background(
-                                        brush = androidx.compose.ui.graphics.Brush.radialGradient(
-                                            colors = listOf(
-                                                com.music.PurelyPlayer.ui.theme.RedPrimary.copy(alpha = 0.4f),
-                                                com.music.PurelyPlayer.ui.theme.RedPrimary.copy(alpha = 0.2f),
-                                                Color.Transparent
-                                            ),
-                                            radius = 400f
-                                        ),
-                                        shape = RoundedCornerShape(24.dp)
-                                    )
+                            AsyncImage(
+                                model = currentSong?.coverUri ?: R.drawable.default_cover,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop
                             )
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(6.dp),
-                                shape = RoundedCornerShape(20.dp),
-                                shadowElevation = 16.dp,
-                                tonalElevation = 8.dp
-                            ) {
-                                AsyncImage(
-                                    model = currentSong?.coverUri ?: R.drawable.default_cover,
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            }
                         }
                     }
                 }
             }
 
-            Column(
+            // 2. 歌曲信息区域 + 模式切换按钮 (将切换键移到这里)
+            Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
-                horizontalAlignment = Alignment.Start
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = currentSong?.title ?: "未知曲目",
-                    color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    lineHeight = 28.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = currentSong?.artist ?: "未知艺术家",
-                    color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = currentSong?.title ?: "未知曲目", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(text = currentSong?.artist ?: "未知艺术家", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
+                }
+
+                // 🚩 原本底部的歌词键上移到此处
+                IconButton(onClick = { showLyrics = !showLyrics }) {
+                    Icon(
+                        imageVector = if (showLyrics) Icons.Default.Album else Icons.Default.Notes,
+                        contentDescription = "模式切换",
+                        tint = Color.White.copy(alpha = 0.9f),
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
 
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp)) {
+            // 3. 进度条区域
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
                 Slider(
                     value = viewModel.currentPosition.toFloat(),
                     onValueChange = { viewModel.seekTo(it) },
                     valueRange = 0f..(viewModel.duration.toFloat().coerceAtLeast(1f)),
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color.White,
-                        activeTrackColor = Color.White,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.3f),
-                        activeTickColor = Color.White,
-                        inactiveTickColor = Color.White.copy(alpha = 0.3f)
-                    )
+                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.3f))
                 )
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                    Text(formatTime(viewModel.currentPosition), color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Text(formatTime(viewModel.currentPosition), color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
                     Spacer(modifier = Modifier.weight(1f))
-                    Text(formatTime(viewModel.duration), color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text(formatTime(viewModel.duration), color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
                 }
             }
 
-            Row(
+            // 4. 底部控制区 (居中悬浮逻辑)
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+                    .weight(1.5f) // 这里的权重负责进度条与底部的间距
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
             ) {
-                Surface(
-                    onClick = { showLyrics = !showLyrics },
-                    shape = CircleShape,
-                    color = Color.Transparent,
-                    modifier = Modifier.size(48.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Icon(
-                            imageVector = if (showLyrics) Icons.Default.Album else Icons.Default.Notes,
-                            contentDescription = "切换显示模式",
-                            tint = Color.White.copy(alpha = 0.9f),
-                            modifier = Modifier.size(26.dp)
-                        )
+                    // 收藏键
+                    IconButton(onClick = { /* 收藏逻辑 */ }, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.FavoriteBorder, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(26.dp))
                     }
-                }
 
-                Surface(
-                    onClick = { viewModel.playPrevious() },
-                    shape = CircleShape,
-                    color = Color.Transparent,
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Icon(
-                            Icons.Default.SkipPrevious,
-                            contentDescription = "上一首",
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
-                        )
+                    // 上一首
+                    IconButton(onClick = { viewModel.playPrevious() }, modifier = Modifier.size(70.dp)) {
+                        Icon(Icons.Default.SkipPrevious, null, tint = Color.White, modifier = Modifier.size(42.dp))
                     }
-                }
 
-                Surface(
-                    onClick = { viewModel.togglePlayPause() },
-                    shape = CircleShape,
-                    color = Color.Transparent,
-                    modifier = Modifier.size(96.dp)
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize()
+                    // 播放/暂停 (绝对居中)
+                    Surface(
+                        onClick = { viewModel.togglePlayPause() },
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = 0.15f), // 给播放按钮加一个淡淡的底圈，更美观
+                        modifier = Modifier.size(90.dp)
                     ) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = "播放/暂停",
-                            tint = Color.White,
-                            modifier = Modifier.size(48.dp)
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(56.dp)
+                            )
+                        }
                     }
-                }
 
-                Surface(
-                    onClick = { viewModel.playNext() },
-                    shape = CircleShape,
-                    color = Color.Transparent,
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Icon(
-                            Icons.Default.SkipNext,
-                            contentDescription = "下一首",
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
-                        )
+                    // 下一首
+                    IconButton(onClick = { viewModel.playNext() }, modifier = Modifier.size(70.dp)) {
+                        Icon(Icons.Default.SkipNext, null, tint = Color.White, modifier = Modifier.size(42.dp))
                     }
-                }
 
-                Surface(
-                    onClick = { /* 收藏逻辑 */ },
-                    shape = CircleShape,
-                    color = Color.Transparent,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FavoriteBorder,
-                            contentDescription = "收藏",
-                            tint = Color.White.copy(alpha = 0.9f),
-                            modifier = Modifier.size(26.dp)
-                        )
+                    // 更多/列表键 (填补收藏键对称位置，或者保留空白)
+                    IconButton(onClick = { /* 其他逻辑 */ }, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.MoreHoriz, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(26.dp))
                     }
                 }
             }
+
+            // 底部留出一小段空白，让按钮不至于贴着导航栏
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
