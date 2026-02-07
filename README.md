@@ -1,4 +1,4 @@
-# Purely Player
+# Purely Music
 
 一款开源的 Android 音乐播放器，采用现代化的 UI 设计，支持本地音乐播放、歌单管理、歌词显示等功能。
 
@@ -31,19 +31,23 @@
 ## 截图预览
 
 ### 🎵 播放界面
-![播放界面](https://github.com/user-attachments/assets/f14a75b6-d5ea-4d98-a13b-7fbbe07865da)
+<img width="393" height="699" alt="MuMuPlayer_lh9U1kT32c" src="https://github.com/user-attachments/assets/74f8efe9-3394-45df-b12d-b3e547e726ef" />
+
 沉浸式播放体验，背景采用歌曲封面虚化效果，支持下滑返回手势
 
 ### 📝 歌词界面
-![歌词界面](https://github.com/user-attachments/assets/bd9a13c9-70e1-4d0f-8d75-1d4b3abddfa9)
+<img width="393" height="699" alt="MuMuPlayer_MpZjTnjalZ" src="https://github.com/user-attachments/assets/ffe2d23e-aff9-47b1-a760-fb333122823a" />
+
 支持 LRC 格式歌词同步显示，歌词高亮显示并自动滚动定位，可切换封面/歌词视图
 
 ### 🏠 主页
-![主页](https://github.com/user-attachments/assets/571ae786-f333-4708-b31c-81092470c8a9)
+<img width="393" height="699" alt="MuMuPlayer_lh9U1kT32c" src="https://github.com/user-attachments/assets/571ae786-f333-4708-b31c-81092470c8a9" />
+
 简洁大气的主页设计，底部 MiniPlayer 悬浮播放控制，方便快捷
 
 ### 📚 资料库
-![资料库](https://github.com/user-attachments/assets/24167232-4ab1-4eee-8cd8-4c59b3f992c9)
+<img width="393" height="699" alt="MuMuPlayer_prqatopbzX" src="https://github.com/user-attachments/assets/648dcfe1-164d-4108-8e84-9401125fe5b2" />
+
 展示所有歌单和歌曲，支持网格视图，美观的封面展示
 
 ## 技术栈
