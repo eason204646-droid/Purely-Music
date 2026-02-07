@@ -4,16 +4,16 @@
     "type": "APK",
     "kind": "Directory"
   },
-  "applicationId": "com.music.PurelyPlayer",
+  "applicationId": "com.music.purelymusic",
   "variantName": "release",
   "elements": [
     {
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 7,
-      "versionName": "1.4.1",
-      "outputFile": "PurelyPlayer.apk"
+      "versionCode": 8,
+      "versionName": "1.4.2",
+      "outputFile": "purelymusic.apk"
     }
   ],
   "elementType": "File",
@@ -22,14 +22,14 @@
       "minApi": 28,
       "maxApi": 30,
       "baselineProfiles": [
-        "baselineProfiles/1/PurelyPlayer.dm"
+        "baselineProfiles/1/purelymusic.dm"
       ]
     },
     {
       "minApi": 31,
       "maxApi": 2147483647,
       "baselineProfiles": [
-        "baselineProfiles/0/PurelyPlayer.dm"
+        "baselineProfiles/0/purelymusic.dm"
       ]
     }
   ],

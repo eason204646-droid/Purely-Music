@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Data extraction rules for PurelyPlayer
+   Data extraction rules for purelymusic
    Disabled cloud backup and device transfer - only using database migration for app updates
 -->
 <data-extraction-rules>

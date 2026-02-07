@@ -9,15 +9,15 @@ plugins {
 }
 
 android {
-    namespace = "com.music.PurelyPlayer"
+    namespace = "com.music.purelymusic"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.music.PurelyPlayer"
+        applicationId = "com.music.purelymusic"
         minSdk = 26
         targetSdk = 34 // 🚩 同步建议修改为 35
-        versionCode = 7
-        versionName = "1.4.1"
+        versionCode = 8
+        versionName = "1.4.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -43,7 +43,7 @@ android {
     applicationVariants.all {
         outputs.all {
             val output = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
-            output.outputFileName = "PurelyPlayer.apk"
+            output.outputFileName = "purelymusic.apk"
         }
     }
 
