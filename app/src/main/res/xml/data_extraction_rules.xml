@@ -1,19 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+   Data extraction rules for PurelyPlayer
+   Disabled cloud backup and device transfer - only using database migration for app updates
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <!-- 不启用云备份 -->
     </cloud-backup>
-    <!--
+    
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <!-- 不启用设备迁移 -->
     </device-transfer>
-    -->
 </data-extraction-rules>

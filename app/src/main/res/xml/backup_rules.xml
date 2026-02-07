@@ -1,13 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+   Backup rules file for PurelyPlayer
+   Disabled cloud backup - only using database migration for app updates
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <!-- 不启用云备份，只通过数据库迁移保留应用更新时的数据 -->
 </full-backup-content>
