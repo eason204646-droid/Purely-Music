@@ -35,7 +35,7 @@ data class Song(
  */
 fun SongEntity.toSong(): Song {
     return Song(
-        id = this.id.toLong(),
+        id = this.id, // 直接使用，已经是 Long 类型
         title = this.title,
         artist = this.artist,
         coverUri = this.coverUri,
@@ -61,7 +61,7 @@ fun Song.toEntity(lastPlayedTime: Long = 0): SongEntity {
         playCount = 0, // 默认播放次数为 0
         createdTime = System.currentTimeMillis(), // 默认创建时间为当前时间
         isFavorite = 0, // 默认未收藏
-        duration = this.duration ?: 0, // 使用 Song 中的时长
+        duration = this.duration, // 使用 Song 中的时长（已经是 Long 类型，有默认值）
         album = this.album // 使用 Song 中的专辑
     )
 }

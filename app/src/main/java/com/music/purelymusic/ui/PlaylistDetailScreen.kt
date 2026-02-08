@@ -18,6 +18,7 @@ package com.music.purelymusic.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -40,12 +41,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.media3.common.util.UnstableApi
 import coil.compose.AsyncImage
 import com.music.purelymusic.R
 import com.music.purelymusic.model.Playlist
 import com.music.purelymusic.model.Song
 import com.music.purelymusic.viewmodel.PlayerViewModel
 
+@androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistDetailScreen(
@@ -223,45 +226,48 @@ fun PlaylistDetailScreen(
 
             // 添加新歌曲按钮
             item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    ),
-                    border = BorderStroke(
-                        1.dp,
-                        com.music.purelymusic.ui.theme.RedPrimary.copy(alpha = 0.3f)
-                    ),
-                    onClick = {
-                        viewModel.showAddSongDialog = true
-                        viewModel.selectedPlaylistForAdd = playlist.id.toString()
-                        viewModel.selectedSongsForAdd = emptySet()
-                    }
-                ) {
+                Column {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.Center,
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .clickable {
+                                viewModel.showAddSongDialog = true
+                                viewModel.selectedPlaylistForAdd = playlist.id.toString()
+                                viewModel.selectedSongsForAdd = emptySet()
+                            },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            tint = com.music.purelymusic.ui.theme.RedPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        // 红色加号图标作为"封面"
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(com.music.purelymusic.ui.theme.RedPrimary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "添加新歌曲",
-                            color = com.music.purelymusic.ui.theme.RedPrimary,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium
+                            text = "添加歌曲",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
+
+                    // 灰色分割线
+                    androidx.compose.material3.Divider(
+                        color = Color(0xFFE0E0E0),
+                        thickness = 1.dp,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
                 }
             }
         }
@@ -281,6 +287,7 @@ fun PlaylistDetailScreen(
 }
 
 // 歌单中的歌曲项（带长按删除功能）
+@androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun PlaylistSongItem(
     song: Song,
@@ -290,95 +297,87 @@ fun PlaylistSongItem(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp
-    ) {
-        Box {
-            Row(
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = { expanded = true }
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AsyncImage(
+                model = song.coverUri ?: R.drawable.default_cover,
+                contentDescription = null,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .combinedClickable(
-                        onClick = onClick,
-                        onLongClick = { expanded = true }
-                    )
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 封面
-                AsyncImage(
-                    model = song.coverUri ?: R.drawable.default_cover,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentScale = ContentScale.Crop
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(8.dp)),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = song.title,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = song.artist,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
-                Spacer(modifier = Modifier.width(12.dp))
+            // 播放图标
+            Icon(
+                imageVector = Icons.Default.PlayArrow,
+                contentDescription = null,
+                tint = com.music.purelymusic.ui.theme.RedPrimary.copy(alpha = 0.7f),
+                modifier = Modifier.size(24.dp)
+            )
+        }
 
-                // 歌曲信息
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = song.title,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface
+        // 灰色分割线
+        androidx.compose.material3.Divider(
+            color = Color(0xFFE0E0E0),
+            thickness = 1.dp,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+
+        // 下拉菜单
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+        ) {
+            DropdownMenuItem(
+                text = { Text("删除", color = com.music.purelymusic.ui.theme.RedPrimary) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = com.music.purelymusic.ui.theme.RedPrimary
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = song.artist,
-                        fontSize = 14.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                },
+                onClick = {
+                    viewModel.removeSongFromPlaylist(playlist.id.toString(), song.id.toLong())
+                    expanded = false
                 }
-
-                // 播放图标
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = com.music.purelymusic.ui.theme.RedPrimary.copy(alpha = 0.7f),
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            // 下拉菜单
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                modifier = Modifier.background(MaterialTheme.colorScheme.surface)
-            ) {
-                DropdownMenuItem(
-                    text = { Text("删除", color = com.music.purelymusic.ui.theme.RedPrimary) },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = null,
-                            tint = com.music.purelymusic.ui.theme.RedPrimary
-                        )
-                    },
-                    onClick = {
-                        viewModel.removeSongFromPlaylist(playlist.id.toString(), song.id.toLong())
-                        expanded = false
-                    }
-                )
-            }
+            )
         }
     }
 }
 
 // 添加歌曲到歌单的对话框
+@androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun AddSongsToPlaylistDialog(
     viewModel: PlayerViewModel,

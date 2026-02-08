@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -145,41 +146,22 @@ fun RecentSongItem(song: Song, onClick: () -> Unit) {
 
 @Composable
 fun SongItem(song: Song, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = AppDimensions.paddingScreen(), vertical = AppDimensions.spacingXS()),
-        shape = RoundedCornerShape(AppDimensions.cornerRadiusM()),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp
-    ) {
+    Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = AppDimensions.paddingCard(), vertical = AppDimensions.paddingSmall()),
+                .clickable { onClick() }
+                .padding(horizontal = AppDimensions.paddingScreen(), vertical = AppDimensions.spacingM()),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
+            AsyncImage(
+                model = song.coverUri ?: R.drawable.default_cover,
+                contentDescription = null,
                 modifier = Modifier
                     .size(AppDimensions.coverM())
-                    .clip(RoundedCornerShape(AppDimensions.cornerRadiusS()))
-                    .background(
-                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                            colors = listOf(
-                                com.music.purelymusic.ui.theme.Red20,
-                                com.music.purelymusic.ui.theme.Red10
-                            )
-                        )
-                    )
-            ) {
-                AsyncImage(
-                    model = song.coverUri ?: R.drawable.default_cover,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            }
+                    .clip(RoundedCornerShape(AppDimensions.cornerRadiusS())),
+                contentScale = ContentScale.Crop
+            )
             Column(
                 modifier = Modifier
                     .padding(start = AppDimensions.spacingM())
@@ -187,7 +169,7 @@ fun SongItem(song: Song, onClick: () -> Unit) {
             ) {
                 Text(
                     song.title,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = Color.Black,
                     fontSize = AppDimensions.textL().value.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -196,19 +178,18 @@ fun SongItem(song: Song, onClick: () -> Unit) {
                 Spacer(modifier = Modifier.height(AppDimensions.spacingXS()))
                 Text(
                     song.artist,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color.Gray,
                     fontSize = AppDimensions.textM().value.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = null,
-                tint = com.music.purelymusic.ui.theme.RedPrimary.copy(alpha = 0.6f),
-                modifier = Modifier.size(AppDimensions.iconS())
-            )
         }
+        androidx.compose.material3.Divider(
+            color = Color(0xFFF5F5F5),
+            thickness = 1.dp,
+            modifier = Modifier.padding(horizontal = AppDimensions.paddingScreen())
+        )
     }
 }
 

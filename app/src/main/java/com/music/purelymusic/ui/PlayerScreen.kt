@@ -2,7 +2,7 @@
 //[purelymusic] is licensed under Mulan PSL v2.
 //You can use this software according to the terms and conditions of the Mulan
 //PSL v2.
-//You may obtain a copy of Mulan PSL v2 at:
+//You may obtain a copy ，of Mulan PSL v2 at:
 //         http://license.coscl.org.cn/MulanPSL2
 //THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
 //KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
@@ -21,9 +21,12 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -32,6 +35,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -129,20 +133,26 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                     .padding(horizontal = AppDimensions.playerCoverPadding()),
                 contentAlignment = Alignment.Center
             ) {
-                Crossfade(targetState = showLyrics, label = "ContentSwitch") { isLyrics ->
-                    if (isLyrics) {
-                        LyricView(viewModel = viewModel, modifier = Modifier.fillMaxSize())
+                Crossfade(targetState = viewModel.showPlaylist, label = "ContentSwitch") { showPlaylist ->
+                    if (showPlaylist) {
+                        PlaylistView(viewModel = viewModel, modifier = Modifier.fillMaxSize())
                     } else {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(0.8f).aspectRatio(1f).clickable { showLyrics = true },
-                            shape = RoundedCornerShape(AppDimensions.cornerRadiusL()),
-                            shadowElevation = AppDimensions.elevationL()
-                        ) {
-                            AsyncImage(
-                                model = currentSong?.coverUri ?: R.drawable.default_cover,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop
-                            )
+                        Crossfade(targetState = showLyrics, label = "LyricSwitch") { isLyrics ->
+                            if (isLyrics) {
+                                LyricView(viewModel = viewModel, modifier = Modifier.fillMaxSize())
+                            } else {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(0.8f).aspectRatio(1f).clickable { showLyrics = true },
+                                    shape = RoundedCornerShape(AppDimensions.cornerRadiusL()),
+                                    shadowElevation = AppDimensions.elevationL()
+                                ) {
+                                    AsyncImage(
+                                        model = currentSong?.coverUri ?: R.drawable.default_cover,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -158,7 +168,17 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                     Text(text = currentSong?.artist ?: "未知艺术家", color = Color.White.copy(alpha = 0.8f), fontSize = AppDimensions.textM().value.sp)
                 }
 
-                IconButton(onClick = { showLyrics = !showLyrics }, modifier = Modifier.size(AppDimensions.iconButtonSizeS())) {
+                IconButton(
+                    onClick = {
+                        if (viewModel.showPlaylist) {
+                            viewModel.showPlaylist = false
+                            showLyrics = true
+                        } else {
+                            showLyrics = !showLyrics
+                        }
+                    },
+                    modifier = Modifier.size(AppDimensions.iconButtonSizeS())
+                ) {
                     Icon(
                         imageVector = if (showLyrics) Icons.Default.Album else Icons.Default.Notes,
                         contentDescription = "模式切换",
@@ -223,8 +243,8 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                         Icon(Icons.Default.SkipNext, null, tint = Color.White, modifier = Modifier.size(AppDimensions.playerControlIconSize()))
                     }
 
-                    IconButton(onClick = { /* 其他逻辑 */ }, modifier = Modifier.size(AppDimensions.iconButtonSizeM())) {
-                        Icon(Icons.Default.MoreHoriz, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(AppDimensions.iconL()))
+                    IconButton(onClick = { viewModel.showPlaylist = !viewModel.showPlaylist }, modifier = Modifier.size(AppDimensions.iconButtonSizeM())) {
+                        Icon(Icons.Default.PlaylistPlay, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(AppDimensions.iconL()))
                     }
                 }
             }
@@ -239,4 +259,159 @@ private fun formatTime(ms: Long): String {
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return java.lang.String.format(java.util.Locale.getDefault(), "%02d:%02d", minutes, seconds)
+}
+
+@OptIn(UnstableApi::class)
+@Composable
+fun PlaylistView(viewModel: PlayerViewModel, modifier: Modifier = Modifier) {
+    val playingQueue = viewModel.getPlayingQueue()
+    val currentSong = viewModel.currentSong
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(AppDimensions.paddingCard())
+    ) {
+        // 关闭按钮
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            IconButton(
+                onClick = { viewModel.showPlaylist = false },
+                modifier = Modifier.size(AppDimensions.iconButtonSizeS())
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "关闭",
+                    tint = Color.White.copy(alpha = 0.9f),
+                    modifier = Modifier.size(AppDimensions.iconM())
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(AppDimensions.spacingM()))
+
+        if (playingQueue.isEmpty()) {
+
+                        Box(
+
+                            modifier = Modifier.fillMaxWidth().weight(1f),
+
+                            contentAlignment = Alignment.Center
+
+                        ) {
+
+                            Text(
+
+                                text = "播放清单为空",
+
+                                color = Color.White.copy(alpha = 0.6f),
+
+                                fontSize = AppDimensions.textM().value.sp
+
+                            )
+
+                        }
+
+                    } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().weight(1f)
+            ) {
+                items(playingQueue) { song ->
+                    PlaylistItem(
+                        song = song,
+                        isPlaying = currentSong?.id == song.id,
+                        onClick = { viewModel.jumpToSong(song) },
+                        onLongClick = { viewModel.removeSongFromPlayingList(song) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PlaylistItem(
+    song: com.music.purelymusic.model.Song,
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = { expanded = true }
+                )
+                .padding(vertical = AppDimensions.paddingSmall(), horizontal = AppDimensions.paddingCard()),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AsyncImage(
+                model = song.coverUri ?: R.drawable.default_cover,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(AppDimensions.coverS())
+                    .clip(RoundedCornerShape(AppDimensions.cornerRadiusS())),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(modifier = Modifier.width(AppDimensions.spacingM()))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = song.title,
+                    color = Color.White,
+                    fontSize = AppDimensions.textM().value.sp,
+                    fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(AppDimensions.spacingXS()))
+                Text(
+                    text = song.artist,
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = AppDimensions.textS().value.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (isPlaying) {
+                Icon(
+                    imageVector = Icons.Default.VolumeUp,
+                    contentDescription = "正在播放",
+                    tint = Color.White.copy(alpha = 0.9f),
+                    modifier = Modifier.size(AppDimensions.iconS())
+                )
+            }
+        }
+        androidx.compose.material3.Divider(
+            color = Color(0xFFE0E0E0),
+            thickness = 1.dp,
+            modifier = Modifier.padding(horizontal = AppDimensions.paddingCard())
+        )
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(Color.Black.copy(alpha = 0.9f))
+        ) {
+            DropdownMenuItem(
+                text = { Text("删除", color = Color.White) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = Color.White
+                    )
+                },
+                onClick = {
+                    onLongClick()
+                    expanded = false
+                }
+            )
+        }
+    }
 }
