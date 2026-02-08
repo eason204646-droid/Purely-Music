@@ -29,6 +29,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -88,10 +91,21 @@ fun LibraryScreen(
             FloatingActionButton(
                 onClick = onNavigateToCreatePlaylist,
                 modifier = Modifier.padding(bottom = AppDimensions.miniPlayerHeight()),
-                containerColor = Color(0xFFE53935),
-                contentColor = Color(0xFFFFFFFF)
+                containerColor = Color(0xFFFFCDD2),
+                contentColor = Color(0xFFE53935)
             ) {
-                Icon(Icons.Default.PlaylistAdd, contentDescription = "组建播放列表", modifier = Modifier.size(AppDimensions.iconM()))
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.PlaylistAdd, contentDescription = "创建列表", modifier = Modifier.size(AppDimensions.iconM()))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "创建列表",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         },
         containerColor = MaterialTheme.colorScheme.background
@@ -115,8 +129,10 @@ fun LibraryScreen(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
-                IconButton(onClick = onPickFile, modifier = Modifier.size(AppDimensions.iconButtonSizeM())) {
-                    Icon(Icons.Default.Add, contentDescription = "导入", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(AppDimensions.iconM()))
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(onClick = onPickFile, modifier = Modifier.size(AppDimensions.iconButtonSizeM())) {
+                        Icon(Icons.Default.Add, contentDescription = "导入", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(AppDimensions.iconM()))
+                    }
                 }
             }
 
@@ -255,7 +271,6 @@ fun ImportMusicDialog(
             Button(onClick = {
                 if (title.isNotBlank()) {
                     viewModel.saveSong(title, artist)
-                    viewModel.tempMusicUri = null
                 }
             }, modifier = Modifier.height(AppDimensions.buttonHeightM())) { Text("保存") }
         },

@@ -51,7 +51,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             playlist.songIds.contains(song.id.toLong())
         }
         if (songs.isEmpty()) return
-        currentPlayingList = if (isRandom) songs.shuffled() else songs
+        currentPlayingList.clear()
+        currentPlayingList.addAll(if (isRandom) songs.shuffled() else songs)
         playSongFromList(currentPlayingList[0])
     }
 
@@ -66,30 +67,59 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
     fun saveSong(title: String, artist: String) {
-        val mUri = tempMusicUri ?: return
-        viewModelScope.launch {
-            // 拷贝文件到私有目录，防止系统清理或权限丢失
-            val pMusic = copyFile(mUri, "mus_${System.currentTimeMillis()}.mp3")
-            val pCover = tempCoverUri?.let { copyFile(it, "cov_${System.currentTimeMillis()}.jpg") }
-            val pLrc = tempLrcUri?.let { copyFile(it, "lrc_${System.currentTimeMillis()}.lrc") }
+        val mUri = tempMusicUri
+        android.util.Log.d("purelymusic", "saveSong 被调用: title=$title, artist=$artist, tempMusicUri=$mUri")
+        if (mUri == null) {
+            android.util.Log.e("purelymusic", "tempMusicUri 为 null，无法保存歌曲")
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                android.util.Log.d("purelymusic", "开始复制文件")
+                // 拷贝文件到私有目录，防止系统清理或权限丢失
+                val pMusic = copyFile(mUri, "mus_${System.currentTimeMillis()}.mp3")
+                val pCover = tempCoverUri?.let { copyFile(it, "cov_${System.currentTimeMillis()}.jpg") }
+                val pLrc = tempLrcUri?.let { copyFile(it, "lrc_${System.currentTimeMillis()}.lrc") }
 
-            if (pMusic != null) {
-                val newSong = Song(
-                    id = 0, // Room 会自动生成
-                    title = title,
-                    artist = artist,
-                    coverUri = pCover,
-                    musicUri = pMusic,
-                    lrcPath = pLrc
-                )
-                // 存入数据库
-                songDao.insertSong(newSong.toEntity())
+                android.util.Log.d("purelymusic", "文件复制结果: pMusic=$pMusic, pCover=$pCover, pLrc=$pLrc")
 
-                // 重置临时状态并刷新
-                tempMusicUri = null
-                tempCoverUri = null
-                tempLrcUri = null
-                refreshData()
+                if (pMusic != null) {
+                    val newSong = Song(
+                        id = 0, // Room 会自动生成
+                        title = title,
+                        artist = artist,
+                        coverUri = pCover,
+                        musicUri = pMusic,
+                        lrcPath = pLrc
+                    )
+                    android.util.Log.d("purelymusic", "准备插入数据库: $newSong")
+                    // 存入数据库
+                    songDao.insertSong(newSong.toEntity())
+                    android.util.Log.d("purelymusic", "数据库插入成功")
+
+                    // 验证数据是否真的保存了
+                    val allSongs = songDao.getAllSongs()
+                    android.util.Log.d("purelymusic", "插入后数据库中的歌曲总数: ${allSongs.size}")
+                    android.util.Log.d("purelymusic", "最新插入的歌曲: ${allSongs.lastOrNull()}")
+
+                    // 检查数据库文件
+                    val dbFile = context.getDatabasePath("am_player_db")
+                    android.util.Log.d("purelymusic", "数据库文件大小: ${dbFile.length()} bytes")
+
+                    // 重置临时状态并刷新
+                    withContext(Dispatchers.Main) {
+                        android.util.Log.d("purelymusic", "重置临时状态并刷新数据")
+                        tempMusicUri = null
+                        tempCoverUri = null
+                        tempLrcUri = null
+                        refreshData()
+                    }
+                } else {
+                    android.util.Log.e("purelymusic", "复制音乐文件失败")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("purelymusic", "保存歌曲失败: ${e.message}", e)
+                e.printStackTrace()
             }
         }
     }
@@ -202,8 +232,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     var recentSongs = mutableStateListOf<Song>()
     var playlists = mutableStateListOf<Playlist>()
-    private var currentPlayingList: List<Song> = emptyList()
+    private var currentPlayingList = mutableStateListOf<Song>()
     var selectedSongsForPlaylist = mutableStateListOf<Song>()
+    var showPlaylist by mutableStateOf(false)
 
     // 导入临时状态
     var tempPlaylistCoverUri by mutableStateOf<Uri?>(null)
@@ -274,7 +305,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     // --- 播放控制逻辑 ---
     fun playSong(song: Song, updateInternalList: Boolean = true) {
-        if (updateInternalList) currentPlayingList = libraryList
+        if (updateInternalList) {
+            currentPlayingList.clear()
+            currentPlayingList.addAll(libraryList)
+        }
 
         if (currentSong?.id == song.id && mediaPlayer != null) {
             togglePlayPause()
@@ -316,6 +350,45 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    // 从播放列表中删除歌曲
+    fun removeSongFromPlayingList(song: Song) {
+        if (currentPlayingList.isEmpty()) return
+        val index = currentPlayingList.indexOfFirst { it.id == song.id }
+        if (index != -1) {
+            currentPlayingList.removeAt(index)
+            // 如果删除的是当前播放的歌曲，播放下一首
+            if (currentSong?.id == song.id && currentPlayingList.isNotEmpty()) {
+                playSong(currentPlayingList[0], false)
+            }
+        }
+    }
+
+    // 跳转到指定歌曲（删除该歌曲之前的所有歌曲）
+    fun jumpToSong(song: Song) {
+        if (currentPlayingList.isEmpty()) return
+        val index = currentPlayingList.indexOfFirst { it.id == song.id }
+        if (index != -1) {
+            // 保留从当前歌曲开始的列表
+            val newList = currentPlayingList.subList(index, currentPlayingList.size).toList()
+            currentPlayingList.clear()
+            currentPlayingList.addAll(newList)
+            playSong(song, false)
+        }
+    }
+
+    // 获取当前播放列表（不包括当前播放的歌曲）
+    fun getPlayingQueue(): List<Song> {
+        if (currentPlayingList.isEmpty() || currentSong == null) {
+            return emptyList()
+        }
+        val currentIndex = currentPlayingList.indexOfFirst { it.id == currentSong?.id }
+        return if (currentIndex != -1 && currentIndex + 1 < currentPlayingList.size) {
+            currentPlayingList.subList(currentIndex + 1, currentPlayingList.size).toList()
+        } else {
+            emptyList()
+        }
+    }
+
     fun togglePlayPause() {
         mediaPlayer?.let {
             if (it.isPlaying) it.pause() else it.start()
@@ -328,8 +401,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (currentPlayingList.isEmpty()) return
         val idx = currentPlayingList.indexOfFirst { it.id == currentSong?.id }
         if (idx != -1) {
-            val nextSong = currentPlayingList[(idx + 1) % currentPlayingList.size]
-            playSong(nextSong, false)
+            val nextIdx = (idx + 1) % currentPlayingList.size
+            playSong(currentPlayingList[nextIdx], false)
         }
     }
 
@@ -363,19 +436,45 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     // --- 数据库操作 ---
     fun refreshData() {
         viewModelScope.launch {
-            val all = songDao.getAllSongs()
-            libraryList = all.map { it.toSong() }
+            try {
+                // 检查数据库文件是否存在
+                val dbFile = context.getDatabasePath("am_player_db")
+                android.util.Log.d("refreshData", "数据库文件路径: ${dbFile.absolutePath}")
+                android.util.Log.d("refreshData", "数据库文件是否存在: ${dbFile.exists()}")
+                android.util.Log.d("refreshData", "数据库文件大小: ${if (dbFile.exists()) dbFile.length() else 0} bytes")
 
-            val recentFromDb = songDao.getRecentSongs().map { it.toSong() }
-            val playlistEntities = playlistDao.getAllPlaylists()
+                val all = songDao.getAllSongs()
+                android.util.Log.d("refreshData", "Total songs from DB: ${all.size}")
+                
+                val convertedSongs = all.map { entity ->
+                    try {
+                        entity.toSong()
+                    } catch (e: Exception) {
+                        android.util.Log.e("refreshData", "Failed to convert song (id=${entity.id}, title=${entity.title}): ${e.message}")
+                        null
+                    }
+                }.filterNotNull()
+                
+                android.util.Log.d("refreshData", "Successfully converted songs: ${convertedSongs.size}")
+                libraryList = convertedSongs
 
-            withContext(Dispatchers.Main) {
-                recentSongs.clear()
-                recentSongs.addAll(recentFromDb)
-                playlists.clear()
-                playlists.addAll(playlistEntities.map { it.toPlaylist() })
+                val recentFromDb = songDao.getRecentSongs().map { it.toSong() }
+                val playlistEntities = playlistDao.getAllPlaylists()
+
+                withContext(Dispatchers.Main) {
+                    recentSongs.clear()
+                    recentSongs.addAll(recentFromDb)
+                    playlists.clear()
+                    playlists.addAll(playlistEntities.map { it.toPlaylist() })
+                }
+                if (currentPlayingList.isEmpty()) {
+                    currentPlayingList.clear()
+                    currentPlayingList.addAll(libraryList)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("refreshData", "Failed to refresh data: ${e.message}")
+                e.printStackTrace()
             }
-            if (currentPlayingList.isEmpty()) currentPlayingList = libraryList
         }
     }
 
