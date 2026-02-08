@@ -10,12 +10,12 @@ plugins {
 
 android {
     namespace = "com.music.purelymusic"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.music.purelymusic"
         minSdk = 26
-        targetSdk = 34 // 🚩 同步建议修改为 35
+        targetSdk = 36
         versionCode = 8
         versionName = "1.4.2"
 
@@ -29,9 +29,19 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("D:\\adroidkeys\\keystorefile.jks")
+            storePassword = "eason627"
+            keyAlias = "key0"
+            keyPassword = "eason627"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -66,17 +76,17 @@ android {
 }
 
 dependencies {
-    // 基础库
-    implementation("androidx.core:core-ktx:1.15.0") // 🚩 建议升级到支持 SDK 35 的版本
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-    implementation("androidx.activity:activity-compose:1.9.3")
+    // 基础库（使用版本目录）
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.activity.compose)
 
     // Compose 统一版本管理
-    implementation(platform("androidx.compose:compose-bom:2024.12.01")) // 🚩 升级 BOM 解决版本冲突
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
     implementation("androidx.compose.material:material-icons-extended")
 
     // 导航
@@ -90,7 +100,7 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
 
     // Media3 (代替过时的 ExoPlayer 2.x)
-    val media3Version = "1.5.0" // 🚩 升级到 1.5.0 更好支持 SDK 35
+    val media3Version = "1.5.0"
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
@@ -105,8 +115,4 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("com.google.android.material:material:1.12.0")
-
-    // 🚩 核心：这是 Compose 使用的 Material 3 库
-    implementation("androidx.compose.material3:material3:1.4.0")
-
 }
