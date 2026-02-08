@@ -1,71 +1,80 @@
 # Purely Music
 
+[项目地址](https://github.com/eason204646-droid/Purely-Music)
+
 一款开源的 Android 音乐播放器，采用现代化的 UI 设计，支持本地音乐播放、歌单管理、歌词显示等功能。
 
 ## 特性
 
 ### 核心功能
-- 🎵 **本地音乐播放** - 支持导入和管理本地音乐文件
-- 📝 **歌词显示** - 支持 LRC 格式歌词同步显示，可切换封面/歌词视图
-- 📚 **歌单管理** - 创建、编辑和管理自定义歌单
-- 🔍 **歌曲编辑** - 支持编辑歌曲信息（标题、歌手、封面、歌词）
-- 🎨 **精美 UI** - 采用红色主题，简洁大气的设计风格
-- 🌙 **深色模式** - 自动适配系统深色模式
-- 🔔 **媒体通知** - 完整的媒体通知栏支持，包括进度条拖动
-- 📻 **后台播放** - 支持后台持续播放
-- 🎭 **封面虚化** - 播放界面背景使用歌曲封面虚化效果
+
+*   🎵 **本地音乐播放** - 支持导入和管理本地音乐文件
+*   📝 **歌词显示** - 支持 LRC 格式歌词同步显示，可切换封面/歌词视图
+*   📚 **歌单管理** - 创建、编辑和管理自定义歌单
+*   🔍 **歌曲编辑** - 支持编辑歌曲信息（标题、歌手、封面、歌词）
+*   🎨 **精美 UI** - 采用红色主题，简洁大气的设计风格
+*   🌙 **深色模式** - 自动适配系统深色模式
+*   🔔 **媒体通知** - 完整的媒体通知栏支持，包括进度条拖动
+*   📻 **后台播放** - 支持后台持续播放
+*   🎭 **封面虚化** - 播放界面背景使用歌曲封面虚化效果
 
 ### 界面特点
-- **资料库页** - 展示所有歌单和歌曲，支持网格视图
-- **播放列表详情** - 美观的封面展示，支持顺序/随机播放
-- **播放界面** - 沉浸式设计，支持下滑返回手势
-- **歌词界面** - 歌词高亮显示，自动滚动定位
-- **底部播放条** - MiniPlayer 悬浮播放控制
+
+*   **资料库页** - 展示所有歌单和歌曲，支持网格视图
+*   **播放列表详情** - 美观的封面展示，支持顺序/随机播放
+*   **播放界面** - 沉浸式设计，支持下滑返回手势
+*   **歌词界面** - 歌词高亮显示，自动滚动定位
+*   **底部播放条** - MiniPlayer 悬浮播放控制
 
 ### 交互优化
-- 长按歌曲显示操作菜单（收藏、编辑、删除）
-- 长按歌单显示操作菜单（删除）
-- 直接在歌单详情页添加/删除歌曲
-- 流畅的页面切换和动画效果
+
+*   长按歌曲显示操作菜单（收藏、编辑、删除）
+*   长按歌单显示操作菜单（删除）
+*   直接在歌单详情页添加/删除歌曲
+*   流畅的页面切换和动画效果
 
 ## 截图预览
 
 ### 🎵 播放界面
-<img width="393" height="699" alt="MuMuPlayer_lh9U1kT32c" src="https://github.com/user-attachments/assets/74f8efe9-3394-45df-b12d-b3e547e726ef" />
+
+<img width="393" height="699" alt="MuMuPlayer_lh9U1kT32c" src="https://p0-xtjj-private.juejin.cn/tos-cn-i-73owjymdk6/b65c7dd07a834993b7c06f377578c798~tplv-73owjymdk6-jj-mark-v1:0:0:0:0:5o6Y6YeR5oqA5pyv56S-5Yy6IEAg55So5oi3NDYxMDExNTkxMzc=:q75.awebp?policy=eyJ2bSI6MywidWlkIjoiMjEzODk5OTA3MjQ5MTE1MiJ9&rk3s=f64ab15b&x-orig-authkey=f32326d3454f2ac7e96d3d06cdbb035152127018&x-orig-expires=1771163190&x-orig-sign=A9nqpix32SOurOtqWRlqo%2FVaSTI%3D">
 
 沉浸式播放体验，背景采用歌曲封面虚化效果，支持下滑返回手势
 
 ### 📝 歌词界面
-<img width="393" height="699" alt="MuMuPlayer_MpZjTnjalZ" src="https://github.com/user-attachments/assets/ffe2d23e-aff9-47b1-a760-fb333122823a" />
+
+<img width="393" height="699" alt="MuMuPlayer_MpZjTnjalZ" src="https://p0-xtjj-private.juejin.cn/tos-cn-i-73owjymdk6/1f6d8b6b63e24118ab51302d10b84610~tplv-73owjymdk6-jj-mark-v1:0:0:0:0:5o6Y6YeR5oqA5pyv56S-5Yy6IEAg55So5oi3NDYxMDExNTkxMzc=:q75.awebp?policy=eyJ2bSI6MywidWlkIjoiMjEzODk5OTA3MjQ5MTE1MiJ9&rk3s=f64ab15b&x-orig-authkey=f32326d3454f2ac7e96d3d06cdbb035152127018&x-orig-expires=1771163190&x-orig-sign=9EEJ2qKmlDfbKYO2RWNqkxVdQO4%3D">
 
 支持 LRC 格式歌词同步显示，歌词高亮显示并自动滚动定位，可切换封面/歌词视图
 
 ### 🏠 主页
-<img width="393" height="699" alt="MuMuPlayer_lh9U1kT32c" src="https://github.com/user-attachments/assets/571ae786-f333-4708-b31c-81092470c8a9" />
+
+<img width="393" height="699" alt="MuMuPlayer_lh9U1kT32c" src="https://p0-xtjj-private.juejin.cn/tos-cn-i-73owjymdk6/59ae8f68cd0d455a9afa45f1704e9adf~tplv-73owjymdk6-jj-mark-v1:0:0:0:0:5o6Y6YeR5oqA5pyv56S-5Yy6IEAg55So5oi3NDYxMDExNTkxMzc=:q75.awebp?policy=eyJ2bSI6MywidWlkIjoiMjEzODk5OTA3MjQ5MTE1MiJ9&rk3s=f64ab15b&x-orig-authkey=f32326d3454f2ac7e96d3d06cdbb035152127018&x-orig-expires=1771163190&x-orig-sign=AjofYI%2FOlZUeOej77KE8jt16H%2F4%3D">
 
 简洁大气的主页设计，底部 MiniPlayer 悬浮播放控制，方便快捷
 
 ### 📚 资料库
-<img width="393" height="699" alt="MuMuPlayer_prqatopbzX" src="https://github.com/user-attachments/assets/648dcfe1-164d-4108-8e84-9401125fe5b2" />
+
+<img width="393" height="699" alt="MuMuPlayer_prqatopbzX" src="https://p0-xtjj-private.juejin.cn/tos-cn-i-73owjymdk6/efb791b57022425b8b7a940696083607~tplv-73owjymdk6-jj-mark-v1:0:0:0:0:5o6Y6YeR5oqA5pyv56S-5Yy6IEAg55So5oi3NDYxMDExNTkxMzc=:q75.awebp?policy=eyJ2bSI6MywidWlkIjoiMjEzODk5OTA3MjQ5MTE1MiJ9&rk3s=f64ab15b&x-orig-authkey=f32326d3454f2ac7e96d3d06cdbb035152127018&x-orig-expires=1771163190&x-orig-sign=QeUb30dGkfCwAOAotpO5d4qEil8%3D">
 
 展示所有歌单和歌曲，支持网格视图，美观的封面展示
 
 ## 技术栈
 
-- **语言**: Kotlin
-- **UI 框架**: Jetpack Compose
-- **设计系统**: Material 3
-- **播放引擎**: Media3 (ExoPlayer)
-- **数据库**: Room
-- **图片加载**: Coil
-- **依赖管理**: Gradle (Kotlin DSL)
+*   **语言**: Kotlin
+*   **UI 框架**: Jetpack Compose
+*   **设计系统**: Material 3
+*   **播放引擎**: Media3 (ExoPlayer)
+*   **数据库**: Room
+*   **图片加载**: Coil
+*   **依赖管理**: Gradle (Kotlin DSL)
 
 ## 开发环境
 
-- Android Studio Hedgehog | 2023.1.1 或更高版本
-- JDK 17 或更高版本
-- Android SDK 35 (compileSdkVersion 35)
-- 最低支持 Android 8.0 (API 26)
+*   Android Studio Hedgehog | 2023.1.1 或更高版本
+*   JDK 17 或更高版本
+*   Android SDK 35 (compileSdkVersion 35)
+*   最低支持 Android 8.0 (API 26)
 
 ## 构建
 
@@ -93,8 +102,8 @@ cd Purely-Music
 
 ## 联系方式
 
-- GitHub: [@eason204646-droid](https://github.com/eason204646-droid)
+*   GitHub: [@eason204646-droid](https://github.com/eason204646-droid)
 
----
+***
 
 **享受音乐，享受生活！** 🎵
