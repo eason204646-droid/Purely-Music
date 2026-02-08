@@ -165,7 +165,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             val newPlaylist = Playlist(
                 name = name,
                 coverUri = finalCoverPath,
-                songIds = selectedSongsForPlaylist.map { it.id.toLong() }
+                songIds = selectedSongsForPlaylist.map { it.id.toLong() },
+                description = null, // 默认没有描述
+                createdAt = System.currentTimeMillis(), // 创建时间
+                updatedAt = System.currentTimeMillis() // 更新时间
             )
             playlistDao.insertPlaylist(newPlaylist.toEntity())
             playlists.add(0, newPlaylist)

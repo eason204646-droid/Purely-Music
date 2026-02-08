@@ -27,7 +27,10 @@ data class PlaylistEntity(
     @PrimaryKey val id: String,
     val name: String,
     val coverUri: String?,
-    val songIdsJson: String // 🚩 存储为 JSON 字符串
+    val songIdsJson: String, // 🚩 存储为 JSON 字符串
+    val description: String? = null, // 🚩 新增：播放列表描述（版本7添加）
+    val createdAt: Long = 0, // 🚩 新增：创建时间（版本7添加）
+    val updatedAt: Long = 0 // 🚩 新增：更新时间（版本7添加）
 )
 
 // 转换工具：Playlist <-> Entity
@@ -36,12 +39,15 @@ fun Playlist.toEntity(): PlaylistEntity {
         id = id,
         name = name,
         coverUri = coverUri,
-        songIdsJson = Gson().toJson(songIds)
+        songIdsJson = Gson().toJson(songIds),
+        description = description,
+        createdAt = createdAt,
+        updatedAt = updatedAt
     )
 }
 
 fun PlaylistEntity.toPlaylist(): Playlist {
     val type = object : TypeToken<List<Long>>() {}.type
     val ids: List<Long> = Gson().fromJson(songIdsJson, type)
-    return Playlist(id, name, coverUri, ids)
+    return Playlist(id, name, coverUri, ids, description, createdAt, updatedAt)
 }

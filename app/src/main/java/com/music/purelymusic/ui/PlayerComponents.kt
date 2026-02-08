@@ -70,7 +70,7 @@ fun BottomPlayerBar(viewModel: PlayerViewModel, onClick: () -> Unit) {
                 model = song.coverUri ?: R.drawable.default_cover,
                 contentDescription = null,
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(56.dp)
                     .clip(RoundedCornerShape(10.dp)),
                 contentScale = ContentScale.Crop,
                 error = painterResource(R.drawable.default_cover),

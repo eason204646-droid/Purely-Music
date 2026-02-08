@@ -1,4 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget // 🚩 必须导入这个
+import java.util.Properties
+import java.io.FileInputStream
 
 plugins {
     id("com.android.application")
@@ -6,6 +8,13 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     // id("kotlin-kapt") // 🚩 如果只有 Room 用它，现在可以删掉这行
     id("com.google.devtools.ksp")
+}
+
+// 加载签名配置
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
 android {
@@ -16,8 +25,8 @@ android {
         applicationId = "com.music.purelymusic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.4.2"
+        versionCode = 9
+        versionName = "1.4.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -31,10 +40,10 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("D:\\adroidkeys\\keystorefile.jks")
-            storePassword = "eason627"
-            keyAlias = "key0"
-            keyPassword = "eason627"
+            storeFile = file(keystoreProperties.getProperty("storeFile", ""))
+            storePassword = keystoreProperties.getProperty("storePassword", "")
+            keyAlias = keystoreProperties.getProperty("keyAlias", "")
+            keyPassword = keystoreProperties.getProperty("keyPassword", "")
         }
     }
 
