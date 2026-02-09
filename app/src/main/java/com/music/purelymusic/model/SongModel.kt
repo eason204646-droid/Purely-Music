@@ -119,3 +119,16 @@ data class LyricResponse(
 data class LrcContent(
     val lyric: String
 )
+
+/**
+ * 5. 自动获取LRC API响应模型
+ */
+data class LrcApiResponse(
+    val code: Int,
+    val msg: String,
+    val data: LrcApiData?
+)
+
+data class LrcApiData(
+    val lyric: String
+)

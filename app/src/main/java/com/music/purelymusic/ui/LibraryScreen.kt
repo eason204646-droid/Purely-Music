@@ -207,10 +207,18 @@ fun ImportMusicDialog(
         }
     }
 
+    // 显示LRC错误提示
+    LaunchedEffect(viewModel.fetchLrcError) {
+        viewModel.fetchLrcError?.let { error ->
+            // 错误提示会自动显示，无需额外处理
+        }
+    }
+
     AlertDialog(
         onDismissRequest = {
             viewModel.tempMusicUri = null
             viewModel.fetchCoverError = null
+            viewModel.fetchLrcError = null
         },
         title = { Text("补充歌曲信息") },
         text = {
@@ -219,7 +227,7 @@ fun ImportMusicDialog(
                 TextField(value = artist, onValueChange = { artist = it }, label = { Text("歌手") }, singleLine = true)
                 Spacer(modifier = Modifier.height(AppDimensions.paddingCard()))
 
-                // 显示错误提示
+                // 显示封面错误提示
                 viewModel.fetchCoverError?.let { error ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -238,13 +246,43 @@ fun ImportMusicDialog(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = error,
+                                text = "封面: $error",
                                 color = Color(0xFFD32F2F),
-                                style = MaterialTheme.typography.bodySmall
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(AppDimensions.spacingS()))
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                // 显示LRC错误提示
+                viewModel.fetchLrcError?.let { error ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFD32F2F),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "歌词: $error",
+                                color = Color(0xFFD32F2F),
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -302,6 +340,36 @@ fun ImportMusicDialog(
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Button(onClick = onPickLrc, modifier = Modifier.height(AppDimensions.buttonHeightM())) { Text("选择歌词 (LRC)") }
+                        Spacer(modifier = Modifier.width(AppDimensions.paddingCard()))
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    if (title.isNotBlank() && artist.isNotBlank()) {
+                                        val lrcPath = viewModel.fetchLrcFromNetwork(title, artist)
+                                        if (lrcPath != null) {
+                                            // 使用 file:// 格式的 URI
+                                            viewModel.tempLrcUri = android.net.Uri.parse("file://$lrcPath")
+                                        }
+                                    }
+                                }
+                            },
+                            modifier = Modifier.height(AppDimensions.buttonHeightM()),
+                            enabled = title.isNotBlank() && artist.isNotBlank() && !viewModel.isFetchingLrc
+                        ) {
+                            if (viewModel.isFetchingLrc) {
+                                androidx.compose.foundation.layout.Box(
+                                    modifier = Modifier.size(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+                            } else {
+                                Text("自动获取")
+                            }
+                        }
                         Spacer(modifier = Modifier.width(AppDimensions.paddingCard()))
                         if (viewModel.tempLrcUri != null) {
                             Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(AppDimensions.iconS()))
@@ -363,8 +431,13 @@ fun EditSongDialog(
     onPickCover: () -> Unit,
     onPickLrc: () -> Unit
 ) {
+    val coroutineScope = rememberCoroutineScope()
+
     AlertDialog(
-        onDismissRequest = { viewModel.cancelEditSong() },
+        onDismissRequest = {
+            viewModel.cancelEditSong()
+            viewModel.fetchLrcError = null
+        },
         title = { Text("编辑歌曲信息", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(AppDimensions.paddingCard())) {
@@ -381,6 +454,35 @@ fun EditSongDialog(
                     singleLine = true
                 )
                 Spacer(modifier = Modifier.height(AppDimensions.spacingS()))
+
+                // 显示LRC错误提示
+                viewModel.fetchLrcError?.let { error ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFD32F2F),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "歌词: $error",
+                                color = Color(0xFFD32F2F),
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Button(onClick = onPickCover, modifier = Modifier.height(AppDimensions.buttonHeightM())) { Text("更换封面") }
@@ -403,6 +505,36 @@ fun EditSongDialog(
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Button(onClick = onPickLrc, modifier = Modifier.height(AppDimensions.buttonHeightM())) { Text("更换歌词 (LRC)") }
+                        Spacer(modifier = Modifier.width(AppDimensions.paddingCard()))
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    if (viewModel.editTitle.isNotBlank() && viewModel.editArtist.isNotBlank()) {
+                                        val lrcPath = viewModel.fetchLrcFromNetwork(viewModel.editTitle, viewModel.editArtist)
+                                        if (lrcPath != null) {
+                                            // 使用 file:// 格式的 URI
+                                            viewModel.editLrcUri = android.net.Uri.parse("file://$lrcPath")
+                                        }
+                                    }
+                                }
+                            },
+                            modifier = Modifier.height(AppDimensions.buttonHeightM()),
+                            enabled = viewModel.editTitle.isNotBlank() && viewModel.editArtist.isNotBlank() && !viewModel.isFetchingLrc
+                        ) {
+                            if (viewModel.isFetchingLrc) {
+                                androidx.compose.foundation.layout.Box(
+                                    modifier = Modifier.size(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+                            } else {
+                                Text("自动获取")
+                            }
+                        }
                         Spacer(modifier = Modifier.width(AppDimensions.paddingCard()))
                         if (viewModel.editLrcUri != null) {
                             Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(AppDimensions.iconS()))

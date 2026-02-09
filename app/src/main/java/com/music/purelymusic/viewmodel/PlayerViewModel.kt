@@ -91,7 +91,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     }
                 }
                 
-                val pLrc = tempLrcUri?.let { copyFile(it, "lrc_${System.currentTimeMillis()}.lrc") }
+                val pLrc = tempLrcUri?.let { uri ->
+                    val uriString = uri.toString()
+                    if (uriString.startsWith("/")) {
+                        // 已经是本地文件路径，直接使用
+                        uriString
+                    } else if (uriString.startsWith("file://")) {
+                        // 是 file:// 格式的 URI，提取路径部分
+                        uriString.substring(7)
+                    } else {
+                        // 是内容选择器的 URI，需要复制到本地
+                        copyFile(uri, "lrc_${System.currentTimeMillis()}.lrc")
+                    }
+                }
 
                 android.util.Log.d("purelymusic", "文件复制结果: pMusic=$pMusic, pCover=$pCover, pLrc=$pLrc")
 
@@ -272,6 +284,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     var fetchCoverError by mutableStateOf<String?>(null)
     var apiResponseData by mutableStateOf<String?>(null)
 
+    // 自动获取LRC的状态
+    var isFetchingLrc by mutableStateOf(false)
+        private set
+    var fetchLrcError by mutableStateOf<String?>(null)
+
     init {
         // 初始化 MediaSession
         mediaSession = MediaSessionCompat(context, "purelymusic").apply {
@@ -293,29 +310,43 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun loadLyrics(pathOrUri: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                Log.d("LyricLoad", "开始加载歌词: pathOrUri=$pathOrUri")
+
                 val bytes = if (pathOrUri.startsWith("/")) {
                     val file = File(pathOrUri)
+                    Log.d("LyricLoad", "文件路径: $pathOrUri, 文件存在: ${file.exists()}, 文件大小: ${file.length()}")
                     if (file.exists()) file.readBytes() else null
                 } else {
+                    Log.d("LyricLoad", "URI路径: $pathOrUri")
                     context.contentResolver.openInputStream(Uri.parse(pathOrUri))?.use { it.readBytes() }
                 }
 
                 if (bytes == null || bytes.isEmpty()) {
+                    Log.e("LyricLoad", "歌词文件为空或不存在")
                     withContext(Dispatchers.Main) { lyricLines = emptyList() }
                     return@launch
                 }
 
+                val rawText = String(bytes, Charsets.UTF_8)
+                Log.d("LyricLoad", "歌词内容长度: ${rawText.length}, 前200字符: ${rawText.take(200)}")
+
                 // 尝试多种编码防止乱码
-                var parsed = LrcParser.parse(String(bytes, Charsets.UTF_8))
+                var parsed = LrcParser.parse(rawText)
                 if (parsed.isEmpty()) {
+                    Log.d("LyricLoad", "UTF-8解析失败，尝试GBK编码")
                     parsed = LrcParser.parse(String(bytes, Charset.forName("GBK")))
+                }
+
+                Log.d("LyricLoad", "解析结果: 共${parsed.size}行歌词")
+                parsed.take(3).forEachIndexed { index, line ->
+                    Log.d("LyricLoad", "  第${index}行: 时间=${line.time}ms, 文本=${line.content}")
                 }
 
                 withContext(Dispatchers.Main) {
                     lyricLines = parsed
                 }
             } catch (e: Exception) {
-                Log.e("LyricLoad", "Failed: ${e.message}")
+                Log.e("LyricLoad", "Failed: ${e.message}", e)
                 withContext(Dispatchers.Main) { lyricLines = emptyList() }
             }
         }
@@ -337,10 +368,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         mediaPlayer?.release()
         currentSong = song
 
+        Log.d("PlaySong", "开始播放歌曲: ${song.title}, 歌词路径: ${song.lrcPath}")
+
         // 加载歌词
         if (!song.lrcPath.isNullOrEmpty()) {
             loadLyrics(song.lrcPath)
         } else {
+            Log.d("PlaySong", "歌曲没有歌词路径")
             lyricLines = emptyList()
         }
 
@@ -532,13 +566,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
 
             val newLrcPath = editLrcUri?.let { uri ->
-                if (uri.toString() != song.lrcPath) {
-                    copyFile(uri, "lrc_${System.currentTimeMillis()}.lrc")
-                } else {
-                    song.lrcPath
-                }
-            }
-
+                                val uriString = uri.toString()
+                                if (uriString.startsWith("/")) {
+                                    // 已经是本地文件路径，直接使用
+                                    uriString
+                                } else if (uriString.startsWith("file://")) {
+                                    // 是 file:// 格式的 URI，提取路径部分
+                                    uriString.substring(7)
+                                } else if (uriString != song.lrcPath) {
+                                    // 是内容选择器的 URI 且路径不同，需要复制到本地
+                                    copyFile(uri, "lrc_${System.currentTimeMillis()}.lrc")
+                                } else {
+                                    song.lrcPath
+                                }
+                            }
             val updatedSong = song.copy(
                 title = editTitle,
                 artist = editArtist,
@@ -634,9 +675,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             Log.d("FetchCover", "开始搜索封面: keywords=$keywords")
 
             // 构建请求 URL - 网易云 API
-            // 注意：请将 xxxxxx 替换为你自己的 API key
-            val apiKey = "xxxxxx" // 替换为你自己的 API key
-            val testUrl = "https://api.yaohud.cn/api/music/wyjiexi?key=$apiKey&type=so&name=${java.net.URLEncoder.encode(keywords, "UTF-8")}&size=standard"
+            val testUrl = "https://api.yaohud.cn/api/music/wyjiexi?key=v3ywJo5vIfAHRz9lIRg&type=so&name=${java.net.URLEncoder.encode(keywords, "UTF-8")}&size=standard"
             Log.d("FetchCover", "请求 URL: $testUrl")
 
             val connection = java.net.URL(testUrl).openConnection() as java.net.HttpURLConnection
@@ -726,5 +765,99 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun clearFetchCoverError() {
         fetchCoverError = null
+    }
+
+    fun clearFetchLrcError() {
+        fetchLrcError = null
+    }
+
+    // --- 自动获取LRC歌词 ---
+    suspend fun fetchLrcFromNetwork(title: String, artist: String): String? {
+        return try {
+            isFetchingLrc = true
+            fetchLrcError = null
+
+            val keywords = "$title $artist"
+            Log.d("FetchLrc", "开始获取LRC: keywords=$keywords")
+
+            // 步骤1: 先调用封面API获取歌曲ID
+            val searchUrl = "https://api.yaohud.cn/api/music/wyjiexi?key=v3ywJo5vIfAHRz9lIRg&type=so&name=${java.net.URLEncoder.encode(keywords, "UTF-8")}&size=standard"
+            Log.d("FetchLrc", "搜索歌曲URL: $searchUrl")
+
+            val searchConnection = java.net.URL(searchUrl).openConnection() as java.net.HttpURLConnection
+            searchConnection.requestMethod = "GET"
+            searchConnection.connectTimeout = 10000
+            searchConnection.readTimeout = 10000
+
+            val searchResponseCode = searchConnection.responseCode
+            if (searchResponseCode != 200) {
+                fetchLrcError = "搜索歌曲失败: HTTP $searchResponseCode"
+                return null
+            }
+
+            val searchResponse = searchConnection.inputStream.bufferedReader().use { it.readText() }
+            Log.d("FetchLrc", "搜索响应: $searchResponse")
+
+            val gson = com.google.gson.Gson()
+            val searchResult = gson.fromJson(searchResponse, com.music.purelymusic.model.WangYiResponse::class.java)
+
+            if (searchResult.code != 200 || searchResult.data.isNullOrEmpty()) {
+                fetchLrcError = "未找到匹配的歌曲"
+                return null
+            }
+
+            val songId = searchResult.data.firstOrNull()?.id?.toString()
+            if (songId == null) {
+                fetchLrcError = "无法获取歌曲ID"
+                return null
+            }
+
+            Log.d("FetchLrc", "获取到歌曲ID: $songId")
+
+            // 步骤2: 使用歌曲ID调用LRC API获取歌词
+            val lrcUrl = "https://api.yaohud.cn/api/music/lrc?key=v3ywJo5vIfAHRz9lIRg&mid=$songId&type=wy"
+            Log.d("FetchLrc", "获取LRC URL: $lrcUrl")
+
+            val lrcConnection = java.net.URL(lrcUrl).openConnection() as java.net.HttpURLConnection
+            lrcConnection.requestMethod = "GET"
+            lrcConnection.connectTimeout = 10000
+            lrcConnection.readTimeout = 10000
+
+            val lrcResponseCode = lrcConnection.responseCode
+            if (lrcResponseCode != 200) {
+                fetchLrcError = "获取歌词失败: HTTP $lrcResponseCode"
+                return null
+            }
+
+            val lrcResponse = lrcConnection.inputStream.bufferedReader().use { it.readText() }
+            Log.d("FetchLrc", "LRC响应: $lrcResponse")
+
+            val lrcResult = gson.fromJson(lrcResponse, com.music.purelymusic.model.LrcApiResponse::class.java)
+
+            if (lrcResult.code != 200 || lrcResult.data?.lyric == null) {
+                fetchLrcError = "未找到歌词"
+                return null
+            }
+
+            val lrcContent = lrcResult.data.lyric
+            Log.d("FetchLrc", "获取到LRC内容，长度: ${lrcContent.length}")
+
+            // 保存LRC到本地文件
+            val fileName = "lrc_${System.currentTimeMillis()}.lrc"
+            val file = java.io.File(context.filesDir, fileName)
+            file.writeText(lrcContent, Charsets.UTF_8)
+
+            val localPath = file.absolutePath
+            Log.d("FetchLrc", "LRC已保存到本地: $localPath")
+            localPath
+
+        } catch (e: Exception) {
+            val errorMsg = "获取LRC失败: ${e.javaClass.simpleName} - ${e.message}"
+            Log.e("FetchLrc", errorMsg, e)
+            fetchLrcError = errorMsg
+            null
+        } finally {
+            isFetchingLrc = false
+        }
     }
 }
