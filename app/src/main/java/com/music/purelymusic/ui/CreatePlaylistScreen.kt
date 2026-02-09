@@ -126,23 +126,30 @@ fun CreatePlaylistScreen(
                     modifier = Modifier
                         .size(200.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .background(Color(0xFFFFCDD2))
                         .clickable { onPickPlaylistCover() },
                     contentAlignment = Alignment.Center
                 ) {
                     if (viewModel.tempPlaylistCoverUri != null) {
                         AsyncImage(model = viewModel.tempPlaylistCoverUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     } else {
-                        Text("点击上传封面", color = MaterialTheme.colorScheme.primary)
+                        Text("点击上传封面", color = Color(0xFFB71C1C))
                     }
                 }
                 Spacer(modifier = Modifier.height(32.dp))
                 TextField(
                     value = playlistName,
                     onValueChange = { playlistName = it },
-                    label = { Text("歌单名称") },
+                    label = { Text("歌单名称", color = Color(0xFFB71C1C)) },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFFFFEBEE),
+                        unfocusedContainerColor = Color(0xFFFFEBEE),
+                        focusedTextColor = Color(0xFFB71C1C),
+                        unfocusedTextColor = Color(0xFFB71C1C),
+                        cursorColor = Color(0xFFB71C1C)
+                    )
                 )
             }
         }

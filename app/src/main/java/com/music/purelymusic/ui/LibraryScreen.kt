@@ -15,6 +15,7 @@
 //
 //January 2020 http://license.coscl.org.cn/MulanPSL2
 package com.music.purelymusic.ui
+import android.util.Log
 import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -194,11 +196,22 @@ fun ImportMusicDialog(
     onPickCover: () -> Unit,
     onPickLrc: () -> Unit
 ) {
+    val coroutineScope = rememberCoroutineScope()
     var title by remember { mutableStateOf("") }
     var artist by remember { mutableStateOf("") }
 
+    // 显示错误提示
+    LaunchedEffect(viewModel.fetchCoverError) {
+        viewModel.fetchCoverError?.let { error ->
+            // 错误提示会自动显示，无需额外处理
+        }
+    }
+
     AlertDialog(
-        onDismissRequest = { viewModel.tempMusicUri = null },
+        onDismissRequest = {
+            viewModel.tempMusicUri = null
+            viewModel.fetchCoverError = null
+        },
         title = { Text("补充歌曲信息") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(AppDimensions.spacingS())) {
@@ -206,8 +219,70 @@ fun ImportMusicDialog(
                 TextField(value = artist, onValueChange = { artist = it }, label = { Text("歌手") }, singleLine = true)
                 Spacer(modifier = Modifier.height(AppDimensions.paddingCard()))
 
+                // 显示错误提示
+                viewModel.fetchCoverError?.let { error ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFD32F2F),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = error,
+                                color = Color(0xFFD32F2F),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(AppDimensions.spacingS()))
+                }
+
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Button(onClick = onPickCover, modifier = Modifier.height(AppDimensions.buttonHeightM())) { Text("选择封面") }
+                    Spacer(modifier = Modifier.width(AppDimensions.spacingXS()))
+                    Button(
+                        onClick = {
+                            Log.d("ImportDialog", "自动获取按钮被点击, title=$title, artist=$artist")
+                            if (title.isNotBlank() && artist.isNotBlank()) {
+                                coroutineScope.launch {
+                                    Log.d("ImportDialog", "开始协程获取封面")
+                                    val coverUrl = viewModel.fetchCoverFromNetwork(title, artist)
+                                    Log.d("ImportDialog", "获取封面结果: $coverUrl")
+                                    if (coverUrl != null) {
+                                        viewModel.tempCoverUri = android.net.Uri.parse(coverUrl)
+                                    }
+                                }
+                            } else {
+                                Log.d("ImportDialog", "歌名或歌手为空，跳过获取")
+                            }
+                        },
+                        modifier = Modifier.height(AppDimensions.buttonHeightM()),
+                        enabled = title.isNotBlank() && artist.isNotBlank() && !viewModel.isFetchingCover
+                    ) {
+                        if (viewModel.isFetchingCover) {
+                            androidx.compose.foundation.layout.Box(
+                                modifier = Modifier.size(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            }
+                        } else {
+                            Text("自动获取")
+                        }
+                    }
                     Spacer(modifier = Modifier.width(AppDimensions.paddingCard()))
                     if (viewModel.tempCoverUri != null) {
                         AsyncImage(

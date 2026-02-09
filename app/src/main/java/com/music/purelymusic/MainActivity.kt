@@ -48,6 +48,15 @@ import com.music.purelymusic.ui.utils.AppDimensions
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 配置 Coil 以支持 HTTP 协议
+        coil.ImageLoader.Builder(this)
+            .okHttpClient {
+                okhttp3.OkHttpClient.Builder()
+                    .build()
+            }
+            .build()
+
         setContent {
             AMPlayerTheme {
                 val playerViewModel: PlayerViewModel = viewModel()

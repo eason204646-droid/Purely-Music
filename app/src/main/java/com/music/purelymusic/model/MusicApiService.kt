@@ -20,10 +20,10 @@ import retrofit2.http.GET
 import retrofit2.http.Query
 
 interface MusicApiService {
-    @GET("search")
+    @GET("music/migu")
     suspend fun searchSong(
-        @Query("keywords") keywords: String,
-        @Query("type") type: Int = 1,
-        @Query("limit") limit: Int = 1
-    ): SearchResponse
+        @Query("key") key: String = "xxxxxx", // 替换为你自己的 API key
+        @Query("type") type: String = "search",
+        @Query("word") word: String
+    ): MiguSearchResponse
 }

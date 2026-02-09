@@ -68,7 +68,49 @@ data class CloudArtist(
 )
 
 /**
- * 3. 歌词响应模型 (如果你以后要实现歌词功能)
+ * 3. 咪咕 API 响应模型
+ */
+
+// 咪咕 API 返回的歌曲信息
+data class MiguSong(
+    val songId: String,
+    val songName: String,
+    val singer: String,
+    val cover: String,
+    val album: String?
+)
+
+// 咪咕 API 搜索响应
+data class MiguSearchResponse(
+    val code: Int,
+    val msg: String,
+    val data: List<MiguSong>
+)
+
+/**
+ * 4. 网易云 API 响应模型
+ */
+
+// 网易云 API 返回的歌曲信息
+data class WangYiSongData(
+    val id: Long,
+    val name: String,
+    val artists: List<String>,
+    val artists_str: String,
+    val album: String,
+    val picUrl: String,
+    val duration: Long,
+    val duration_str: String
+)
+
+// 网易云 API 搜索响应
+data class WangYiResponse(
+    val code: Int,
+    val data: List<WangYiSongData>
+)
+
+/**
+ * 4. 歌词响应模型 (如果你以后要实现歌词功能)
  */
 data class LyricResponse(
     val lrc: LrcContent

@@ -78,7 +78,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 android.util.Log.d("purelymusic", "开始复制文件")
                 // 拷贝文件到私有目录，防止系统清理或权限丢失
                 val pMusic = copyFile(mUri, "mus_${System.currentTimeMillis()}.mp3")
-                val pCover = tempCoverUri?.let { copyFile(it, "cov_${System.currentTimeMillis()}.jpg") }
+                
+                // 处理封面：如果是本地文件路径，直接使用；如果是 URI，需要复制
+                val pCover: String? = tempCoverUri?.let { uri ->
+                    val uriString = uri.toString()
+                    if (uriString.startsWith("/")) {
+                        // 已经是本地文件路径，直接使用
+                        uriString
+                    } else {
+                        // 是 URI，需要复制到本地
+                        copyFile(uri, "cov_${System.currentTimeMillis()}.jpg")
+                    }
+                }
+                
                 val pLrc = tempLrcUri?.let { copyFile(it, "lrc_${System.currentTimeMillis()}.lrc") }
 
                 android.util.Log.d("purelymusic", "文件复制结果: pMusic=$pMusic, pCover=$pCover, pLrc=$pLrc")
@@ -253,6 +265,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     var showAddSongDialog by mutableStateOf(false)
     var selectedPlaylistForAdd by mutableStateOf<String?>(null)
     var selectedSongsForAdd by mutableStateOf<Set<Long>>(emptySet())
+
+    // 自动获取封面的状态
+    var isFetchingCover by mutableStateOf(false)
+        private set
+    var fetchCoverError by mutableStateOf<String?>(null)
+    var apiResponseData by mutableStateOf<String?>(null)
 
     init {
         // 初始化 MediaSession
@@ -604,5 +622,109 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         super.onCleared()
         mediaPlayer?.release()
         mediaSession?.release()
+    }
+
+    // --- 网络获取封面 ---
+    suspend fun fetchCoverFromNetwork(title: String, artist: String): String? {
+        return try {
+            isFetchingCover = true
+            fetchCoverError = null
+
+            val keywords = "$title $artist"
+            Log.d("FetchCover", "开始搜索封面: keywords=$keywords")
+
+            // 构建请求 URL - 网易云 API
+            // 注意：请将 xxxxxx 替换为你自己的 API key
+            val apiKey = "xxxxxx" // 替换为你自己的 API key
+            val testUrl = "https://api.yaohud.cn/api/music/wyjiexi?key=$apiKey&type=so&name=${java.net.URLEncoder.encode(keywords, "UTF-8")}&size=standard"
+            Log.d("FetchCover", "请求 URL: $testUrl")
+
+            val connection = java.net.URL(testUrl).openConnection() as java.net.HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 10000
+            connection.readTimeout = 10000
+
+            val responseCode = connection.responseCode
+            Log.d("FetchCover", "HTTP 响应码: $responseCode")
+
+            if (responseCode == 200) {
+                val rawResponse = connection.inputStream.bufferedReader().use { it.readText() }
+                Log.d("FetchCover", "原始响应内容: $rawResponse")
+
+                // 保存原始响应数据用于调试
+                apiResponseData = rawResponse
+
+                // 尝试解析 JSON
+                val gson = com.google.gson.Gson()
+                try {
+                    val response = gson.fromJson(rawResponse, com.music.purelymusic.model.WangYiResponse::class.java)
+
+                    Log.d("FetchCover", "解析后: code=${response.code}, data=${response.data}, data size=${response.data?.size ?: 0}")
+
+                    if (response.code == 200 && response.data != null && response.data.isNotEmpty()) {
+                        val coverUrl = response.data.firstOrNull()?.picUrl
+                        Log.d("FetchCover", "获取的封面 URL: $coverUrl")
+
+                        if (!coverUrl.isNullOrEmpty()) {
+                            // 下载封面图片到本地
+                            try {
+                                val coverConnection = java.net.URL(coverUrl).openConnection() as java.net.HttpURLConnection
+                                coverConnection.requestMethod = "GET"
+                                coverConnection.connect()
+                                
+                                if (coverConnection.responseCode == 200) {
+                                    val inputStream = coverConnection.inputStream
+                                    val fileName = "cover_${System.currentTimeMillis()}.jpg"
+                                    val file = java.io.File(context.filesDir, fileName)
+                                    val outputStream = java.io.FileOutputStream(file)
+                                    
+                                    inputStream.copyTo(outputStream)
+                                    inputStream.close()
+                                    outputStream.close()
+                                    
+                                    val localPath = file.absolutePath
+                                    Log.d("FetchCover", "封面已下载到本地: $localPath")
+                                    localPath
+                                } else {
+                                    fetchCoverError = "下载封面失败: HTTP ${coverConnection.responseCode}"
+                                    null
+                                }
+                            } catch (e: Exception) {
+                                Log.e("FetchCover", "下载封面失败", e)
+                                fetchCoverError = "下载封面失败: ${e.message}"
+                                null
+                            }
+                        } else {
+                            fetchCoverError = "未找到封面\n原始响应: ${rawResponse.take(200)}"
+                            null
+                        }
+                    } else {
+                        fetchCoverError = "API 错误 (${response.code}): 未找到匹配歌曲\n原始响应: ${rawResponse.take(200)}"
+                        null
+                    }
+                } catch (e: Exception) {
+                    Log.e("FetchCover", "JSON 解析失败", e)
+                    fetchCoverError = "JSON 解析失败: ${e.message}\n原始响应: ${rawResponse.take(200)}"
+                    null
+                }
+            } else {
+                val errorMsg = "HTTP 错误: $responseCode"
+                Log.e("FetchCover", errorMsg)
+                fetchCoverError = errorMsg
+                null
+            }
+        } catch (e: Exception) {
+            val errorMsg = "获取封面失败: ${e.javaClass.simpleName} - ${e.message}"
+            Log.e("FetchCover", errorMsg, e)
+            fetchCoverError = errorMsg
+            e.printStackTrace()
+            null
+        } finally {
+            isFetchingCover = false
+        }
+    }
+
+    fun clearFetchCoverError() {
+        fetchCoverError = null
     }
 }
