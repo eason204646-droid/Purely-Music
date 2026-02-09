@@ -55,25 +55,25 @@
 
 ### 🎵 播放界面
 
-<img width="393" height="699" alt="MuMuPlayer_lh9U1kT32c" src="https://p0-xtjj-private.juejin.cn/tos-cn-i-73owjymdk6/b65c7dd07a834993b7c06f377578c798~tplv-73owjymdk6-jj-mark-v1:0:0:0:0:5o6Y6YeR5oqA5pyv56S-5Yy6IEAg55So5oi3NDYxMDExNTkxMzc=:q75.awebp?policy=eyJ2bSI6MywidWlkIjoiMjEzODk5OTA3MjQ5MTE1MiJ9&rk3s=f64ab15b&x-orig-authkey=f32326d3454f2ac7e96d3d06cdbb035152127018&x-orig-expires=1771163190&x-orig-sign=A9nqpix32SOurOtqWRlqo%2FVaSTI%3D">
+<img width="393" height="699" alt="MuMuPlayer_lh9U1kT32c" src="https://p6-xtjj-sign.byteimg.com/tos-cn-i-73owjymdk6/3e5a00227d94469895678325e6dcf456~tplv-73owjymdk6-jj-mark-v1:0:0:0:0:5o6Y6YeR5oqA5pyv56S-5Yy6IEAg55So5oi3NDYxMDExNTkxMzc=:q75.awebp?rk3s=f64ab15b&x-expires=1771201864&x-signature=ez9fZn7B%2Bvpovl3GKTeTo39OugA%3D">
 
 沉浸式播放体验，背景采用歌曲封面虚化效果，支持下滑返回手势
 
 ### 📝 歌词界面
 
-<img width="393" height="699" alt="MuMuPlayer_MpZjTnjalZ" src="https://p0-xtjj-private.juejin.cn/tos-cn-i-73owjymdk6/1f6d8b6b63e24118ab51302d10b84610~tplv-73owjymdk6-jj-mark-v1:0:0:0:0:5o6Y6YeR5oqA5pyv56S-5Yy6IEAg55So5oi3NDYxMDExNTkxMzc=:q75.awebp?policy=eyJ2bSI6MywidWlkIjoiMjEzODk5OTA3MjQ5MTE1MiJ9&rk3s=f64ab15b&x-orig-authkey=f32326d3454f2ac7e96d3d06cdbb035152127018&x-orig-expires=1771163190&x-orig-sign=9EEJ2qKmlDfbKYO2RWNqkxVdQO4%3D">
+<img width="393" height="699" alt="MuMuPlayer_MpZjTnjalZ" src="https://p6-xtjj-sign.byteimg.com/tos-cn-i-73owjymdk6/1f6d8b6b63e24118ab51302d10b84610~tplv-73owjymdk6-jj-mark-v1:0:0:0:0:5o6Y6YeR5oqA5pyv56S-5Yy6IEAg55So5oi3NDYxMDExNTkxMzc=:q75.awebp?rk3s=f64ab15b&x-expires=1771201864&x-signature=TEx%2FoGjocYxSMYXVJryeKLUyBCM%3D">
 
 支持 LRC 格式歌词同步显示，歌词高亮显示并自动滚动定位，可切换封面/歌词视图
 
 ### 🏠 主页
 
-<img width="393" height="699" alt="MuMuPlayer_lh9U1kT32c" src="https://p0-xtjj-private.juejin.cn/tos-cn-i-73owjymdk6/59ae8f68cd0d455a9afa45f1704e9adf~tplv-73owjymdk6-jj-mark-v1:0:0:0:0:5o6Y6YeR5oqA5pyv56S-5Yy6IEAg55So5oi3NDYxMDExNTkxMzc=:q75.awebp?policy=eyJ2bSI6MywidWlkIjoiMjEzODk5OTA3MjQ5MTE1MiJ9&rk3s=f64ab15b&x-orig-authkey=f32326d3454f2ac7e96d3d06cdbb035152127018&x-orig-expires=1771163190&x-orig-sign=AjofYI%2FOlZUeOej77KE8jt16H%2F4%3D">
+<img width="393" height="699" alt="MuMuPlayer_lh9U1kT32c" src="https://p6-xtjj-sign.byteimg.com/tos-cn-i-73owjymdk6/59ae8f68cd0d455a9afa45f1704e9adf~tplv-73owjymdk6-jj-mark-v1:0:0:0:0:5o6Y6YeR5oqA5pyv56S-5Yy6IEAg55So5oi3NDYxMDExNTkxMzc=:q75.awebp?rk3s=f64ab15b&x-expires=1771201864&x-signature=baNLDYlniRQEP68Ncn2N%2FfbAAhU%3D">
 
 简洁大气的主页设计，底部 MiniPlayer 悬浮播放控制，方便快捷
 
 ### 📚 资料库
 
-<img width="393" height="699" alt="MuMuPlayer_prqatopbzX" src="https://p0-xtjj-private.juejin.cn/tos-cn-i-73owjymdk6/efb791b57022425b8b7a940696083607~tplv-73owjymdk6-jj-mark-v1:0:0:0:0:5o6Y6YeR5oqA5pyv56S-5Yy6IEAg55So5oi3NDYxMDExNTkxMzc=:q75.awebp?policy=eyJ2bSI6MywidWlkIjoiMjEzODk5OTA3MjQ5MTE1MiJ9&rk3s=f64ab15b&x-orig-authkey=f32326d3454f2ac7e96d3d06cdbb035152127018&x-orig-expires=1771163190&x-orig-sign=QeUb30dGkfCwAOAotpO5d4qEil8%3D">
+<img width="393" height="699" alt="MuMuPlayer_prqatopbzX" src="https://p6-xtjj-sign.byteimg.com/tos-cn-i-73owjymdk6/efb791b57022425b8b7a940696083607~tplv-73owjymdk6-jj-mark-v1:0:0:0:0:5o6Y6YeR5oqA5pyv56S-5Yy6IEAg55So5oi3NDYxMDExNTkxMzc=:q75.awebp?rk3s=f64ab15b&x-expires=1771201864&x-signature=KSN34oC9KR8gKAsxYd%2Blljf0F7A%3D">
 
 展示所有歌单和歌曲，支持网格视图，美观的封面展示
 
