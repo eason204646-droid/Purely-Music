@@ -1,4 +1,4 @@
-﻿//Copyright (c) [2026] [eason204646]
+//Copyright (c) [2026] [eason204646]
 //[purelymusic] is licensed under Mulan PSL v2.
 //You can use this software according to the terms and conditions of the Mulan
 //PSL v2.
@@ -16,17 +16,18 @@
 //January 2020 http://license.coscl.org.cn/MulanPSL2
 package com.music.purelymusic.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,8 +40,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.util.UnstableApi
 import coil.compose.AsyncImage
 import com.music.purelymusic.R
@@ -57,7 +56,7 @@ fun PlaylistDetailScreen(
     onBack: () -> Unit,
     onNavigateToPlayer: () -> Unit
 ) {
-    // 🚩 修复 ID 匹配逻辑：全部使用 toString() 比较，确保 UUID 字符串也能正常匹配
+    // 修复 ID 匹配逻辑：全部使用 toString() 比较，确保 UUID 字符串也能正常匹配
     val playlistSongs = remember(playlist.songIds, viewModel.libraryList) {
         val idSet = playlist.songIds.map { it.toString() }.toSet()
         viewModel.libraryList.filter { song ->
@@ -65,7 +64,6 @@ fun PlaylistDetailScreen(
         }
     }
 
-    // 计算总时长（这里使用歌曲数量代替，可以后续扩展）
     val totalSongs = playlistSongs.size
 
     Scaffold(
@@ -101,172 +99,112 @@ fun PlaylistDetailScreen(
                         color = Color.Black.copy(alpha = 0.3f),
                         onClick = onBack
                     ) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = Color.White)
-                        }
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "返回",
+                            tint = Color.White,
+                            modifier = Modifier.padding(8.dp).size(24.dp)
+                        )
                     }
 
                     Column(
-                        modifier = Modifier.align(Alignment.BottomStart).padding(20.dp)
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp)
+                            .padding(bottom = 32.dp),
+                        verticalArrangement = Arrangement.Bottom
                     ) {
                         Text(
                             text = playlist.name,
                             color = Color.White,
-                            fontSize = 34.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            lineHeight = 40.sp
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "$totalSongs 首歌曲",
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.8f),
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = "$totalSongs 首歌曲",
-                                color = Color.White.copy(alpha = 0.9f),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Surface(
-                                modifier = Modifier
-                                    .padding(horizontal = 8.dp)
-                                    .height(4.dp)
-                                    .width(4.dp),
-                                shape = CircleShape,
-                                color = Color.White.copy(alpha = 0.5f)
-                            ) {}
-                            Text(
-                                text = "播放列表",
-                                color = Color.White.copy(alpha = 0.7f),
-                                fontSize = 13.sp
-                            )
+                            Button(
+                                onClick = {
+                                    viewModel.playPlaylist(playlist, isRandom = false)
+                                    onNavigateToPlayer()
+                                },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("播放全部", color = Color.White)
+                            }
+                            Button(
+                                onClick = {
+                                    viewModel.playPlaylist(playlist, isRandom = true)
+                                    onNavigateToPlayer()
+                                },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.White.copy(alpha = 0.2f),
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Text("随机播放", color = Color.White)
+                            }
                         }
                     }
                 }
             }
 
-            // 控制按钮区域
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Button(
-                        onClick = { viewModel.playPlaylist(playlist, isRandom = false); onNavigateToPlayer() },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = com.music.purelymusic.ui.theme.RedPrimary
-                        ),
-                        elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = 4.dp,
-                            pressedElevation = 8.dp
-                        )
-                    ) {
-                        Icon(
-                            Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "顺序播放",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                    OutlinedButton(
-                        onClick = { viewModel.playPlaylist(playlist, isRandom = true); onNavigateToPlayer() },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(2.dp, com.music.purelymusic.ui.theme.RedPrimary),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = com.music.purelymusic.ui.theme.RedPrimary
-                        )
-                    ) {
-                        Icon(
-                            Icons.Default.Shuffle,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "随机播放",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
-
-            // 歌曲列表
             items(playlistSongs) { song ->
-                PlaylistSongItem(
+                SongItem(
                     song = song,
-                    playlist = playlist,
-                    viewModel = viewModel,
                     onClick = {
-                        viewModel.playSong(song, updateInternalList = false)
+                        viewModel.playSong(song)
                         onNavigateToPlayer()
                     }
                 )
             }
 
-            // 添加新歌曲按钮
+            // 添加歌曲按钮
             item {
-                Column {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                            .clickable {
-                                viewModel.showAddSongDialog = true
-                                viewModel.selectedPlaylistForAdd = playlist.id.toString()
-                                viewModel.selectedSongsForAdd = emptySet()
-                            },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // 红色加号图标作为"封面"
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(com.music.purelymusic.ui.theme.RedPrimary),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "添加歌曲",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
-                    // 灰色分割线
-                    androidx.compose.material3.Divider(
-                        color = Color(0xFFE0E0E0),
-                        thickness = 1.dp,
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .clickable {
+                            viewModel.showAddSongDialog = true
+                            viewModel.selectedPlaylistForAdd = playlist.id.toString()
+                            viewModel.selectedSongsForAdd = emptySet()
+                        },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "添加歌曲",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -286,96 +224,6 @@ fun PlaylistDetailScreen(
     }
 }
 
-// 歌单中的歌曲项（带长按删除功能）
-@androidx.annotation.OptIn(UnstableApi::class)
-@Composable
-fun PlaylistSongItem(
-    song: Song,
-    playlist: Playlist,
-    viewModel: PlayerViewModel,
-    onClick: () -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = { expanded = true }
-                ),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            AsyncImage(
-                model = song.coverUri ?: R.drawable.default_cover,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(8.dp)),
-                contentScale = ContentScale.Crop
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = song.title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = song.artist,
-                    fontSize = 14.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // 播放图标
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = null,
-                tint = com.music.purelymusic.ui.theme.RedPrimary.copy(alpha = 0.7f),
-                modifier = Modifier.size(24.dp)
-            )
-        }
-
-        // 灰色分割线
-        androidx.compose.material3.Divider(
-            color = Color(0xFFE0E0E0),
-            thickness = 1.dp,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
-
-        // 下拉菜单
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
-        ) {
-            DropdownMenuItem(
-                text = { Text("删除", color = com.music.purelymusic.ui.theme.RedPrimary) },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = null,
-                        tint = com.music.purelymusic.ui.theme.RedPrimary
-                    )
-                },
-                onClick = {
-                    viewModel.removeSongFromPlaylist(playlist.id.toString(), song.id.toLong())
-                    expanded = false
-                }
-            )
-        }
-    }
-}
-
 // 添加歌曲到歌单的对话框
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
@@ -383,9 +231,9 @@ fun AddSongsToPlaylistDialog(
     viewModel: PlayerViewModel,
     onDismiss: () -> Unit
 ) {
-    Dialog(
+    androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(
+        properties = androidx.compose.ui.window.DialogProperties(
             dismissOnBackPress = true,
             dismissOnClickOutside = true,
             usePlatformDefaultWidth = false
@@ -395,7 +243,7 @@ fun AddSongsToPlaylistDialog(
             modifier = Modifier
                 .fillMaxWidth(0.9f)
                 .fillMaxHeight(0.8f),
-            shape = RoundedCornerShape(20.dp),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 8.dp
         ) {
@@ -430,7 +278,7 @@ fun AddSongsToPlaylistDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                androidx.compose.material3.Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -467,7 +315,7 @@ fun AddSongsToPlaylistDialog(
                     OutlinedButton(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
                     ) {
                         Text("取消", fontSize = 15.sp)
                     }
@@ -482,9 +330,9 @@ fun AddSongsToPlaylistDialog(
                             onDismiss()
                         },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = com.music.purelymusic.ui.theme.RedPrimary
+                            containerColor = MaterialTheme.colorScheme.primary
                         ),
                         enabled = viewModel.selectedSongsForAdd.isNotEmpty()
                     ) {
@@ -508,16 +356,16 @@ fun SelectableSongItem(
     onClick: () -> Unit
 ) {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
         color = if (isSelected) {
-                                    com.music.purelymusic.ui.theme.RedPrimary.copy(alpha = 0.1f)
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                                },
-                                border = if (isSelected) {
-                                    BorderStroke(1.dp, com.music.purelymusic.ui.theme.RedPrimary)        } else {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        },
+        border = if (isSelected) {
+            androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+        } else {
             null
         },
         onClick = onClick
@@ -533,11 +381,12 @@ fun SelectableSongItem(
                 modifier = Modifier.size(24.dp),
                 shape = CircleShape,
                 color = if (isSelected) {
-                                            com.music.purelymusic.ui.theme.RedPrimary
-                                        } else {
-                                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                        },                border = if (!isSelected) {
-                    BorderStroke(2.dp, MaterialTheme.colorScheme.outlineVariant)
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                },
+                border = if (!isSelected) {
+                    androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.outlineVariant)
                 } else {
                     null
                 }
@@ -564,7 +413,7 @@ fun SelectableSongItem(
                 contentDescription = null,
                 modifier = Modifier
                     .size(48.dp)
-                    .clip(RoundedCornerShape(8.dp)),
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp)),
                 contentScale = ContentScale.Crop
             )
 

@@ -19,7 +19,6 @@ package com.music.purelymusic.utils
 import com.music.purelymusic.model.LrcLine
 
 object LrcParser {
-    // 🚩 改进的正则：使用 [.:] 兼容点和冒号，并让内容部分可选
     private val regex = Regex("\\[(\\d{2}):(\\d{2})[.:](\\d{2,3})\\](.*)")
 
     fun parse(lrcText: String): List<LrcLine> {
@@ -34,7 +33,6 @@ object LrcParser {
                     val milStr = match.groupValues[3]
                     val text = match.groupValues[4].trim()
 
-                    // 🚩 动态转换毫秒：根据位数补全 (2位*10, 1位*100)
                     val mil = when (milStr.length) {
                         1 -> milStr.toLong() * 100
                         2 -> milStr.toLong() * 10
@@ -44,12 +42,10 @@ object LrcParser {
                     val time = min * 60000 + sec * 1000 + mil
                     lines.add(LrcLine(time, text))
                 } catch (e: Exception) {
-                    // 防止个别行格式崩坏导致整个解析停止
                     e.printStackTrace()
                 }
             }
         }
-        // 按时间排序
         return lines.sortedBy { it.time }
     }
 }

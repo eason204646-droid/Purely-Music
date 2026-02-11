@@ -790,30 +790,66 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                             }
                         }
 
-                        // 处理歌词
+                        // 处理歌词 - 优先使用 data.music.lrctxt，如果为空则调用 data.music.lrcurl
                         var lrcPath: String? = null
-                        if (!data.lrc.isNullOrEmpty()) {
+
+                        // 优先使用直接返回的歌词内容
+                        val lrcContent = if (!data.music.lrctxt.isNullOrEmpty()) {
+                            Log.d("FetchAll", "使用直接返回的歌词内容")
+                            data.music.lrctxt
+                        } else if (!data.music.lrcurl.isNullOrEmpty()) {
+                            // 如果没有直接返回的内容，则通过 URL 获取
                             try {
-                                val lrcConnection = java.net.URL(data.lrc).openConnection() as java.net.HttpURLConnection
+                                val lrcUrl = data.music.lrcurl
+                                Log.d("FetchAll", "通过URL获取歌词: $lrcUrl")
+
+                                val lrcConnection = java.net.URL(lrcUrl).openConnection() as java.net.HttpURLConnection
                                 lrcConnection.requestMethod = "GET"
+                                lrcConnection.connectTimeout = 10000
+                                lrcConnection.readTimeout = 10000
                                 lrcConnection.connect()
 
                                 if (lrcConnection.responseCode == 200) {
-                                    val lrcResponse = lrcConnection.inputStream.bufferedReader().use { it.readText() }
-                                    val lrcResult = gson.fromJson(lrcResponse, com.music.purelymusic.model.LrcApiResponse::class.java)
+                                    val rawResponse = lrcConnection.inputStream.bufferedReader().use { it.readText() }
+                                    Log.d("FetchAll", "歌词API响应: ${rawResponse.take(500)}")
 
-                                    if (lrcResult.code == 200 && lrcResult.data?.lyric != null) {
-                                        val lrcContent = lrcResult.data.lyric
-                                        val fileName = "lrc_${System.currentTimeMillis()}.lrc"
-                                        val file = java.io.File(context.filesDir, fileName)
-                                        file.writeText(lrcContent, Charsets.UTF_8)
-                                        lrcPath = file.absolutePath
-                                        Log.d("FetchAll", "歌词已下载: $lrcPath")
+                                    val gson = com.google.gson.Gson()
+                                    val lrcResponse = gson.fromJson(rawResponse, com.music.purelymusic.model.LrcJsonResponse::class.java)
+
+                                    if (lrcResponse.code == 200 && !lrcResponse.data?.lyric.isNullOrEmpty()) {
+                                        lrcResponse.data.lyric
+                                    } else {
+                                        null
                                     }
+                                } else {
+                                    Log.e("FetchAll", "歌词URL请求失败，响应码: ${lrcConnection.responseCode}")
+                                    null
                                 }
                             } catch (e: Exception) {
                                 Log.e("FetchAll", "下载歌词失败", e)
+                                null
                             }
+                        } else {
+                            Log.d("FetchAll", "API返回的歌词URL和内容都为空")
+                            null
+                        }
+
+                        // 保存歌词文件
+                        if (!lrcContent.isNullOrEmpty()) {
+                            val fileName = "lrc_${System.currentTimeMillis()}.lrc"
+                            val file = java.io.File(context.filesDir, fileName)
+                            file.writeText(lrcContent, Charsets.UTF_8)
+                            lrcPath = file.absolutePath
+                            Log.d("FetchAll", "歌词已保存: $lrcPath, 文件大小: ${file.length()} 字节")
+
+                            // 测试解析
+                            val testParse = com.music.purelymusic.utils.LrcParser.parse(lrcContent)
+                            Log.d("FetchAll", "歌词解析测试结果: 共${testParse.size}行")
+                            if (testParse.isNotEmpty()) {
+                                Log.d("FetchAll", "第一行: 时间=${testParse[0].time}ms, 内容=${testParse[0].content}")
+                            }
+                        } else {
+                            Log.d("FetchAll", "歌词内容为空")
                         }
 
                         Pair(coverPath, lrcPath)

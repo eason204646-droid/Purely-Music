@@ -92,7 +92,8 @@ data class MiguSearchResponse(
  */
 data class WyApiMusic(
     val lrc: String,
-    val lrcurl: String
+    val lrcurl: String,
+    val lrctxt: String? = null
 )
 
 data class WyApiData(
@@ -125,15 +126,18 @@ data class WyApiResponse(
 )
 
 /**
- * 5. LRC API响应模型
+ * 5. LRC JSON响应模型 (data.music.lrcurl 返回的格式)
  */
-data class LrcApiResponse(
+data class LrcJsonResponse(
     val code: Int,
     val msg: String,
-    val data: LrcApiData?
+    val data: LrcJsonData?,
+    val exec_time: Double,
+    val tips: String,
+    val ip: String
 )
 
-data class LrcApiData(
+data class LrcJsonData(
     val lyric: String
 )
 
