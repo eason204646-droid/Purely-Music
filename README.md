@@ -96,6 +96,16 @@
 
 ## 构建
 
+### 配置 API Key
+
+在项目根目录创建 `local.properties` 文件，添加你的音乐 API key：
+
+```properties
+MUSIC_API_KEY=你的API密钥
+```
+
+### 编译运行
+
 ```bash
 # 克隆项目
 git clone https://github.com/eason204646-droid/Purely-Music.git
