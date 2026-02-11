@@ -69,6 +69,7 @@ fun LibraryScreen(
     onPickCover: () -> Unit,
     onNavigateToCreatePlaylist: () -> Unit,
     onNavigateToPlaylistDetail: (Playlist) -> Unit,
+    onNavigateToAlbumDetail: (String) -> Unit,
     onNavigateToPlayer: () -> Unit,
     onPickLrc: () -> Unit
 ) {
@@ -166,6 +167,32 @@ fun LibraryScreen(
                                     )
                                 }
                             }
+                            Spacer(modifier = Modifier.height(AppDimensions.spacingS()))
+                        }
+                    }
+                }
+
+                if (viewModel.albums.isNotEmpty()) {
+                    item(span = { GridItemSpan(2) }) {
+                        Column {
+                            Text(
+                                text = "专辑",
+                                fontSize = AppDimensions.homeSectionTitleSize().value.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(bottom = AppDimensions.paddingCard())
+                            )
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(AppDimensions.spacingM()),
+                                contentPadding = PaddingValues(end = AppDimensions.paddingCard())
+                            ) {
+                                items(viewModel.albums) { album ->
+                                    AlbumItem(
+                                        album = album,
+                                        viewModel = viewModel,
+                                        onClick = { onNavigateToAlbumDetail(album.id) }
+                                    )
+                                }
+                            }
                             Spacer(modifier = Modifier.height(AppDimensions.paddingScreen()))
                         }
                     }
@@ -200,25 +227,18 @@ fun ImportMusicDialog(
     var title by remember { mutableStateOf("") }
     var artist by remember { mutableStateOf("") }
 
-    // 显示错误提示
-    LaunchedEffect(viewModel.fetchCoverError) {
-        viewModel.fetchCoverError?.let { error ->
-            // 错误提示会自动显示，无需额外处理
-        }
-    }
-
-    // 显示LRC错误提示
-    LaunchedEffect(viewModel.fetchLrcError) {
-        viewModel.fetchLrcError?.let { error ->
-            // 错误提示会自动显示，无需额外处理
+    // 显示保存错误
+    LaunchedEffect(viewModel.saveSongError) {
+        viewModel.saveSongError?.let { error ->
+            // 错误会在UI中显示
         }
     }
 
     AlertDialog(
         onDismissRequest = {
             viewModel.tempMusicUri = null
-            viewModel.fetchCoverError = null
-            viewModel.fetchLrcError = null
+            viewModel.fetchAllError = null
+            viewModel.saveSongError = null
         },
         title = { Text("补充歌曲信息") },
         text = {
@@ -227,8 +247,8 @@ fun ImportMusicDialog(
                 TextField(value = artist, onValueChange = { artist = it }, label = { Text("歌手") }, singleLine = true)
                 Spacer(modifier = Modifier.height(AppDimensions.paddingCard()))
 
-                // 显示封面错误提示
-                viewModel.fetchCoverError?.let { error ->
+                // 显示错误提示
+                viewModel.fetchAllError?.let { error ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
@@ -246,7 +266,7 @@ fun ImportMusicDialog(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "封面: $error",
+                                text = error,
                                 color = Color(0xFFD32F2F),
                                 fontSize = 12.sp,
                                 lineHeight = 16.sp
@@ -256,8 +276,8 @@ fun ImportMusicDialog(
                     Spacer(modifier = Modifier.height(4.dp))
                 }
 
-                // 显示LRC错误提示
-                viewModel.fetchLrcError?.let { error ->
+                // 显示保存错误提示
+                viewModel.saveSongError?.let { error ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
@@ -275,7 +295,7 @@ fun ImportMusicDialog(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "歌词: $error",
+                                text = "保存失败: $error",
                                 color = Color(0xFFD32F2F),
                                 fontSize = 12.sp,
                                 lineHeight = 16.sp
@@ -285,91 +305,81 @@ fun ImportMusicDialog(
                     Spacer(modifier = Modifier.height(4.dp))
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Button(onClick = onPickCover, modifier = Modifier.height(AppDimensions.buttonHeightM())) { Text("选择封面") }
-                    Spacer(modifier = Modifier.width(AppDimensions.spacingXS()))
-                    Button(
-                        onClick = {
-                            Log.d("ImportDialog", "自动获取按钮被点击, title=$title, artist=$artist")
-                            if (title.isNotBlank() && artist.isNotBlank()) {
-                                coroutineScope.launch {
-                                    Log.d("ImportDialog", "开始协程获取封面")
-                                    val coverUrl = viewModel.fetchCoverFromNetwork(title, artist)
-                                    Log.d("ImportDialog", "获取封面结果: $coverUrl")
-                                    if (coverUrl != null) {
-                                        viewModel.tempCoverUri = android.net.Uri.parse(coverUrl)
-                                    }
+                // 自动获取所有信息按钮
+                Button(
+                    onClick = {
+                        Log.d("ImportDialog", "自动获取所有信息按钮被点击, title=$title, artist=$artist")
+                        if (title.isNotBlank() && artist.isNotBlank()) {
+                            coroutineScope.launch {
+                                Log.d("ImportDialog", "开始协程获取所有信息")
+                                val (coverPath, lrcPath) = viewModel.fetchAllFromNetwork(title, artist)
+                                Log.d("ImportDialog", "获取结果: cover=$coverPath, lrc=$lrcPath")
+                                if (coverPath != null) {
+                                    viewModel.tempCoverUri = android.net.Uri.parse(coverPath)
                                 }
-                            } else {
-                                Log.d("ImportDialog", "歌名或歌手为空，跳过获取")
-                            }
-                        },
-                        modifier = Modifier.height(AppDimensions.buttonHeightM()),
-                        enabled = title.isNotBlank() && artist.isNotBlank() && !viewModel.isFetchingCover
-                    ) {
-                        if (viewModel.isFetchingCover) {
-                            androidx.compose.foundation.layout.Box(
-                                modifier = Modifier.size(16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                androidx.compose.material3.CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp
-                                )
+                                if (lrcPath != null) {
+                                    viewModel.tempLrcUri = android.net.Uri.parse("file://$lrcPath")
+                                }
                             }
                         } else {
-                            Text("自动获取")
+                            Log.d("ImportDialog", "歌名或歌手为空，跳过获取")
                         }
-                    }
-                    Spacer(modifier = Modifier.width(AppDimensions.paddingCard()))
-                    if (viewModel.tempCoverUri != null) {
-                        AsyncImage(
-                            model = viewModel.tempCoverUri,
-                            contentDescription = null,
-                            modifier = Modifier.size(AppDimensions.coverS()).clip(RoundedCornerShape(AppDimensions.cornerRadiusS())),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier.size(AppDimensions.coverS()).clip(RoundedCornerShape(AppDimensions.cornerRadiusS())).background(MaterialTheme.colorScheme.surfaceVariant),
+                    },
+                    modifier = Modifier.fillMaxWidth().height(AppDimensions.buttonHeightM()),
+                    enabled = title.isNotBlank() && artist.isNotBlank() && !viewModel.isFetchingAll
+                ) {
+                    if (viewModel.isFetchingAll) {
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier.size(16.dp),
                             contentAlignment = Alignment.Center
-                        ) { Icon(Icons.Default.MusicNote, contentDescription = null, modifier = Modifier.size(AppDimensions.iconM())) }
+                        ) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    } else {
+                        Text("自动获取所有信息")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(AppDimensions.spacingS()))
+
+                Column {
+                    Text(
+                        text = "歌曲封面",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = AppDimensions.spacingXS())
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(onClick = onPickCover, modifier = Modifier.height(AppDimensions.buttonHeightM())) { Text("手动导入") }
+                        Spacer(modifier = Modifier.width(AppDimensions.paddingCard()))
+                        if (viewModel.tempCoverUri != null) {
+                            AsyncImage(
+                                model = viewModel.tempCoverUri,
+                                contentDescription = null,
+                                modifier = Modifier.size(AppDimensions.coverS()).clip(RoundedCornerShape(AppDimensions.cornerRadiusS())),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier.size(AppDimensions.coverS()).clip(RoundedCornerShape(AppDimensions.cornerRadiusS())).background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) { Icon(Icons.Default.MusicNote, contentDescription = null, modifier = Modifier.size(AppDimensions.iconM())) }
+                        }
                     }
                 }
 
                 Column {
+                    Text(
+                        text = "歌词文件 (LRC)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = AppDimensions.spacingXS())
+                    )
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Button(onClick = onPickLrc, modifier = Modifier.height(AppDimensions.buttonHeightM())) { Text("选择歌词 (LRC)") }
-                        Spacer(modifier = Modifier.width(AppDimensions.paddingCard()))
-                        Button(
-                            onClick = {
-                                coroutineScope.launch {
-                                    if (title.isNotBlank() && artist.isNotBlank()) {
-                                        val lrcPath = viewModel.fetchLrcFromNetwork(title, artist)
-                                        if (lrcPath != null) {
-                                            // 使用 file:// 格式的 URI
-                                            viewModel.tempLrcUri = android.net.Uri.parse("file://$lrcPath")
-                                        }
-                                    }
-                                }
-                            },
-                            modifier = Modifier.height(AppDimensions.buttonHeightM()),
-                            enabled = title.isNotBlank() && artist.isNotBlank() && !viewModel.isFetchingLrc
-                        ) {
-                            if (viewModel.isFetchingLrc) {
-                                androidx.compose.foundation.layout.Box(
-                                    modifier = Modifier.size(16.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    androidx.compose.material3.CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                }
-                            } else {
-                                Text("自动获取")
-                            }
-                        }
+                        OutlinedButton(onClick = onPickLrc, modifier = Modifier.height(AppDimensions.buttonHeightM())) { Text("手动导入") }
                         Spacer(modifier = Modifier.width(AppDimensions.paddingCard()))
                         if (viewModel.tempLrcUri != null) {
                             Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(AppDimensions.iconS()))
@@ -412,13 +422,20 @@ fun ImportMusicDialog(
         },
         confirmButton = {
             Button(onClick = {
+                viewModel.clearSaveSongError()
                 if (title.isNotBlank()) {
                     viewModel.saveSong(title, artist)
                 }
             }, modifier = Modifier.height(AppDimensions.buttonHeightM())) { Text("保存") }
         },
         dismissButton = {
-            TextButton(onClick = { viewModel.tempMusicUri = null }, modifier = Modifier.height(AppDimensions.buttonHeightM())) { Text("取消") }
+            TextButton(
+                onClick = {
+                    viewModel.tempMusicUri = null
+                    viewModel.saveSongError = null
+                },
+                modifier = Modifier.height(AppDimensions.buttonHeightM())
+            ) { Text("取消") }
         }
     )
 }
@@ -436,7 +453,6 @@ fun EditSongDialog(
     AlertDialog(
         onDismissRequest = {
             viewModel.cancelEditSong()
-            viewModel.fetchLrcError = null
         },
         title = { Text("编辑歌曲信息", fontWeight = FontWeight.Bold) },
         text = {
@@ -454,35 +470,6 @@ fun EditSongDialog(
                     singleLine = true
                 )
                 Spacer(modifier = Modifier.height(AppDimensions.spacingS()))
-
-                // 显示LRC错误提示
-                viewModel.fetchLrcError?.let { error ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = Color(0xFFD32F2F),
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "歌词: $error",
-                                color = Color(0xFFD32F2F),
-                                fontSize = 12.sp,
-                                lineHeight = 16.sp
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Button(onClick = onPickCover, modifier = Modifier.height(AppDimensions.buttonHeightM())) { Text("更换封面") }
@@ -504,37 +491,7 @@ fun EditSongDialog(
 
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Button(onClick = onPickLrc, modifier = Modifier.height(AppDimensions.buttonHeightM())) { Text("更换歌词 (LRC)") }
-                        Spacer(modifier = Modifier.width(AppDimensions.paddingCard()))
-                        Button(
-                            onClick = {
-                                coroutineScope.launch {
-                                    if (viewModel.editTitle.isNotBlank() && viewModel.editArtist.isNotBlank()) {
-                                        val lrcPath = viewModel.fetchLrcFromNetwork(viewModel.editTitle, viewModel.editArtist)
-                                        if (lrcPath != null) {
-                                            // 使用 file:// 格式的 URI
-                                            viewModel.editLrcUri = android.net.Uri.parse("file://$lrcPath")
-                                        }
-                                    }
-                                }
-                            },
-                            modifier = Modifier.height(AppDimensions.buttonHeightM()),
-                            enabled = viewModel.editTitle.isNotBlank() && viewModel.editArtist.isNotBlank() && !viewModel.isFetchingLrc
-                        ) {
-                            if (viewModel.isFetchingLrc) {
-                                androidx.compose.foundation.layout.Box(
-                                    modifier = Modifier.size(16.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    androidx.compose.material3.CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                }
-                            } else {
-                                Text("自动获取")
-                            }
-                        }
+                        OutlinedButton(onClick = onPickLrc, modifier = Modifier.height(AppDimensions.buttonHeightM())) { Text("手动导入") }
                         Spacer(modifier = Modifier.width(AppDimensions.paddingCard()))
                         if (viewModel.editLrcUri != null) {
                             Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(AppDimensions.iconS()))
@@ -733,6 +690,108 @@ fun SongGridItem(song: Song, viewModel: PlayerViewModel, onNavigateToPlayer: () 
                 leadingIcon = { Icon(Icons.Default.Delete, null, tint = Color.Red, modifier = Modifier.size(AppDimensions.iconS())) },
                 onClick = {
                     viewModel.deleteSong(song)
+                    expanded = false
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun AlbumItem(album: com.music.purelymusic.model.Album, viewModel: PlayerViewModel, onClick: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+
+    // 计算该专辑的歌曲数量
+    val albumSongCount = remember(album.name, viewModel.libraryList) {
+        viewModel.libraryList.count { it.album == album.name }
+    }
+
+    Box {
+        Column(
+            modifier = Modifier
+                .width(AppDimensions.libraryPlaylistWidth())
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = { expanded = true }
+                )
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(AppDimensions.libraryPlaylistWidth())
+                    .clip(RoundedCornerShape(AppDimensions.cornerRadiusL()))
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                            colors = listOf(
+                                com.music.purelymusic.ui.theme.RedLight,
+                                com.music.purelymusic.ui.theme.RedPrimary
+                            )
+                        )
+                    )
+            ) {
+                AsyncImage(
+                    model = album.coverUri ?: R.drawable.default_cover,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(AppDimensions.cornerRadiusL())),
+                    contentScale = ContentScale.Crop
+                )
+
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(AppDimensions.spacingS()),
+                    shape = RoundedCornerShape(AppDimensions.cornerRadiusS()),
+                    color = Color.Black.copy(alpha = 0.6f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = AppDimensions.spacingS(), vertical = AppDimensions.spacingXS()),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(AppDimensions.iconS())
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "$albumSongCount",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(AppDimensions.spacingXS()))
+            Text(
+                text = album.name,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+            Text(
+                text = album.artist,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)
+        ) {
+            DropdownMenuItem(
+                text = { Text("删除") },
+                leadingIcon = { Icon(Icons.Default.Delete, null, modifier = Modifier.size(AppDimensions.iconS())) },
+                onClick = {
+                    viewModel.deleteAlbum(album)
                     expanded = false
                 }
             )

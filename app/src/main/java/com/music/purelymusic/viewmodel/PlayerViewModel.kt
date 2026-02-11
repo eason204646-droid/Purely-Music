@@ -16,6 +16,8 @@
 //January 2020 http://license.coscl.org.cn/MulanPSL2
 package com.music.purelymusic.viewmodel
 import com.music.purelymusic.data.toPlaylist
+import com.music.purelymusic.data.toAlbum
+import com.music.purelymusic.model.Album
 import android.annotation.SuppressLint
 import android.app.Application
 import android.graphics.BitmapFactory
@@ -28,6 +30,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.legacy.MediaMetadataCompat
 import androidx.media3.session.legacy.MediaSessionCompat
+import com.music.purelymusic.BuildConfig
 import androidx.media3.session.legacy.PlaybackStateCompat
 
 import com.music.purelymusic.data.AppDatabase
@@ -108,13 +111,39 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 android.util.Log.d("purelymusic", "文件复制结果: pMusic=$pMusic, pCover=$pCover, pLrc=$pLrc")
 
                 if (pMusic != null) {
+                    // 处理专辑逻辑
+                    val albumName = tempAlbumName
+                    val albumArtist = tempAlbumArtist
+
+                    if (!albumName.isNullOrEmpty()) {
+                        // 检查专辑是否已存在
+                        val existingAlbum = albumDao.getAlbumByName(albumName)
+                        if (existingAlbum == null) {
+                            // 创建新专辑
+                            val albumId = java.util.UUID.randomUUID().toString()
+                            val newAlbum = Album(
+                                id = albumId,
+                                name = albumName,
+                                artist = albumArtist ?: artist,
+                                coverUri = pCover
+                            )
+                            android.util.Log.d("purelymusic", "准备创建新专辑: ${newAlbum.name}")
+                            val albumEntity = newAlbum.toEntity()
+                            albumDao.insertAlbum(albumEntity)
+                            android.util.Log.d("purelymusic", "新专辑已创建: ${newAlbum.name}")
+                        } else {
+                            android.util.Log.d("purelymusic", "专辑已存在: ${albumName}")
+                        }
+                    }
+
                     val newSong = Song(
                         id = 0, // Room 会自动生成
                         title = title,
                         artist = artist,
                         coverUri = pCover,
                         musicUri = pMusic,
-                        lrcPath = pLrc
+                        lrcPath = pLrc,
+                        album = albumName
                     )
                     android.util.Log.d("purelymusic", "准备插入数据库: $newSong")
                     // 存入数据库
@@ -136,16 +165,30 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         tempMusicUri = null
                         tempCoverUri = null
                         tempLrcUri = null
+                        tempAlbumName = null
+                        tempAlbumArtist = null
                         refreshData()
                     }
                 } else {
-                    android.util.Log.e("purelymusic", "复制音乐文件失败")
+                    val errorMsg = "复制音乐文件失败"
+                    android.util.Log.e("purelymusic", errorMsg)
+                    withContext(Dispatchers.Main) {
+                        saveSongError = errorMsg
+                    }
                 }
             } catch (e: Exception) {
-                android.util.Log.e("purelymusic", "保存歌曲失败: ${e.message}", e)
+                val errorMsg = "保存歌曲失败: ${e.message}"
+                android.util.Log.e("purelymusic", errorMsg, e)
                 e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    saveSongError = errorMsg
+                }
             }
         }
+    }
+
+    fun clearSaveSongError() {
+        saveSongError = null
     }
     fun updatePlaylistSongs(playlistId: String, newSongIds: List<Long>) {
         viewModelScope.launch {
@@ -235,6 +278,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val context = application.applicationContext
     private val songDao = AppDatabase.getDatabase(application).songDao()
     private val playlistDao = AppDatabase.getDatabase(application).playlistDao()
+    private val albumDao = AppDatabase.getDatabase(application).albumDao()
     private var mediaPlayer: MediaPlayer? = null
     @SuppressLint("RestrictedApi")
     private var mediaSession: MediaSessionCompat? = null
@@ -256,6 +300,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     var recentSongs = mutableStateListOf<Song>()
     var playlists = mutableStateListOf<Playlist>()
+    var albums = mutableStateListOf<Album>()
     private var currentPlayingList = mutableStateListOf<Song>()
     var selectedSongsForPlaylist = mutableStateListOf<Song>()
     var showPlaylist by mutableStateOf(false)
@@ -265,6 +310,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     var tempMusicUri by mutableStateOf<Uri?>(null)
     var tempCoverUri by mutableStateOf<Uri?>(null)
     var tempLrcUri by mutableStateOf<Uri?>(null)
+    var tempAlbumName by mutableStateOf<String?>(null)
+    var tempAlbumArtist by mutableStateOf<String?>(null)
 
     // 编辑歌曲状态
     var editingSong by mutableStateOf<Song?>(null)
@@ -278,16 +325,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     var selectedPlaylistForAdd by mutableStateOf<String?>(null)
     var selectedSongsForAdd by mutableStateOf<Set<Long>>(emptySet())
 
-    // 自动获取封面的状态
-    var isFetchingCover by mutableStateOf(false)
+    // 自动获取所有信息的状态
+    var isFetchingAll by mutableStateOf(false)
         private set
-    var fetchCoverError by mutableStateOf<String?>(null)
-    var apiResponseData by mutableStateOf<String?>(null)
+    var fetchAllError by mutableStateOf<String?>(null)
 
-    // 自动获取LRC的状态
-    var isFetchingLrc by mutableStateOf(false)
-        private set
-    var fetchLrcError by mutableStateOf<String?>(null)
+    // 保存歌曲错误状态
+    var saveSongError by mutableStateOf<String?>(null)
 
     init {
         // 初始化 MediaSession
@@ -441,6 +485,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun deleteAlbum(album: Album) {
+        viewModelScope.launch {
+            albumDao.deleteAlbum(album.toEntity())
+            refreshData()
+        }
+    }
+
     fun togglePlayPause() {
         mediaPlayer?.let {
             if (it.isPlaying) it.pause() else it.start()
@@ -518,6 +569,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     recentSongs.addAll(recentFromDb)
                     playlists.clear()
                     playlists.addAll(playlistEntities.map { it.toPlaylist() })
+                }
+
+                // 获取专辑列表
+                albumDao.getAllAlbums().collect { albumEntityList ->
+                    withContext(Dispatchers.Main) {
+                        albums.clear()
+                        albums.addAll(albumEntityList.map { it.toAlbum() })
+                    }
                 }
                 if (currentPlayingList.isEmpty()) {
                     currentPlayingList.clear()
@@ -665,237 +724,125 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         mediaSession?.release()
     }
 
-    // --- 网络获取封面 ---
-    suspend fun fetchCoverFromNetwork(title: String, artist: String): String? {
+    
+    // --- 自动获取所有信息（封面+歌词）---
+    suspend fun fetchAllFromNetwork(title: String, artist: String): Pair<String?, String?> {
         return withContext(Dispatchers.IO) {
             try {
                 withContext(Dispatchers.Main) {
-                    isFetchingCover = true
-                    fetchCoverError = null
+                    isFetchingAll = true
+                    fetchAllError = null
                 }
 
                 val keywords = "$title $artist"
-                Log.d("FetchCover", "开始搜索封面: keywords=$keywords")
+                Log.d("FetchAll", "开始获取所有信息: keywords=$keywords")
 
-                // 构建请求 URL - 网易云 API
-                val testUrl = "https://api.yaohud.cn/api/music/wyjiexi?key=v3ywJo5vIfAHRz9lIRg&type=so&name=${java.net.URLEncoder.encode(keywords, "UTF-8")}&size=standard"
-                Log.d("FetchCover", "请求 URL: $testUrl")
+                // 使用新的API获取所有信息
+                val apiUrl = "https://api.yaohud.cn/api/music/wy?key=${BuildConfig.MUSIC_API_KEY}&msg=${java.net.URLEncoder.encode(keywords, "UTF-8")}&n=1"
+                Log.d("FetchAll", "请求URL: $apiUrl")
 
-                val connection = java.net.URL(testUrl).openConnection() as java.net.HttpURLConnection
+                val connection = java.net.URL(apiUrl).openConnection() as java.net.HttpURLConnection
                 connection.requestMethod = "GET"
                 connection.connectTimeout = 10000
                 connection.readTimeout = 10000
 
                 val responseCode = connection.responseCode
-                Log.d("FetchCover", "HTTP 响应码: $responseCode")
+                Log.d("FetchAll", "HTTP响应码: $responseCode")
 
                 if (responseCode == 200) {
                     val rawResponse = connection.inputStream.bufferedReader().use { it.readText() }
-                    Log.d("FetchCover", "原始响应内容: $rawResponse")
+                    Log.d("FetchAll", "原始响应: $rawResponse")
 
-                    // 保存原始响应数据用于调试
-                    withContext(Dispatchers.Main) {
-                        apiResponseData = rawResponse
-                    }
-
-                    // 尝试解析 JSON
                     val gson = com.google.gson.Gson()
-                    try {
-                        val response = gson.fromJson(rawResponse, com.music.purelymusic.model.WangYiResponse::class.java)
+                    val response = gson.fromJson(rawResponse, com.music.purelymusic.model.WyApiResponse::class.java)
 
-                        Log.d("FetchCover", "解析后: code=${response.code}, data=${response.data}, data size=${response.data?.size ?: 0}")
+                    if (response.code == 200) {
+                        val data = response.data
+                        Log.d("FetchAll", "解析成功: album=${data.album}, picture=${data.picture}, lrc=${data.lrc}")
 
-                        if (response.code == 200 && response.data != null && response.data.isNotEmpty()) {
-                            val coverUrl = response.data.firstOrNull()?.picUrl
-                            Log.d("FetchCover", "获取的封面 URL: $coverUrl")
-
-                            if (!coverUrl.isNullOrEmpty()) {
-                                // 下载封面图片到本地
-                                try {
-                                    val coverConnection = java.net.URL(coverUrl).openConnection() as java.net.HttpURLConnection
-                                    coverConnection.requestMethod = "GET"
-                                    coverConnection.connect()
-
-                                    if (coverConnection.responseCode == 200) {
-                                        val inputStream = coverConnection.inputStream
-                                        val fileName = "cover_${System.currentTimeMillis()}.jpg"
-                                        val file = java.io.File(context.filesDir, fileName)
-                                        val outputStream = java.io.FileOutputStream(file)
-
-                                        inputStream.copyTo(outputStream)
-                                        inputStream.close()
-                                        outputStream.close()
-
-                                        val localPath = file.absolutePath
-                                        Log.d("FetchCover", "封面已下载到本地: $localPath")
-                                        localPath
-                                    } else {
-                                        withContext(Dispatchers.Main) {
-                                            fetchCoverError = "下载封面失败: HTTP ${coverConnection.responseCode}"
-                                        }
-                                        null
-                                    }
-                                } catch (e: Exception) {
-                                    Log.e("FetchCover", "下载封面失败", e)
-                                    withContext(Dispatchers.Main) {
-                                        fetchCoverError = "下载封面失败: ${e.message}"
-                                    }
-                                    null
-                                }
-                            } else {
-                                withContext(Dispatchers.Main) {
-                                    fetchCoverError = "未找到封面\n原始响应: ${rawResponse.take(200)}"
-                                }
-                                null
-                            }
-                        } else {
-                            withContext(Dispatchers.Main) {
-                                fetchCoverError = "API 错误 (${response.code}): 未找到匹配歌曲\n原始响应: ${rawResponse.take(200)}"
-                            }
-                            null
-                        }
-                    } catch (e: Exception) {
-                        Log.e("FetchCover", "JSON 解析失败", e)
+                        // 保存专辑信息
                         withContext(Dispatchers.Main) {
-                            fetchCoverError = "JSON 解析失败: ${e.message}\n原始响应: ${rawResponse.take(200)}"
+                            tempAlbumName = data.album
+                            tempAlbumArtist = data.songname
                         }
-                        null
+
+                        // 处理封面
+                        var coverPath: String? = null
+                        if (!data.picture.isNullOrEmpty()) {
+                            try {
+                                val coverConnection = java.net.URL(data.picture).openConnection() as java.net.HttpURLConnection
+                                coverConnection.requestMethod = "GET"
+                                coverConnection.connect()
+
+                                if (coverConnection.responseCode == 200) {
+                                    val inputStream = coverConnection.inputStream
+                                    val fileName = "cover_${System.currentTimeMillis()}.jpg"
+                                    val file = java.io.File(context.filesDir, fileName)
+                                    val outputStream = java.io.FileOutputStream(file)
+                                    inputStream.copyTo(outputStream)
+                                    inputStream.close()
+                                    outputStream.close()
+                                    coverPath = file.absolutePath
+                                    Log.d("FetchAll", "封面已下载: $coverPath")
+                                }
+                            } catch (e: Exception) {
+                                Log.e("FetchAll", "下载封面失败", e)
+                            }
+                        }
+
+                        // 处理歌词
+                        var lrcPath: String? = null
+                        if (!data.lrc.isNullOrEmpty()) {
+                            try {
+                                val lrcConnection = java.net.URL(data.lrc).openConnection() as java.net.HttpURLConnection
+                                lrcConnection.requestMethod = "GET"
+                                lrcConnection.connect()
+
+                                if (lrcConnection.responseCode == 200) {
+                                    val lrcResponse = lrcConnection.inputStream.bufferedReader().use { it.readText() }
+                                    val lrcResult = gson.fromJson(lrcResponse, com.music.purelymusic.model.LrcApiResponse::class.java)
+
+                                    if (lrcResult.code == 200 && lrcResult.data?.lyric != null) {
+                                        val lrcContent = lrcResult.data.lyric
+                                        val fileName = "lrc_${System.currentTimeMillis()}.lrc"
+                                        val file = java.io.File(context.filesDir, fileName)
+                                        file.writeText(lrcContent, Charsets.UTF_8)
+                                        lrcPath = file.absolutePath
+                                        Log.d("FetchAll", "歌词已下载: $lrcPath")
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.e("FetchAll", "下载歌词失败", e)
+                            }
+                        }
+
+                        Pair(coverPath, lrcPath)
+                    } else {
+                        val errorMsg = "API错误: ${response.msg}"
+                        Log.e("FetchAll", errorMsg)
+                        withContext(Dispatchers.Main) {
+                            fetchAllError = errorMsg
+                        }
+                        Pair(null, null)
                     }
                 } else {
-                    val errorMsg = "HTTP 错误: $responseCode"
-                    Log.e("FetchCover", errorMsg)
+                    val errorMsg = "HTTP错误: $responseCode"
+                    Log.e("FetchAll", errorMsg)
                     withContext(Dispatchers.Main) {
-                        fetchCoverError = errorMsg
+                        fetchAllError = errorMsg
                     }
-                    null
+                    Pair(null, null)
                 }
             } catch (e: Exception) {
-            val errorMsg = "获取封面失败: ${e.javaClass.simpleName} - ${e.message}"
-                Log.e("FetchCover", errorMsg, e)
+                val errorMsg = "获取所有信息失败: ${e.javaClass.simpleName} - ${e.message}"
+                Log.e("FetchAll", errorMsg, e)
                 withContext(Dispatchers.Main) {
-                    fetchCoverError = errorMsg
+                    fetchAllError = errorMsg
                 }
-                e.printStackTrace()
-                null
+                Pair(null, null)
             } finally {
                 withContext(Dispatchers.Main) {
-                    isFetchingCover = false
-                }
-            }
-        }
-    }
-
-    fun clearFetchCoverError() {
-        fetchCoverError = null
-    }
-
-    fun clearFetchLrcError() {
-        fetchLrcError = null
-    }
-
-    // --- 自动获取LRC歌词 ---
-    suspend fun fetchLrcFromNetwork(title: String, artist: String): String? {
-        return withContext(Dispatchers.IO) {
-            try {
-                withContext(Dispatchers.Main) {
-                    isFetchingLrc = true
-                    fetchLrcError = null
-                }
-
-                val keywords = "$title $artist"
-                Log.d("FetchLrc", "开始获取LRC: keywords=$keywords")
-
-                // 步骤1: 先调用封面API获取歌曲ID
-                val searchUrl = "https://api.yaohud.cn/api/music/wyjiexi?key=v3ywJo5vIfAHRz9lIRg&type=so&name=${java.net.URLEncoder.encode(keywords, "UTF-8")}&size=standard"
-                Log.d("FetchLrc", "搜索歌曲URL: $searchUrl")
-
-                val searchConnection = java.net.URL(searchUrl).openConnection() as java.net.HttpURLConnection
-                searchConnection.requestMethod = "GET"
-                searchConnection.connectTimeout = 10000
-                searchConnection.readTimeout = 10000
-
-                val searchResponseCode = searchConnection.responseCode
-                if (searchResponseCode != 200) {
-                    withContext(Dispatchers.Main) {
-                        fetchLrcError = "搜索歌曲失败: HTTP $searchResponseCode"
-                    }
-                    return@withContext null
-                }
-
-                val searchResponse = searchConnection.inputStream.bufferedReader().use { it.readText() }
-                Log.d("FetchLrc", "搜索响应: $searchResponse")
-
-                val gson = com.google.gson.Gson()
-                val searchResult = gson.fromJson(searchResponse, com.music.purelymusic.model.WangYiResponse::class.java)
-
-                if (searchResult.code != 200 || searchResult.data.isNullOrEmpty()) {
-                    withContext(Dispatchers.Main) {
-                        fetchLrcError = "未找到匹配的歌曲"
-                    }
-                    return@withContext null
-                }
-
-                val songId = searchResult.data.firstOrNull()?.id?.toString()
-                if (songId == null) {
-                    withContext(Dispatchers.Main) {
-                        fetchLrcError = "无法获取歌曲ID"
-                    }
-                    return@withContext null
-                }
-
-                Log.d("FetchLrc", "获取到歌曲ID: $songId")
-
-                // 步骤2: 使用歌曲ID调用LRC API获取歌词
-                val lrcUrl = "https://api.yaohud.cn/api/music/lrc?key=v3ywJo5vIfAHRz9lIRg&mid=$songId&type=wy"
-                Log.d("FetchLrc", "获取LRC URL: $lrcUrl")
-
-                val lrcConnection = java.net.URL(lrcUrl).openConnection() as java.net.HttpURLConnection
-                lrcConnection.requestMethod = "GET"
-                lrcConnection.connectTimeout = 10000
-                lrcConnection.readTimeout = 10000
-
-                val lrcResponseCode = lrcConnection.responseCode
-                if (lrcResponseCode != 200) {
-                    withContext(Dispatchers.Main) {
-                        fetchLrcError = "获取歌词失败: HTTP $lrcResponseCode"
-                    }
-                    return@withContext null
-                }
-
-                val lrcResponse = lrcConnection.inputStream.bufferedReader().use { it.readText() }
-                Log.d("FetchLrc", "LRC响应: $lrcResponse")
-
-                val lrcResult = gson.fromJson(lrcResponse, com.music.purelymusic.model.LrcApiResponse::class.java)
-
-                if (lrcResult.code != 200 || lrcResult.data?.lyric == null) {
-                    withContext(Dispatchers.Main) {
-                        fetchLrcError = "未找到歌词"
-                    }
-                    return@withContext null
-                }
-
-                val lrcContent = lrcResult.data.lyric
-                Log.d("FetchLrc", "获取到LRC内容，长度: ${lrcContent.length}")
-
-                // 保存LRC到本地文件
-                val fileName = "lrc_${System.currentTimeMillis()}.lrc"
-                val file = java.io.File(context.filesDir, fileName)
-                file.writeText(lrcContent, Charsets.UTF_8)
-
-                val localPath = file.absolutePath
-                Log.d("FetchLrc", "LRC已保存到本地: $localPath")
-                localPath
-
-            } catch (e: Exception) {
-                val errorMsg = "获取LRC失败: ${e.javaClass.simpleName} - ${e.message}"
-                Log.e("FetchLrc", errorMsg, e)
-                withContext(Dispatchers.Main) {
-                    fetchLrcError = errorMsg
-                }
-                null
-            } finally {
-                withContext(Dispatchers.Main) {
-                    isFetchingLrc = false
+                    isFetchingAll = false
                 }
             }
         }

@@ -88,40 +88,44 @@ data class MiguSearchResponse(
 )
 
 /**
- * 4. 网易云 API 响应模型
+ * 4. 自动获取所有信息API响应模型 (https://api.yaohud.cn/api/music/wy)
  */
+data class WyApiMusic(
+    val lrc: String,
+    val lrcurl: String
+)
 
-// 网易云 API 返回的歌曲信息
-data class WangYiSongData(
-    val id: Long,
+data class WyApiData(
     val name: String,
-    val artists: List<String>,
-    val artists_str: String,
+    val songname: String,
     val album: String,
-    val picUrl: String,
-    val duration: Long,
-    val duration_str: String
+    val songtitle: String,
+    val picture: String,
+    val url: String,
+    val musicurl: String,
+    val music: WyApiMusic,
+    val lrctxt: String?,
+    val lrc: String,
+    val catalog: String
 )
 
-// 网易云 API 搜索响应
-data class WangYiResponse(
+data class WyApiDebug(
+    val cache: String,
+    val tips: String
+)
+
+data class WyApiResponse(
     val code: Int,
-    val data: List<WangYiSongData>
+    val msg: String,
+    val data: WyApiData,
+    val debug: WyApiDebug,
+    val exec_time: Double,
+    val tips: String,
+    val ip: String
 )
 
 /**
- * 4. 歌词响应模型 (如果你以后要实现歌词功能)
- */
-data class LyricResponse(
-    val lrc: LrcContent
-)
-
-data class LrcContent(
-    val lyric: String
-)
-
-/**
- * 5. 自动获取LRC API响应模型
+ * 5. LRC API响应模型
  */
 data class LrcApiResponse(
     val code: Int,
@@ -131,4 +135,15 @@ data class LrcApiResponse(
 
 data class LrcApiData(
     val lyric: String
+)
+
+/**
+ * 6. 专辑模型
+ */
+data class Album(
+    val id: String,
+    val name: String,
+    val artist: String,
+    val coverUri: String?,
+    val createdAt: Long = System.currentTimeMillis()
 )

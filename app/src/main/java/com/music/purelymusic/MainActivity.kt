@@ -146,6 +146,9 @@ fun MainScreen(viewModel: PlayerViewModel) {
                         onNavigateToPlaylistDetail = { playlist ->
                             navController.navigate("playlist_detail/${playlist.id}")
                         },
+                        onNavigateToAlbumDetail = { albumId ->
+                            navController.navigate("album_detail/$albumId")
+                        },
                         onNavigateToPlayer = { navController.navigate("player") },
                         onPickLrc = {
                             lrcPickerLauncher.launch("*/*")
@@ -171,6 +174,38 @@ fun MainScreen(viewModel: PlayerViewModel) {
                     if (playlist != null) {
                         PlaylistDetailScreen(
                             playlist = playlist,
+                            viewModel = viewModel,
+                            onBack = { navController.popBackStack() },
+                            onNavigateToPlayer = { navController.navigate("player") }
+                        )
+                    }
+                }
+
+                composable(
+                    route = "album_detail/{albumId}",
+                    arguments = listOf(navArgument("albumId") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val albumId = backStackEntry.arguments?.getString("albumId")
+                    val album = viewModel.albums.find { it.id == albumId }
+                    if (album != null) {
+                        AlbumDetailScreen(
+                            album = album,
+                            viewModel = viewModel,
+                            onBack = { navController.popBackStack() },
+                            onNavigateToPlayer = { navController.navigate("player") }
+                        )
+                    }
+                }
+
+                composable(
+                    route = "album_detail/{albumId}",
+                    arguments = listOf(navArgument("albumId") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val albumId = backStackEntry.arguments?.getString("albumId")
+                    val album = viewModel.albums.find { it.id == albumId }
+                    if (album != null) {
+                        AlbumDetailScreen(
+                            album = album,
                             viewModel = viewModel,
                             onBack = { navController.popBackStack() },
                             onNavigateToPlayer = { navController.navigate("player") }

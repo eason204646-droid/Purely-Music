@@ -25,13 +25,16 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 // 🚩 1. 必须在 entities 中加入 PlaylistEntity::class
-@Database(entities = [SongEntity::class, PlaylistEntity::class], version = 8, exportSchema = false)
+@Database(entities = [SongEntity::class, PlaylistEntity::class, AlbumEntity::class], version = 9, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun songDao(): SongDao
 
     // 🚩 3. 必须显式指定返回值类型为 : PlaylistDao
     abstract fun playlistDao(): PlaylistDao
+
+    // 专辑 DAO
+    abstract fun albumDao(): AlbumDao
 
     companion object {
         @Volatile
@@ -177,6 +180,15 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // 数据库迁移策略：版本 8 -> 9 (添加专辑功能)
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 从版本8迁移到版本9（添加专辑功能）
+                // 创建 albums 表
+                database.execSQL("CREATE TABLE albums (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, artist TEXT NOT NULL, coverUri TEXT, createdAt INTEGER NOT NULL DEFAULT 0)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -185,7 +197,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "am_player_db"
                 )
                     // 🚩 使用 addMigrations 添加迁移策略，确保数据不会丢失
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                     // 🚩 设置 WAL 模式以提高性能并确保数据持久化
                     .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                     // 🚩 允许主线程查询（仅用于调试，生产环境应该移除）

@@ -160,9 +160,9 @@ object AppDimensions {
     @Composable
     fun homeSectionTitleSize() = responsiveSize(18.dp, 20.dp, 22.dp)
     @Composable
-    fun homeRecentCardWidth() = responsiveSize(130.dp, 140.dp, 150.dp)
+    fun homeRecentCardWidth() = responsiveSize(160.dp, 180.dp, 200.dp)
     @Composable
-    fun homeRecentCardHeight() = responsiveSize(130.dp, 140.dp, 150.dp)
+    fun homeRecentCardHeight() = responsiveSize(160.dp, 180.dp, 200.dp)
 
     // ==================== 资料库尺寸 ====================
     @Composable
