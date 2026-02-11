@@ -678,7 +678,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 Log.d("FetchCover", "开始搜索封面: keywords=$keywords")
 
                 // 构建请求 URL - 网易云 API
-                val testUrl = "https://api.yaohud.cn/api/music/wyjiexi?key=v3ywJo5vIfAHRz9lIRg&type=so&name=${java.net.URLEncoder.encode(keywords, "UTF-8")}&size=standard"
+                val testUrl = "https://api.yaohud.cn/api/music/wyjiexi?key=${BuildConfig.MUSIC_API_KEY}&type=so&name=${java.net.URLEncoder.encode(keywords, "UTF-8")}&size=standard"
                 Log.d("FetchCover", "请求 URL: $testUrl")
 
                 val connection = java.net.URL(testUrl).openConnection() as java.net.HttpURLConnection
@@ -806,7 +806,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 Log.d("FetchLrc", "开始获取LRC: keywords=$keywords")
 
                 // 步骤1: 先调用封面API获取歌曲ID
-                val searchUrl = "https://api.yaohud.cn/api/music/wyjiexi?key=v3ywJo5vIfAHRz9lIRg&type=so&name=${java.net.URLEncoder.encode(keywords, "UTF-8")}&size=standard"
+                val searchUrl = "https://api.yaohud.cn/api/music/wyjiexi?key=${BuildConfig.MUSIC_API_KEY}&type=so&name=${java.net.URLEncoder.encode(keywords, "UTF-8")}&size=standard"
                 Log.d("FetchLrc", "搜索歌曲URL: $searchUrl")
 
                 val searchConnection = java.net.URL(searchUrl).openConnection() as java.net.HttpURLConnection
@@ -846,7 +846,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 Log.d("FetchLrc", "获取到歌曲ID: $songId")
 
                 // 步骤2: 使用歌曲ID调用LRC API获取歌词
-                val lrcUrl = "https://api.yaohud.cn/api/music/lrc?key=v3ywJo5vIfAHRz9lIRg&mid=$songId&type=wy"
+                val lrcUrl = "https://api.yaohud.cn/api/music/lrc?key=${BuildConfig.MUSIC_API_KEY}&mid=$songId&type=wy"
                 Log.d("FetchLrc", "获取LRC URL: $lrcUrl")
 
                 val lrcConnection = java.net.URL(lrcUrl).openConnection() as java.net.HttpURLConnection

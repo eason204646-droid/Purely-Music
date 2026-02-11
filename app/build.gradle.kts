@@ -36,6 +36,12 @@ android {
                 disable += "NullSafeMutableLiveData" // 使用 +=
             }
         }
+
+        // 从 local.properties 读取 API key
+        val localPropertiesFile = rootProject.file("local.properties")
+        val localProperties = Properties()
+        localProperties.load(FileInputStream(localPropertiesFile))
+        buildConfigField("String", "MUSIC_API_KEY", "\"${localProperties.getProperty("MUSIC_API_KEY", "")}\"")
     }
 
     signingConfigs {
@@ -81,6 +87,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

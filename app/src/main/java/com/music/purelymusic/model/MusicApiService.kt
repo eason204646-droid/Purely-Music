@@ -22,14 +22,14 @@ import retrofit2.http.Query
 interface MusicApiService {
     @GET("music/migu")
     suspend fun searchSong(
-        @Query("key") key: String = "v3ywJo5vIfAHRz9lIRg",
+        @Query("key") key: String = BuildConfig.MUSIC_API_KEY,
         @Query("type") type: String = "search",
         @Query("word") word: String
     ): MiguSearchResponse
 
     @GET("api/music/lrc")
     suspend fun getLrc(
-        @Query("key") key: String = "v3ywJo5vIfAHRz9lIRg",
+        @Query("key") key: String = BuildConfig.MUSIC_API_KEY,
         @Query("mid") mid: String,
         @Query("type") type: String = "wy"
     ): LrcApiResponse
