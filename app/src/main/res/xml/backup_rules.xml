@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+   Backup rules file for purelymusic
+   Disabled cloud backup - only using database migration for app updates
+-->
+<full-backup-content>
+    <!-- 不启用云备份，只通过数据库迁移保留应用更新时的数据 -->
+</full-backup-content>
