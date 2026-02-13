@@ -18,6 +18,8 @@ package com.music.purelymusic.ui
 
 import androidx.annotation.OptIn
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -62,19 +64,20 @@ fun LyricView(
         val containerHeightPx = with(density) { maxHeight.toPx() }
         val containerHeightDp = maxHeight
 
-        // 🚩 目标位置：屏幕上方 1/4 (25%) 处
-        val targetLinePx = containerHeightPx * 0.25f
-        val targetLineDp = containerHeightDp * 0.25f
+        // 目标位置：屏幕上方，与播放器界面设计匹配
+        val targetLinePx = containerHeightPx * 0.20f
+        val targetLineDp = containerHeightDp * 0.20f
 
-        // 估算单行行高（包含文字和间距）用于平滑偏移
-        val lineHeightPx = with(density) { 56.dp.toPx() }
+        // 使用固定的行高，避免因字体大小变化导致的行高差异
+        val fixedLineHeight = 40.sp
+        val fixedLineHeightPx = with(density) { fixedLineHeight.toPx() }
 
         LaunchedEffect(currentIndex) {
             if (lyrics.isNotEmpty() && currentIndex in lyrics.indices) {
                 listState.animateScrollToItem(
                     index = currentIndex,
-                    // 🚩 偏移计算：将当前项的顶部对齐到 1/4 处，并向上修正半行高度实现垂直居中于该线
-                    scrollOffset = (-targetLinePx + (lineHeightPx / 2)).toInt()
+                    // 偏移计算：将当前行的中心对齐到目标位置
+                    scrollOffset = (-targetLinePx + (fixedLineHeightPx / 2)).toInt()
                 )
             }
         }
@@ -89,13 +92,12 @@ fun LyricView(
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.Start, // 靠左对齐
-                // 🚩 重点：顶部留 1/4，底部留 3/4。
+                horizontalAlignment = Alignment.Start,
                 contentPadding = PaddingValues(
                     top = targetLineDp,
                     bottom = containerHeightDp - targetLineDp
                 ),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 itemsIndexed(
                     items = lyrics,
@@ -106,7 +108,6 @@ fun LyricView(
                     val fontSize by animateFloatAsState(targetValue = if (isCurrent) 24f else 18f, label = "fontSize")
                     val textAlpha by animateFloatAsState(targetValue = if (isCurrent) 1f else 0.4f, label = "textAlpha")
 
-                    // 🚩 定义一个发光模糊半径的动画，当前行会有 12f 的光晕，非当前行无光晕
                     val shadowBlur by animateFloatAsState(
                         targetValue = if (isCurrent) 12f else 0f,
                         label = "shadowBlur"
@@ -115,21 +116,27 @@ fun LyricView(
                     Text(
                         text = line.content,
                         fontSize = fontSize.sp,
-                        lineHeight = (fontSize * 1.4f).sp,
+                        lineHeight = fixedLineHeight,
                         fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
                         color = Color.White,
                         textAlign = TextAlign.Start,
                         style = LocalTextStyle.current.copy(
-                            // 🚩 核心：添加发光阴影效果
                             shadow = if (isCurrent) Shadow(
-                                color = Color.White.copy(alpha = 0.6f), // 发光颜色：带透明度的白
-                                offset = Offset(0f, 0f),                // 偏移为0，光晕均匀向四周扩散
-                                blurRadius = shadowBlur                 // 模糊半径
+                                color = Color.White.copy(alpha = 0.6f),
+                                offset = Offset(0f, 0f),
+                                blurRadius = shadowBlur
                             ) else null
                         ),
                         modifier = Modifier
                             .alpha(textAlpha)
                             .padding(vertical = 4.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                // 点击歌词跳转到对应时间
+                                viewModel.seekTo(line.time.toFloat())
+                            }
                     )
                 }
             }
