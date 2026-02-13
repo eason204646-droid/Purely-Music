@@ -22,9 +22,15 @@ object LrcParser {
     private val regex = Regex("\\[(\\d{2}):(\\d{2})[.:](\\d{2,3})\\](.*)")
 
     fun parse(lrcText: String): List<LrcLine> {
-        val lines = mutableListOf<LrcLine>()
+        if (lrcText.isBlank()) return emptyList()
 
-        lrcText.lines().forEach { line ->
+        val lines = mutableListOf<LrcLine>()
+        val validLineCount = lrcText.lineSequence().count { regex.containsMatchIn(it) }
+        if (validLineCount > 0) {
+            (lines as ArrayList).ensureCapacity(validLineCount)
+        }
+
+        lrcText.lineSequence().forEach { line ->
             val match = regex.find(line)
             if (match != null) {
                 try {
@@ -34,18 +40,18 @@ object LrcParser {
                     val text = match.groupValues[4].trim()
 
                     val mil = when (milStr.length) {
-                        1 -> milStr.toLong() * 100
                         2 -> milStr.toLong() * 10
+                        3 -> milStr.toLong()
                         else -> milStr.toLong()
                     }
 
                     val time = min * 60000 + sec * 1000 + mil
                     lines.add(LrcLine(time, text))
-                } catch (e: Exception) {
-                    e.printStackTrace()
+                } catch (e: NumberFormatException) {
+                    // 忽略格式错误的歌词行
                 }
             }
         }
-        return lines.sortedBy { it.time }
+        return lines
     }
 }

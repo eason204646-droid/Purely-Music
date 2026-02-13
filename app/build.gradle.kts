@@ -32,8 +32,8 @@ android {
         applicationId = "com.music.purelymusic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 18
-        versionName = "1.8"
+        versionCode = 19
+        versionName = "1.8.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

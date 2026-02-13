@@ -182,36 +182,34 @@ fun MainScreen(viewModel: PlayerViewModel) {
                 }
 
                 composable(
-                    route = "album_detail/{albumId}",
-                    arguments = listOf(navArgument("albumId") { type = NavType.StringType })
-                ) { backStackEntry ->
-                    val albumId = backStackEntry.arguments?.getString("albumId")
-                    val album = viewModel.albums.find { it.id == albumId }
-                    if (album != null) {
-                        AlbumDetailScreen(
-                            album = album,
-                            viewModel = viewModel,
-                            onBack = { navController.popBackStack() },
-                            onNavigateToPlayer = { navController.navigate("player") }
-                        )
-                    }
-                }
 
-                composable(
-                    route = "album_detail/{albumId}",
-                    arguments = listOf(navArgument("albumId") { type = NavType.StringType })
-                ) { backStackEntry ->
-                    val albumId = backStackEntry.arguments?.getString("albumId")
-                    val album = viewModel.albums.find { it.id == albumId }
-                    if (album != null) {
-                        AlbumDetailScreen(
-                            album = album,
-                            viewModel = viewModel,
-                            onBack = { navController.popBackStack() },
-                            onNavigateToPlayer = { navController.navigate("player") }
-                        )
-                    }
-                }
+                                    route = "album_detail/{albumId}",
+
+                                    arguments = listOf(navArgument("albumId") { type = NavType.StringType })
+
+                                ) { backStackEntry ->
+
+                                    val albumId = backStackEntry.arguments?.getString("albumId")
+
+                                    val album = viewModel.albums.find { it.id == albumId }
+
+                                    if (album != null) {
+
+                                        AlbumDetailScreen(
+
+                                            album = album,
+
+                                            viewModel = viewModel,
+
+                                            onBack = { navController.popBackStack() },
+
+                                            onNavigateToPlayer = { navController.navigate("player") }
+
+                                        )
+
+                                    }
+
+                                }
                 composable(
                     route = "edit_playlist/{playlistId}",
                     arguments = listOf(navArgument("playlistId") { type = NavType.StringType })
