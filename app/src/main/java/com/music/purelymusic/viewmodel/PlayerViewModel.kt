@@ -303,6 +303,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     var selectedSongsForPlaylist = mutableStateListOf<Song>()
     var showPlaylist by mutableStateOf(false)
 
+    // 播放模式
+    enum class PlayMode {
+        SEQUENTIAL,  // 顺序播放
+        REPEAT_ONE   // 单曲循环
+    }
+
+    var playMode by mutableStateOf(PlayMode.SEQUENTIAL)
+
     // 导入临时状态
     var tempPlaylistCoverUri by mutableStateOf<Uri?>(null)
     var tempMusicUri by mutableStateOf<Uri?>(null)
@@ -500,6 +508,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun playNext() {
         if (currentPlayingList.isEmpty()) return
+
+        // 单曲循环模式
+        if (playMode == PlayMode.REPEAT_ONE && currentSong != null) {
+            playSong(currentSong!!, false)
+            return
+        }
+
+        // 顺序播放模式
         val idx = currentPlayingList.indexOfFirst { it.id == currentSong?.id }
         if (idx != -1) {
             val nextIdx = (idx + 1) % currentPlayingList.size
@@ -676,6 +692,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val metadataBuilder = MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, song.title)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, song.artist)
+            // 🚩 核心修复：必须设置时长，系统进度条才能正确显示和响应拖动
+            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
 
         song.coverUri?.let { path ->
             if (File(path).exists()) {
@@ -689,8 +707,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun updatePlaybackState(playing: Boolean) {
         val state = if (playing) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
         val stateBuilder = PlaybackStateCompat.Builder()
-            // 🚩 核心修复：传入 currentPosition，系统进度条才会显示正确位置
+            // 🚩 核心修复：传入 currentPosition 和 playbackSpeed，系统进度条才会显示正确位置
             .setState(state, currentPosition, 1.0f)
+            // 🚩 核心修复：设置缓冲位置，确保进度条可以拖动
+            .setBufferedPosition(duration)
             .setActions(
                 PlaybackStateCompat.ACTION_PLAY_PAUSE or
                         PlaybackStateCompat.ACTION_PLAY or

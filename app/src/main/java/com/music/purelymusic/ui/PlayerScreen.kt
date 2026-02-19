@@ -215,8 +215,21 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { /* 收藏逻辑 */ }, modifier = Modifier.size(AppDimensions.iconButtonSizeM())) {
-                        Icon(Icons.Default.FavoriteBorder, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(AppDimensions.iconL()))
+                    IconButton(
+                        onClick = {
+                            viewModel.playMode = when (viewModel.playMode) {
+                                PlayerViewModel.PlayMode.SEQUENTIAL -> PlayerViewModel.PlayMode.REPEAT_ONE
+                                PlayerViewModel.PlayMode.REPEAT_ONE -> PlayerViewModel.PlayMode.SEQUENTIAL
+                            }
+                        },
+                        modifier = Modifier.size(AppDimensions.iconButtonSizeM())
+                    ) {
+                        Icon(
+                            imageVector = if (viewModel.playMode == PlayerViewModel.PlayMode.REPEAT_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                            contentDescription = "播放模式",
+                            tint = Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.size(AppDimensions.iconL())
+                        )
                     }
 
                     IconButton(onClick = { viewModel.playPrevious() }, modifier = Modifier.size(AppDimensions.iconButtonSizeXL())) {
