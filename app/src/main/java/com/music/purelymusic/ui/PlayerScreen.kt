@@ -17,7 +17,8 @@
 package com.music.purelymusic.ui
 
 import androidx.annotation.OptIn
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -137,12 +138,28 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                     if (showPlaylist) {
                         PlaylistView(viewModel = viewModel, modifier = Modifier.fillMaxSize())
                     } else {
-                        Crossfade(targetState = showLyrics, label = "LyricSwitch") { isLyrics ->
-                            if (isLyrics) {
-                                LyricView(viewModel = viewModel, modifier = Modifier.fillMaxSize())
-                            } else {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = !showLyrics,
+                                enter = fadeIn(
+                                    animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic)
+                                ) + scaleIn(
+                                    animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic),
+                                    initialScale = 0.95f
+                                ),
+                                exit = fadeOut(
+                                    animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic)
+                                ) + scaleOut(
+                                    animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic),
+                                    targetScale = 1.05f
+                                ),
+                                modifier = Modifier.fillMaxWidth(0.85f)
+                            ) {
                                 Surface(
-                                    modifier = Modifier.fillMaxWidth(0.8f).aspectRatio(1f).clickable { showLyrics = true },
+                                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clickable { showLyrics = true },
                                     shape = RoundedCornerShape(AppDimensions.cornerRadiusL()),
                                     shadowElevation = AppDimensions.elevationL()
                                 ) {
@@ -152,6 +169,25 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                                         contentScale = ContentScale.Crop
                                     )
                                 }
+                            }
+
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = showLyrics,
+                                enter = fadeIn(
+                                    animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic)
+                                ) + scaleIn(
+                                    animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic),
+                                    initialScale = 0.95f
+                                ),
+                                exit = fadeOut(
+                                    animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic)
+                                ) + scaleOut(
+                                    animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic),
+                                    targetScale = 1.05f
+                                ),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                LyricView(viewModel = viewModel, modifier = Modifier.fillMaxSize())
                             }
                         }
                     }

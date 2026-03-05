@@ -16,8 +16,12 @@
 //January 2020 http://license.coscl.org.cn/MulanPSL2
 package com.music.purelymusic.ui
 
+import android.os.Build
+import android.util.Log
 import androidx.annotation.OptIn
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -25,13 +29,21 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.Text
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.zIndex
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -45,6 +57,7 @@ import com.music.purelymusic.model.LrcLine
 import com.music.purelymusic.viewmodel.PlayerViewModel
 import kotlinx.coroutines.delay
 
+@RequiresApi(Build.VERSION_CODES.S_V2)
 @OptIn(UnstableApi::class)
 @Composable
 fun LyricView(
@@ -53,8 +66,18 @@ fun LyricView(
 ) {
     val lyrics = viewModel.lyricLines
     val currentIndex = viewModel.currentLyricIndex
+    val showTranslation = viewModel.showTranslation
+    val isTranslating = viewModel.isTranslating
+    val canTranslate = viewModel.canTranslate
+    val translateError = viewModel.translateError
+    val translateLogs = viewModel.translateLogs
     val listState = rememberLazyListState()
     val density = LocalDensity.current
+    
+    // 歌词设置
+    val lyricStyle = viewModel.lyricStyle
+    val lyricGlowEnabled = viewModel.lyricGlowEnabled
+    val lyricFilterEnabled = viewModel.lyricFilterEnabled
 
     // 动画触发器：当歌词切换时,增加触发计数,重新触发波浪动画
     var animationTrigger by remember { mutableIntStateOf(0) }
@@ -127,22 +150,76 @@ fun LyricView(
         }
 
         if (lyrics.isEmpty()) {
-            Text(
-                text = "暂无歌词",
-                color = Color.Gray.copy(alpha = 0.5f),
-                modifier = Modifier.align(Alignment.Center)
-            )
-        } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.Start,
-                contentPadding = PaddingValues(
-                    top = targetLineDp,
-                    bottom = containerHeightDp - targetLineDp
-                ),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Text(
+                    text = "暂无歌词",
+                    color = Color.Gray.copy(alpha = 0.5f)
+                )
+            }
+        }
+
+        // 翻译按钮（仅在非中文歌词时显示）
+        if (canTranslate && lyrics.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+                    .zIndex(10f) // 确保在最上层
+            ) {
+                if (isTranslating) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(32.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    IconButton(
+                        onClick = {
+                            Log.d("LyricView", "翻译按钮被点击")
+                            viewModel.translateLyrics()
+                        },
+                        modifier = Modifier
+                            .background(
+                                Color.White.copy(alpha = 0.15f),
+                                RoundedCornerShape(50)
+                            )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Translate,
+                            contentDescription = "翻译",
+                            tint = if (showTranslation) Color(0xFF4FC3F7) else Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        if (lyrics.isNotEmpty()) {
+            // 根据歌词样式选择渲染方式
+            if (lyricStyle == "single") {
+                // 单行歌词样式
+                SingleLineLyricView(
+                    lyrics = lyrics,
+                    currentIndex = currentIndex,
+                    lyricGlowEnabled = lyricGlowEnabled,
+                    lyricFilterEnabled = lyricFilterEnabled,
+                    showTranslation = showTranslation
+                )
+            } else {
+                // 多行歌词样式（原有样式）
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.Start,
+                    contentPadding = PaddingValues(
+                        top = targetLineDp,
+                        bottom = containerHeightDp - targetLineDp
+                    )
+                ) {
                 itemsIndexed(
                     items = lyrics,
                     key = { index, line -> "${line.time}_$index" }
@@ -154,6 +231,10 @@ fun LyricView(
 
                     // 所有歌词使用统一的字体大小，确保排版完全一致
                     val fontSize = 24f
+                    val translationFontSize = 16f // 翻译字体更小
+
+                    // 根据是否为续行调整行高：续行使用更小的行高，其他行使用较大行高
+                    val actualLineHeight = if (line.isContinuation) 28.sp else fixedLineHeight
 
                     // 透明度动画也添加延迟，形成波浪效果
                     val textAlpha by animateFloatAsState(
@@ -208,23 +289,9 @@ fun LyricView(
                         )
                     )
 
-                    Text(
-                        text = line.content,
-                        fontSize = fontSize.sp,
-                        lineHeight = fixedLineHeight,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        textAlign = TextAlign.Start,
-                        style = LocalTextStyle.current.copy(
-                            shadow = if (isCurrent) Shadow(
-                                color = Color.White.copy(alpha = 0.6f),
-                                offset = Offset(0f, 0f),
-                                blurRadius = shadowBlur
-                            ) else null
-                        ),
+                    Column(
                         modifier = Modifier
-                            .alpha(textAlpha)
-                            .blur(radius = blurAmount.dp)
+                            .padding(top = if (line.isContinuation) 0.dp else 8.dp)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
@@ -232,6 +299,195 @@ fun LyricView(
                                 // 点击歌词跳转到对应时间
                                 viewModel.seekTo(line.time.toFloat())
                             }
+                    ) {
+                        // 原文（应用脏字过滤）
+                        val displayContent = if (lyricFilterEnabled) {
+                            com.music.purelymusic.utils.ProfanityFilter.filter(line.content)
+                        } else {
+                            line.content
+                        }
+                        
+                        Text(
+                            text = displayContent,
+                            fontSize = fontSize.sp,
+                            lineHeight = actualLineHeight,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            textAlign = TextAlign.Start,
+                            style = LocalTextStyle.current.copy(
+                                shadow = if (isCurrent && lyricGlowEnabled) Shadow(
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    offset = Offset(0f, 0f),
+                                    blurRadius = shadowBlur
+                                ) else null
+                            ),
+                            modifier = Modifier
+                                .alpha(textAlpha)
+                                .blur(radius = blurAmount.dp)
+                        )
+
+                        // 翻译文本（如果启用翻译且有翻译内容）
+                        if (showTranslation && !line.translation.isNullOrEmpty()) {
+                            val displayTranslation = if (lyricFilterEnabled) {
+                                com.music.purelymusic.utils.ProfanityFilter.filter(line.translation)
+                            } else {
+                                line.translation
+                            }
+                            
+                            Text(
+                                text = displayTranslation,
+                                fontSize = translationFontSize.sp,
+                                lineHeight = (translationFontSize * 1.4f).sp,
+                                fontWeight = FontWeight.Normal,
+                                color = Color.White.copy(alpha = 0.7f),
+                                textAlign = TextAlign.Start,
+                                modifier = Modifier
+                                    .padding(top = 4.dp)
+                                    .alpha(textAlpha)
+                                    .blur(radius = blurAmount.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        }
+
+        // 翻译错误弹窗
+        if (translateError != null) {
+            var showDetails by remember { mutableStateOf(false) }
+
+            AlertDialog(
+                onDismissRequest = { viewModel.translateError = null },
+                title = {
+                    Text(
+                        "翻译失败",
+                        color = Color.White,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    )
+                },
+                text = {
+                    Column {
+                        Text(
+                            translateError,
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "提示：\n1. 请检查网络连接\n2. 可能翻译服务暂时不可用\n3. 可以查看Logcat日志获取详细信息",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 12.sp
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.translateError = null }) {
+                        Text("确定", color = Color(0xFF4FC3F7))
+                    }
+                },
+                containerColor = Color(0xFF2A2A2A)
+            )
+        }
+    }
+}
+
+/**
+ * 单行歌词样式组件
+ * 只显示当前播放的一句歌词，带有渐变过渡动画
+ */
+@Composable
+fun SingleLineLyricView(
+    lyrics: List<LrcLine>,
+    currentIndex: Int,
+    lyricGlowEnabled: Boolean,
+    lyricFilterEnabled: Boolean,
+    showTranslation: Boolean
+) {
+    val currentLine = if (currentIndex in lyrics.indices) lyrics[currentIndex] else null
+    
+    // 动画：透明度和缩放
+    val alpha by animateFloatAsState(
+        targetValue = if (currentLine != null) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = 300,
+            easing = EaseInOutCubic
+        ),
+        label = "singleLineAlpha"
+    )
+    
+    val scale by animateFloatAsState(
+        targetValue = if (currentLine != null) 1f else 0.95f,
+        animationSpec = tween(
+            durationMillis = 300,
+            easing = EaseInOutCubic
+        ),
+        label = "singleLineScale"
+    )
+    
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        if (currentLine != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 32.dp),
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.Center
+            ) {
+                // 主歌词
+                val displayContent = if (lyricFilterEnabled) {
+                    com.music.purelymusic.utils.ProfanityFilter.filter(currentLine.content)
+                } else {
+                    currentLine.content
+                }
+                
+                Text(
+                    text = displayContent,
+                    fontSize = 42.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    textAlign = TextAlign.Start,
+                    lineHeight = 56.sp,
+                    maxLines = 4,
+                    style = androidx.compose.ui.text.TextStyle(
+                        shadow = if (lyricGlowEnabled) Shadow(
+                            color = Color.White.copy(alpha = 0.5f),
+                            offset = Offset(0f, 0f),
+                            blurRadius = 16f
+                        ) else null
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .alpha(alpha)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                )
+                
+                // 翻译文本
+                if (showTranslation && !currentLine.translation.isNullOrEmpty()) {
+                    val displayTranslation = if (lyricFilterEnabled) {
+                        com.music.purelymusic.utils.ProfanityFilter.filter(currentLine.translation)
+                    } else {
+                        currentLine.translation
+                    }
+                    
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text(
+                        text = displayTranslation,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.White.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Start,
+                        lineHeight = 32.sp,
+                        maxLines = 3,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .alpha(alpha)
                     )
                 }
             }

@@ -19,5 +19,7 @@ package com.music.purelymusic.model // 🚩 这里的包名必须和你项目的
 // 将这个定义放在这里，全项目共享
 data class LrcLine(
     val time: Long,
-    val content: String
+    val content: String,
+    val isContinuation: Boolean = false, // 标识是否为同一句歌词的续行
+    val translation: String? = null // 翻译文本
 )

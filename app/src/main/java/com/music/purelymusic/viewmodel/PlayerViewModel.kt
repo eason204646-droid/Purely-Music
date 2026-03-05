@@ -18,9 +18,16 @@ package com.music.purelymusic.viewmodel
 import android.annotation.SuppressLint
 import android.app.Application
 import android.graphics.BitmapFactory
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioTrack
 import android.media.MediaPlayer
+import android.media.Spatializer
 import android.net.Uri
+import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -36,11 +43,14 @@ import com.music.purelymusic.data.toAlbum
 import com.music.purelymusic.model.*
 import com.music.purelymusic.utils.LrcParser
 import com.music.purelymusic.ui.utils.BlurUtil
+import retrofit2.Retrofit
 import kotlinx.coroutines.*
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.Charset
+import kotlin.math.sin
 
+@RequiresApi(Build.VERSION_CODES.S_V2)
 @SuppressLint("RestrictedApi")
 @UnstableApi
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
@@ -281,6 +291,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     @SuppressLint("RestrictedApi")
     private var mediaSession: MediaSessionCompat? = null
 
+    // Android 12+ Spatializer 支持
+    private var spatializer: Spatializer? = null
+    private var isSpatializerAvailable = false
+
     // --- UI 状态 ---
     var libraryList by mutableStateOf<List<Song>>(emptyList())
     var currentSong by mutableStateOf<Song?>(null)
@@ -311,6 +325,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     var playMode by mutableStateOf(PlayMode.SEQUENTIAL)
 
+    // 环绕音状态
+    enum class SurroundMode {
+        NONE,           // 无效果
+        IMMERSIVE,      // 沉浸立体音（多声道，四面八方）
+        THREE_D         // 3D环绕音（圆周运动）
+    }
+
+    var surroundMode by mutableStateOf(SurroundMode.NONE)  // 当前环绕音模式
+    var isSurroundEnabled by mutableStateOf(false)          // 环绕音是否启用
+
+    // 3D环绕音参数
+    var surroundRadius by mutableStateOf(400f)         // 圆周半径
+    var surroundSpeed by mutableStateOf(2.0f)          // 运动速度
+
     // 导入临时状态
     var tempPlaylistCoverUri by mutableStateOf<Uri?>(null)
     var tempMusicUri by mutableStateOf<Uri?>(null)
@@ -339,7 +367,66 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     // 保存歌曲错误状态
     var saveSongError by mutableStateOf<String?>(null)
 
+    // 翻译相关状态
+    var showTranslation by mutableStateOf(false)
+    var isTranslating by mutableStateOf(false)
+    var canTranslate by mutableStateOf(false)
+    var translateError by mutableStateOf<String?>(null)
+    var translateLogs by mutableStateOf<String>("")
+
+    // 语言设置状态（带持久化）
+    private var _currentLanguage by mutableStateOf("zh")
+    var currentLanguage: String
+        get() = _currentLanguage
+        set(value) {
+            _currentLanguage = value
+            com.music.purelymusic.utils.PreferencesManager.saveLanguage(value)
+        }
+
+    // 歌词设置状态（带持久化）
+    private var _lyricGlowEnabled by mutableStateOf(true)
+    var lyricGlowEnabled: Boolean
+        get() = _lyricGlowEnabled
+        set(value) {
+            _lyricGlowEnabled = value
+            com.music.purelymusic.utils.PreferencesManager.saveLyricGlow(value)
+        }
+    
+    private var _lyricFilterEnabled by mutableStateOf(false)
+    var lyricFilterEnabled: Boolean
+        get() = _lyricFilterEnabled
+        set(value) {
+            _lyricFilterEnabled = value
+            com.music.purelymusic.utils.PreferencesManager.saveLyricFilter(value)
+        }
+    
+    private var _lyricStyle by mutableStateOf("multi") // "multi" or "single"
+    var lyricStyle: String
+        get() = _lyricStyle
+        set(value) {
+            _lyricStyle = value
+            com.music.purelymusic.utils.PreferencesManager.saveLyricStyle(value)
+        }
+
+    // 翻译API服务
+    private val translateService: TranslateApiService by lazy {
+        retrofit2.Retrofit.Builder()
+            .baseUrl("https://api.yaohud.cn/api/")
+            .addConverterFactory(retrofit2.converter.gson.GsonConverterFactory.create())
+            .build()
+            .create(TranslateApiService::class.java)
+    }
+
     init {
+        // 初始化 PreferencesManager
+        com.music.purelymusic.utils.PreferencesManager.init(context)
+        
+        // 加载保存的设置
+        _currentLanguage = com.music.purelymusic.utils.PreferencesManager.getLanguage()
+        _lyricGlowEnabled = com.music.purelymusic.utils.PreferencesManager.getLyricGlow()
+        _lyricFilterEnabled = com.music.purelymusic.utils.PreferencesManager.getLyricFilter()
+        _lyricStyle = com.music.purelymusic.utils.PreferencesManager.getLyricStyle()
+        
         // 初始化 MediaSession
         mediaSession = MediaSessionCompat(context, "purelymusic").apply {
             isActive = true
@@ -352,6 +439,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 override fun onSeekTo(pos: Long) { seekTo(pos.toFloat()) } // 支持系统进度条拖动
             })
         }
+
+        // 初始化 Spatializer (Android 12+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                val audioManager = context.getSystemService(Application.AUDIO_SERVICE) as AudioManager
+                spatializer = audioManager.spatializer
+                isSpatializerAvailable = spatializer != null && spatializer!!.isEnabled
+                Log.d("Spatializer", "Spatializer available: $isSpatializerAvailable")
+            } catch (e: Exception) {
+                Log.e("Spatializer", "Failed to initialize Spatializer: ${e.message}")
+                isSpatializerAvailable = false
+            }
+        }
+
         refreshData()
         startTimer()
     }
@@ -394,6 +495,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
                 withContext(Dispatchers.Main) {
                     lyricLines = parsed
+                    // 检测歌词语言，判断是否可以翻译
+                    val lyricTexts = parsed.map { it.content }
+                    val isChinese = com.music.purelymusic.utils.LanguageDetector.isLyricsChinese(lyricTexts)
+                    canTranslate = !isChinese
+                    Log.d("LyricLoad", "语言检测结果: isChinese=$isChinese, canTranslate=$canTranslate")
+                    Log.d("LyricLoad", "歌词内容示例: ${lyricTexts.take(3)}")
+                    // 重置翻译状态
+                    showTranslation = false
+                    translateError = null
                 }
             } catch (e: Exception) {
                 Log.e("LyricLoad", "Failed: ${e.message}", e)
@@ -440,6 +550,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     this@PlayerViewModel.isPlaying = true
                     this@PlayerViewModel.duration = it.duration.toLong()
                     updatePlaybackState(true)
+                    // 启动环绕音效果
+                    startSurroundEffect()
                 }
                 setOnCompletionListener { playNext() }
             }
@@ -500,7 +612,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun togglePlayPause() {
         mediaPlayer?.let {
-            if (it.isPlaying) it.pause() else it.start()
+            if (it.isPlaying) {
+                it.pause()
+                stopSurroundEffect()
+            } else {
+                it.start()
+                startSurroundEffect()
+            }
             isPlaying = it.isPlaying
             updatePlaybackState(isPlaying)
         }
@@ -535,6 +653,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun seekTo(pos: Float) {
         mediaPlayer?.seekTo(pos.toInt())
         currentPosition = pos.toLong()
+        // 确保歌词索引立即更新，拖动进度条时自动导航到对应歌词
+        // currentLyricIndex 使用 derivedStateOf 会自动根据 currentPosition 重新计算
     }
 
     private fun startTimer() {
@@ -548,6 +668,244 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 delay(1000) // 1秒同步一次即可，减少性能开销
             }
         }
+    }
+
+// --- 环绕音效 ---
+    private var surroundJob: Job? = null
+    private var surroundAngle = 0f
+    private var sourcePhase = 0f
+
+    // 延迟缓冲区（用于实现ITD和空间混响）
+    private val leftDelayBuffer = ArrayDeque<Float>(50).apply { repeat(50) { add(0.5f) } }
+    private val rightDelayBuffer = ArrayDeque<Float>(50).apply { repeat(50) { add(0.5f) } }
+
+    private fun startSurroundEffect() {
+        stopSurroundEffect()
+
+        // 在 Android 12+ 上检查 Spatializer 状态 (仅对沉浸立体音有效)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && isSpatializerAvailable && surroundMode == SurroundMode.IMMERSIVE) {
+            try {
+                val isSpatializerEnabled = spatializer?.isEnabled ?: false
+                Log.d("SurroundEffect", "Spatializer available and enabled: $isSpatializerEnabled")
+            } catch (e: Exception) {
+                Log.e("SurroundEffect", "Failed to check Spatializer: ${e.message}")
+            }
+        }
+
+        surroundJob = viewModelScope.launch {
+            while (isPlaying) {
+                if (isSurroundEnabled) {
+                    when (surroundMode) {
+                        SurroundMode.IMMERSIVE -> applyImmersiveSurround()
+                        SurroundMode.THREE_D -> apply3DSurround()
+                        SurroundMode.NONE -> {
+                            mediaPlayer?.setVolume(1.0f, 1.0f)
+                            delay(100)
+                        }
+                    }
+                } else {
+                    mediaPlayer?.setVolume(1.0f, 1.0f)
+                    delay(100)
+                }
+            }
+        }
+    }
+
+private fun stopSurroundEffect() {
+        surroundJob?.cancel()
+        surroundJob = null
+
+        // 恢复平衡音量
+        mediaPlayer?.setVolume(1.0f, 1.0f)
+        // 重置缓冲区
+        leftDelayBuffer.clear()
+        repeat(50) { leftDelayBuffer.add(0.5f) }
+        rightDelayBuffer.clear()
+        repeat(50) { rightDelayBuffer.add(0.5f) }
+        sourcePhase = 0f
+    }
+
+    // 沉浸立体音效（模拟5.1声道环绕）
+    private suspend fun applyImmersiveSurround() {
+        // 使用动态变化的声源，营造四面八方传来的效果
+
+        // 更新相位，让声源增益动态变化
+        sourcePhase = (sourcePhase + 0.08f) % (2 * Math.PI.toFloat())
+
+        // === 模拟5.1声道的动态增益 ===
+        // 前置左声道 (FL)：动态变化
+        val frontLeft = 0.6f + 0.15f * Math.sin(sourcePhase.toDouble()).toFloat()
+
+        // 前置右声道 (FR)：动态变化，与FL有相位差
+        val frontRight = 0.6f + 0.15f * Math.cos(sourcePhase.toDouble()).toFloat()
+
+        // 中置声道 (C)：稳定增益
+        val center = 0.4f
+
+        // 后置左环绕 (SL)：较慢的动态变化，模拟从背后传来
+        val surroundLeft = 0.35f + 0.2f * Math.sin(sourcePhase.toDouble() + Math.PI / 4).toFloat()
+
+        // 后置右环绕 (SR)：较慢的动态变化，与SL有相位差
+        val surroundRight = 0.35f + 0.2f * Math.cos(sourcePhase.toDouble() + Math.PI / 4).toFloat()
+
+        // 低音炮 (LFE)：非常缓慢的脉冲效果
+        val lfePulse = (Math.sin(sourcePhase * 0.5) + 1.0).toFloat() * 0.3f
+
+        // === 添加到延迟缓冲区（每次都更新）===
+        val currentLeft = frontLeft + center * 0.5f + surroundLeft * 0.3f
+        val currentRight = frontRight + center * 0.5f + surroundRight * 0.3f
+
+        leftDelayBuffer.addLast(currentLeft)
+        leftDelayBuffer.removeFirst()
+        rightDelayBuffer.addLast(currentRight)
+        rightDelayBuffer.removeFirst()
+
+        // === 混合5.1声道到立体声输出 ===
+        // 左声道混合：FL(强) + C(中) + SL(中) + LFE(弱) + 交叉串扰
+        var leftMix = frontLeft * 1.0f           // 前置左，主要
+        leftMix += center * 0.5f                 // 中置
+        leftMix += leftDelayBuffer[15] * 0.6f   // 后置左环绕（延迟）
+        leftMix += lfePulse * 0.2f               // 低音炮
+
+        // 右声道混合：FR(强) + C(中) + SR(中) + LFE(弱) + 交叉串扰
+        var rightMix = frontRight * 1.0f          // 前置右，主要
+        rightMix += center * 0.5f                 // 中置
+        rightMix += rightDelayBuffer[15] * 0.6f  // 后置右环绕（延迟）
+        rightMix += lfePulse * 0.2f               // 低音炮
+
+        // === 交叉串扰（模拟空间扩散）===
+        // 前置右串扰到左耳
+        leftMix += rightDelayBuffer[5] * 0.25f
+        // 前置左串扰到右耳
+        rightMix += leftDelayBuffer[5] * 0.25f
+        // 后置环绕交叉串扰
+        leftMix += rightDelayBuffer[20] * 0.15f
+        rightMix += leftDelayBuffer[20] * 0.15f
+
+        // === 空间混响（增强空间感）===
+        // 早期反射
+        val earlyL = (leftDelayBuffer[3] + leftDelayBuffer[8]) / 2f * 0.4f
+        val earlyR = (rightDelayBuffer[3] + rightDelayBuffer[8]) / 2f * 0.4f
+
+        // 中期反射
+        val midL = (leftDelayBuffer[12] + leftDelayBuffer[18] + leftDelayBuffer[25]) / 3f * 0.3f
+        val midR = (rightDelayBuffer[12] + rightDelayBuffer[18] + rightDelayBuffer[25]) / 3f * 0.3f
+
+        // 晚期反射
+        val lateL = leftDelayBuffer[35] * 0.15f
+        val lateR = rightDelayBuffer[35] * 0.15f
+
+        leftMix += earlyL + midL + lateL
+        rightMix += earlyR + midR + lateR
+
+        // === 动态范围控制 ===
+        // 确保左右声道有明显差异
+        leftMix = leftMix.coerceIn(0.35f, 1.6f)
+        rightMix = rightMix.coerceIn(0.35f, 1.6f)
+
+        // 应用到MediaPlayer
+        mediaPlayer?.setVolume(leftMix, rightMix)
+
+        delay(20) // ~50fps
+    }
+
+    // 3D环绕音效（圆周运动）
+    private suspend fun apply3DSurround() {
+        // 参考HMS的动态渲染模式：ROTATION
+        surroundAngle = (surroundAngle + surroundSpeed) % 360f
+        val angleRad = Math.toRadians(surroundAngle.toDouble())
+
+        // 声源位置：在水平面上做圆周运动（增大运动范围）
+        val sourceRadius = (surroundRadius / 100f) * 3.0f
+        val sourceX = Math.sin(angleRad).toFloat() * sourceRadius
+        val sourceZ = Math.cos(angleRad).toFloat() * sourceRadius
+
+        // 双耳时间差 (ITD)
+        val leftEarDist = kotlin.math.sqrt(
+            (sourceX - 0.085) * (sourceX - 0.085) + sourceZ * sourceZ
+        )
+        val rightEarDist = kotlin.math.sqrt(
+            (sourceX + 0.085) * (sourceX + 0.085) + sourceZ * sourceZ
+        )
+        val itdMs = kotlin.math.abs(leftEarDist - rightEarDist) / 343f * 1000
+        val itdSamples = (itdMs * 60 / 1000).toInt().coerceIn(0, 49)
+
+        // 双耳强度差 (ILD)（增大衰减系数，增强距离感）
+        val leftAttenuation = 1.0f / (1.0f + leftEarDist * 0.5f)
+        val rightAttenuation = 1.0f / (1.0f + rightEarDist * 0.5f)
+
+        var leftVol: Double = leftAttenuation
+        var rightVol: Double = rightAttenuation
+
+        // 前后方位感（增强前后差异）
+        val azimuth = Math.atan2(sourceX.toDouble(), sourceZ.toDouble())
+        val frontBackFactor = (Math.cos(azimuth) + 1.0) / 2.0
+        val frontBackAttenuation = 0.2f + 0.8f * frontBackFactor.toFloat()
+
+        if (sourceZ < 0) {
+            leftVol *= frontBackAttenuation
+            rightVol *= frontBackAttenuation
+        }
+
+        // 头部阴影效应（增强阴影效果）
+        val shadowFactor = (1.0 + Math.cos(azimuth)) / 2.0
+        val shadowAttenuation = 0.1f + 0.9f * shadowFactor.toFloat()
+
+        if (sourceX > 0) {
+            leftVol *= shadowAttenuation
+        } else {
+            rightVol *= shadowAttenuation
+        }
+
+        // 相位差（增大相位偏移）
+        val phaseShift = if (sourceZ < 0) 0.35f else 0.15f
+        if (sourceX > 0) {
+            leftVol *= (1.0f - phaseShift)
+            rightVol *= (1.0f + phaseShift)
+        } else {
+            leftVol *= (1.0f + phaseShift)
+            rightVol *= (1.0f - phaseShift)
+        }
+
+        // 应用延迟缓冲
+        leftDelayBuffer.addLast(leftVol.toFloat())
+        leftDelayBuffer.removeFirst()
+        rightDelayBuffer.addLast(rightVol.toFloat())
+        rightDelayBuffer.removeFirst()
+
+        // 从延迟缓冲区读取
+        var leftVolume = leftDelayBuffer[itdSamples]
+        var rightVolume = rightDelayBuffer[itdSamples]
+
+        // 空间混响（增强混响效果）
+        val earlyL = (leftDelayBuffer[2] + leftDelayBuffer[5] + leftDelayBuffer[8]) / 3f * 0.8f
+        val earlyR = (rightDelayBuffer[2] + rightDelayBuffer[5] + rightDelayBuffer[8]) / 3f * 0.8f
+        val midL = (leftDelayBuffer[12] + leftDelayBuffer[18] + leftDelayBuffer[25]) / 3f * 0.6f
+        val midR = (rightDelayBuffer[12] + rightDelayBuffer[18] + rightDelayBuffer[25]) / 3f * 0.6f
+
+        leftVolume += earlyL + midL
+        rightVolume += earlyR + midR
+
+        // 动态范围控制（扩大变化范围）
+        leftVolume = leftVolume.coerceIn(0.2f, 1.8f)
+        rightVolume = rightVolume.coerceIn(0.2f, 1.8f)
+
+        // 应用到MediaPlayer
+        mediaPlayer?.setVolume(leftVolume, rightVolume)
+
+        delay(20)
+    }
+
+    private fun stop3DSurroundEffect() {
+        surroundJob?.cancel()
+        surroundJob = null
+        mediaPlayer?.setVolume(1.0f, 1.0f)
+        // 重置缓冲区
+        leftDelayBuffer.clear()
+        repeat(50) { leftDelayBuffer.add(0.5f) }
+        rightDelayBuffer.clear()
+        repeat(50) { rightDelayBuffer.add(0.5f) }
+        sourcePhase = 0f
     }
 
     // --- 数据库操作 ---
@@ -731,13 +1089,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val resourceId = context.resources.getIdentifier("default_cover", "drawable", context.packageName)
                 BitmapFactory.decodeResource(context.resources, resourceId)
             }
-            val blurred = bitmap?.let { BlurUtil.doBlur(it, 8, 20) }
+            val blurred = bitmap?.let { BlurUtil.doBlur(it, 25, 20) }
             withContext(Dispatchers.Main) { blurredBackground = blurred }
         }
     }
 
     override fun onCleared() {
         super.onCleared()
+        stop3DSurroundEffect()
         mediaPlayer?.release()
         mediaSession?.release()
     }
@@ -896,5 +1255,481 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
         }
+    }
+
+    // --- 翻译功能 ---
+    /**
+     * 翻译当前歌词
+     */
+    fun translateLyrics() {
+        viewModelScope.launch {
+            try {
+                isTranslating = true
+                translateError = null
+                translateLogs = ""
+
+                if (lyricLines.isEmpty()) {
+                    translateError = "没有歌词可翻译"
+                    addLog("错误: 没有歌词可翻译")
+                    return@launch
+                }
+
+                addLog("========== 开始翻译 ==========")
+                addLog("原始歌词行数: ${lyricLines.size}")
+                Log.d("Translate", "========== 开始翻译 ==========")
+                Log.d("Translate", "原始歌词行数: ${lyricLines.size}")
+
+                // 构建歌词文本：每行包含时间戳和内容
+                val lyricText = lyricLines.joinToString("\n") { line ->
+                    val timeStr = formatTimeToLrc(line.time)
+                    "[$timeStr]${line.content}"
+                }
+
+                addLog("发送翻译请求，歌词长度: ${lyricText.length}")
+                addLog("歌词前100字符: ${lyricText.take(100)}")
+                Log.d("Translate", "发送翻译请求，歌词长度: ${lyricText.length}")
+                Log.d("Translate", "歌词前100字符: ${lyricText.take(100)}")
+
+                // 调用翻译API，目标语言为中文
+                val response = translateService.translateText(
+                    apiKey = BuildConfig.MUSIC_API_KEY,
+                    text = lyricText,
+                    fromLang = "auto",
+                    targetLang = "zh"
+                )
+
+                addLog("API调用成功")
+                addLog("========== 翻译响应开始 ==========")
+                addLog("响应代码: ${response.code}")
+                addLog("响应消息: ${response.msg}")
+                addLog("响应data: ${response.data}")
+                addLog("完整响应: $response")
+                Log.d("Translate", "API调用成功")
+                Log.d("Translate", "========== 翻译响应开始 ==========")
+                Log.d("Translate", "响应代码: ${response.code}")
+                Log.d("Translate", "响应消息: ${response.msg}")
+                Log.d("Translate", "响应data: ${response.data}")
+                Log.d("Translate", "完整响应: $response")
+
+                // 检查响应是否成功
+                if (response.code != 200 || response.data == null) {
+                    translateError = "翻译服务返回错误: ${response.msg} (code: ${response.code})"
+                    addLog("❌ 翻译失败: $translateError")
+                    Log.e("Translate", "翻译失败: $translateError")
+                    return@launch
+                }
+
+                // 获取翻译结果
+                val translatedText = response.data!!.data?.jieguo
+                if (translatedText == null) {
+                    translateError = "翻译服务返回格式错误，未找到翻译结果"
+                    addLog("❌ 翻译结果为空")
+                    Log.e("Translate", "翻译结果为空")
+                    return@launch
+                }
+
+                // 解码HTML实体
+                val decodedText = decodeHtmlEntities(translatedText)
+
+                addLog("翻译响应: translatedText长度=${decodedText.length}")
+                addLog("翻译响应前200字符: ${decodedText.take(200)}")
+                Log.d("Translate", "翻译响应: translatedText长度=${decodedText.length}")
+                Log.d("Translate", "翻译响应前200字符: ${decodedText.take(200)}")
+
+                // 检查翻译文本是否为空
+                if (translatedText.isBlank()) {
+                    translateError = "翻译服务返回空内容，请稍后重试"
+                    addLog("❌ 翻译文本为空")
+                    Log.e("Translate", "翻译文本为空")
+                    return@launch
+                }
+
+                // 解析翻译后的文本
+                val translatedLines = parseTranslatedText(decodedText, lyricLines)
+
+                addLog("解析结果：共${translatedLines.size}行")
+                translatedLines.forEachIndexed { index, text ->
+                    addLog("  第${index}行: ${text?.take(30) ?: "(空)"} (长度=${text?.length ?: 0})")
+                }
+                addLog("========== 翻译响应结束 ==========")
+                Log.d("Translate", "解析结果：共${translatedLines.size}行")
+                translatedLines.forEachIndexed { index, text ->
+                    Log.d("Translate", "  第${index}行: ${text?.take(30) ?: "(空)"} (长度=${text?.length ?: 0})")
+                }
+                Log.d("Translate", "========== 翻译响应结束 ==========")
+
+                // 检查是否有翻译结果
+                val hasTranslation = translatedLines.any { !it.isNullOrEmpty() }
+                if (!hasTranslation) {
+                    translateError = "未能解析出翻译内容，API返回格式可能已改变"
+                    addLog("❌ 未能解析出翻译内容")
+                    return@launch
+                }
+
+                withContext(Dispatchers.Main) {
+                    // 更新歌词行，添加翻译
+                    val newLyricLines = lyricLines.mapIndexed { index, line ->
+                        line.copy(translation = translatedLines.getOrElse(index) { null })
+                    }
+                    lyricLines = newLyricLines
+                    showTranslation = true
+                    addLog("✅ 翻译完成！showTranslation=$showTranslation")
+                    addLog("更新后的第一行: content=${lyricLines.getOrNull(0)?.content}, translation=${lyricLines.getOrNull(0)?.translation}")
+                    addLog("更新后的第二行: content=${lyricLines.getOrNull(1)?.content}, translation=${lyricLines.getOrNull(1)?.translation}")
+                    Log.d("Translate", "翻译完成，showTranslation=$showTranslation")
+                    Log.d("Translate", "更新后的第一行: content=${lyricLines.getOrNull(0)?.content}, translation=${lyricLines.getOrNull(0)?.translation}")
+                    Log.d("Translate", "更新后的第二行: content=${lyricLines.getOrNull(1)?.content}, translation=${lyricLines.getOrNull(1)?.translation}")
+                }
+
+            } catch (e: retrofit2.HttpException) {
+                val errorMsg = "网络请求失败: ${e.code()} - ${e.message()}"
+                addLog("❌ $errorMsg")
+                Log.e("Translate", errorMsg, e)
+                translateError = errorMsg
+            } catch (e: java.net.SocketTimeoutException) {
+                val errorMsg = "请求超时，请检查网络连接"
+                addLog("❌ $errorMsg")
+                Log.e("Translate", errorMsg, e)
+                translateError = errorMsg
+            } catch (e: java.net.UnknownHostException) {
+                val errorMsg = "无法连接到翻译服务器，请检查网络"
+                addLog("❌ $errorMsg")
+                Log.e("Translate", errorMsg, e)
+                translateError = errorMsg
+            } catch (e: Exception) {
+                val errorMsg = "翻译失败: ${e.javaClass.simpleName} - ${e.message}"
+                addLog("❌ $errorMsg")
+                Log.e("Translate", errorMsg, e)
+                translateError = errorMsg
+            } finally {
+                isTranslating = false
+            }
+        }
+    }
+
+    /**
+     * 将毫秒转换为LRC时间格式 [mm:ss.xxx]
+     */
+    private fun formatTimeToLrc(ms: Long): String {
+        val minutes = ms / 60000
+        val seconds = (ms % 60000) / 1000
+        val millis = ms % 1000
+        return String.format("%02d:%02d.%03d", minutes, seconds, millis)
+    }
+
+    /**
+     * 解析翻译后的文本，提取每句翻译
+     * 使用 parseContinuous 方法解析包含合并时间戳的翻译文本，然后进行智能匹配
+     */
+    private fun parseTranslatedText(translatedText: String, originalLines: List<LrcLine>): List<String?> {
+        val result: MutableList<String?> = mutableListOf()
+        repeat(originalLines.size) { result.add(null) }
+
+        Log.d("Translate", "========== 解析翻译文本开始 ==========")
+        addLog("========== 解析翻译文本开始 ==========")
+        addLog("翻译文本长度: ${translatedText.length}")
+        addLog("翻译文本前500字符: ${translatedText.take(500)}")
+        addLog("原始歌词行数: ${originalLines.size}")
+        addLog("原始歌词时间戳前3个: ${originalLines.take(3).map { "${formatTimeToLrc(it.time)}(${it.time}ms)" }}")
+
+        // 步骤1: 使用 LrcParser.parseContinuous 解析包含合并时间戳的文本
+        // 这个方法可以处理像 [00:10.255]文本[00:17.957]文本 这样的格式
+        val normalizedText = convertContinuousToStandardLrc(translatedText)
+        val translatedLines = LrcParser.parseContinuous(normalizedText)
+        if (translatedLines.isEmpty()) {
+            val plainLines = translatedText.lineSequence()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .toList()
+
+            plainLines.forEachIndexed { index, line ->
+                val logMsg = "Plain line ${index}: ${line.take(40)}"
+                Log.d("Translate", "  $logMsg")
+                addLog("  $logMsg")
+            }
+
+            for (i in originalLines.indices) {
+                result[i] = plainLines.getOrNull(i)
+            }
+            return result
+        }
+        Log.d("Translate", "parseContinuous解析结果: 共${translatedLines.size}行")
+        addLog("parseContinuous解析结果: 共${translatedLines.size}行")
+
+        // 打印解析后的翻译内容
+        translatedLines.forEachIndexed { index, line ->
+            val logMsg = "翻译第${index}行: [${formatTimeToLrc(line.time)}] ${line.content.take(40)}"
+            Log.d("Translate", "  $logMsg")
+            addLog("  $logMsg")
+        }
+
+        // 步骤2: 使用双向匹配算法
+        // 对于每个原文行，查找最接近的翻译行
+        var matchedCount = 0
+        var unmatchedCount = 0
+        
+        for (i in originalLines.indices) {
+            val originalTime = originalLines[i].time
+            
+            // 查找最接近且未使用的时间戳
+            var bestMatchIndex = -1
+            var minDiff = Long.MAX_VALUE
+            val timeTolerance = 300L // 允许300毫秒误差
+            
+            for (j in translatedLines.indices) {
+                val diff = kotlin.math.abs(translatedLines[j].time - originalTime)
+                if (diff < minDiff) {
+                    minDiff = diff
+                    bestMatchIndex = j
+                }
+            }
+
+            if (bestMatchIndex != -1 && minDiff <= timeTolerance) {
+                result[i] = translatedLines[bestMatchIndex].content
+                matchedCount++
+                val logMsg = "原文行${i} [${formatTimeToLrc(originalTime)}] -> 匹配翻译: ${translatedLines[bestMatchIndex].content.take(40)} (差异: ${minDiff}ms)"
+                Log.d("Translate", "$logMsg")
+                addLog("$logMsg")
+            } else {
+                unmatchedCount++
+                val logMsg = "原文行${i} [${formatTimeToLrc(originalTime)}] -> 未找到匹配翻译 (原始内容: ${originalLines[i].content.take(30)})"
+                Log.d("Translate", "$logMsg")
+                addLog("$logMsg")
+            }
+        }
+
+        Log.d("Translate", "匹配统计: 成功$matchedCount 行, 失败$unmatchedCount 行")
+        addLog("匹配统计: 成功$matchedCount 行, 失败$unmatchedCount 行")
+
+        // Fallback: if translation missing, use original text to avoid empty lines
+        for (i in result.indices) {
+            if (result[i].isNullOrBlank() && originalLines[i].content.isNotBlank()) {
+                result[i] = originalLines[i].content
+                val logMsg = "Fallback to original line $i"
+                Log.d("Translate", logMsg)
+                addLog(logMsg)
+            }
+        }
+        
+        // 打印调试信息
+        Log.d("Translate", "解析结果：")
+        addLog("解析结果：")
+        result.forEachIndexed { index, text ->
+            val logMsg = "  第${index}行: ${text?.take(50) ?: "(空)"} (长度=${text?.length ?: 0})"
+            Log.d("Translate", "$logMsg")
+            addLog("$logMsg")
+        }
+        Log.d("Translate", "========== 解析翻译文本结束 ==========")
+        addLog("========== 解析翻译文本结束 ==========")
+
+        return result
+    }
+
+    /**
+     * 将连续时间戳格式的文本转换为标准LRC格式
+     * 先标准化所有时间戳格式，然后正确处理换行符
+     */
+    private fun convertContinuousToStandardLrc(continuousText: String): String {
+        var result = continuousText
+        
+        // 步骤1: 修复错误格式的时间戳
+        // 修复 [00:6.484] -> [00:06.484] (秒数补零)
+        result = result.replace(Regex("\\[(\\d{2}):(\\d)([.:]\\d{2,3})\\]")) { matchResult ->
+            val min = matchResult.groupValues[1]
+            val sec = matchResult.groupValues[2].padStart(2, '0')
+            val millis = matchResult.groupValues[3]
+            "[$min:$sec$millis]"
+        }
+        
+        // 修复 [0:15.367] -> [00:15.367] (分钟补零)
+        result = result.replace(Regex("\\[(\\d):(\\d{2})([.:]\\d{2,3})\\]")) { matchResult ->
+            val min = matchResult.groupValues[1].padStart(2, '0')
+            val sec = matchResult.groupValues[2]
+            val millis = matchResult.groupValues[3]
+            "[$min:$sec$millis]"
+        }
+        
+        // 修复 [00,49.162] -> [00:49.162] (逗号转冒号)
+        result = result.replace(Regex("\\[(\\d{2}),(\\d{2})([.:]\\d{2,3})\\]")) { matchResult ->
+            val min = matchResult.groupValues[1]
+            val sec = matchResult.groupValues[2]
+            val millis = matchResult.groupValues[3]
+            "[$min:$sec$millis]"
+        }
+        
+        // 修复 [00:3.884] -> [00:03.884] (秒数补零)
+        result = result.replace(Regex("\\[(\\d{2}):(\\d)([.:]\\d{2,3})\\]")) { matchResult ->
+            val min = matchResult.groupValues[1]
+            val sec = matchResult.groupValues[2].padStart(2, '0')
+            val millis = matchResult.groupValues[3]
+            "[$min:$sec$millis]"
+        }
+        
+        // 修复 [02:431.23] -> [02:43.123] (秒数错误，截取前两位)
+        result = result.replace(Regex("\\[(\\d{2}):(\\d{3})([.:]\\d{2,3})\\]")) { matchResult ->
+            val min = matchResult.groupValues[1]
+            val sec = matchResult.groupValues[2].take(2)
+            val millis = matchResult.groupValues[3]
+            "[$min:$sec$millis]"
+        }
+        
+        // 修复 [03:05.65] -> [03:05.065] (毫秒补零)
+        result = result.replace(Regex("\\[(\\d{2}):(\\d{2})[.:](\\d{2})\\]")) { matchResult ->
+            val min = matchResult.groupValues[1]
+            val sec = matchResult.groupValues[2]
+            val millis = matchResult.groupValues[3] + "0"
+            "[$min:$sec.$millis]"
+        }
+        
+        // 步骤2: 提取每个时间戳及其后的文本，重新格式化
+        // 这样可以确保时间戳和文本在同一行，并且每行只有一个时间戳
+        val timePattern = Regex("\\[\\d{2}:\\d{2}[.:]\\d{3}\\]")
+        val matches = timePattern.findAll(result).toList()
+        
+        if (matches.isEmpty()) {
+            return result
+        }
+        
+        val builder = StringBuilder()
+        
+        for (i in matches.indices) {
+            val match = matches[i]
+            val timeStr = match.value
+            
+            // 提取文本：从当前时间戳结束位置到下一个时间戳开始位置
+            val startPos = match.range.last + 1
+            val endPos = if (i < matches.size - 1) {
+                matches[i + 1].range.first
+            } else {
+                result.length
+            }
+            
+            var content = result.substring(startPos, endPos).trim()
+            
+            // 移除内容中的其他时间戳（防止嵌套）
+            content = content.replace(timePattern, "").trim()
+            
+            // 将时间戳和文本放在同一行
+            if (content.isNotEmpty()) {
+                builder.append(timeStr).append(content).append("\n")
+            }
+        }
+        
+        // 步骤3: 移除末尾多余的换行符
+        return builder.toString().trimEnd('\n')
+    }
+
+    /**
+     * 解析LRC时间戳格式 [MM:SS.mmm] 或 [MM:SS:mmm] 为毫秒
+     */
+    private fun parseLrcTime(timeStr: String): Long {
+        try {
+            // 移除方括号，提取时间部分
+            val timeContent = timeStr.substring(1, timeStr.length - 1)
+            val parts = timeContent.split(":")
+            
+            val minutes = parts[0].toInt()
+            val seconds = parts[1].split("[.:]")[0].toInt()
+            
+            // 提取毫秒部分，支持点号或冒号分隔
+            val millisStr = if (parts[1].contains(".")) {
+                parts[1].split(".")[1]
+            } else if (parts[1].contains(":")) {
+                parts[1].split(":")[1]
+            } else {
+                "0"
+            }
+            
+            // 处理毫秒：2位需要乘以10，3位直接使用
+            val millis = when (millisStr.length) {
+                2 -> millisStr.toInt() * 10L  // 例如: 48 -> 480
+                3 -> millisStr.toLong()       // 例如: 484 -> 484
+                else -> millisStr.toLong()    // 其他情况直接使用
+            }
+            
+            return minutes * 60000L + seconds * 1000L + millis
+        } catch (e: Exception) {
+            Log.e("Translate", "解析时间戳失败: $timeStr, 错误: ${e.message}")
+            return 0L
+        }
+    }
+
+    /**
+     * 添加翻译日志
+     */
+    private fun addLog(message: String) {
+        val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+        translateLogs += "[$timestamp] $message\n"
+    }
+
+    /**
+     * 切换翻译显示状态
+     */
+    fun toggleTranslation() {
+        showTranslation = !showTranslation
+    }
+
+    /**
+     * 解码HTML实体
+     * 将 &amp;quot;、&amp;#039; 等HTML实体转换为正常字符
+     * 并将 \\n 转换为真正的换行符
+     * 支持中文分号（；）和英文分号（;）两种格式
+     */
+    private fun decodeHtmlEntities(text: String): String {
+        var result = text
+        
+        // 处理带中文分号的HTML实体（如 &quot；）
+        result = result.replace("&quot；", "\"")
+        result = result.replace("&apos；", "'")
+        result = result.replace("&lt；", "<")
+        result = result.replace("&gt；", ">")
+        result = result.replace("&amp；", "&")
+        result = result.replace("&#039；", "'")
+        
+        // 处理带英文分号的HTML实体（如 &quot;）
+        result = result.replace("&quot;", "\"")
+        result = result.replace("&apos;", "'")
+        result = result.replace("&lt;", "<")
+        result = result.replace("&gt;", ">")
+        result = result.replace("&amp;", "&")
+        result = result.replace("&#039;", "'")
+        
+        // 处理不带&前缀但可能被错误编码的情况
+        result = result.replace("quot；", "\"")
+        result = result.replace("quot;", "\"")
+        result = result.replace("apos；", "'")
+        result = result.replace("apos;", "'")
+        result = result.replace("lt；", "<")
+        result = result.replace("lt;", "<")
+        result = result.replace("gt；", ">")
+        result = result.replace("gt;", ">")
+        result = result.replace("amp；", "&")
+        result = result.replace("amp;", "&")
+        result = result.replace("#039；", "'")
+        result = result.replace("#039;", "'")
+        
+        // 处理中文全角引号和标点
+        result = result.replace(""", "\"")
+        result = result.replace(""", "\"")
+        result = result.replace("，", ",")
+        result = result.replace("。", ".")
+        result = result.replace("！", "!")
+        result = result.replace("？", "?")
+        result = result.replace("；", ";")  // 中文分号转英文分号
+        
+        // 处理中文全角方括号转换为半角方括号（重要！）
+        result = result.replace("【", "[")
+        result = result.replace("】", "]")
+        result = result.replace("［", "[")
+        result = result.replace("］", "]")
+        
+        // 处理中文全角括号
+        result = result.replace("（", "(")
+        result = result.replace("）", ")")
+        
+        // 处理换行符
+        result = result.replace("\\n", "\n")
+        
+        return result
     }
 }

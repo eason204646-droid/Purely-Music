@@ -96,7 +96,7 @@ fun AlbumDetailScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "返回",
+                            contentDescription = if (viewModel.currentLanguage == "zh") "返回" else "Back",
                             tint = Color.White,
                             modifier = Modifier.padding(8.dp).size(24.dp)
                         )
@@ -119,7 +119,7 @@ fun AlbumDetailScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "${album.artist} • $totalSongs 首歌曲",
+                            text = "${album.artist} • ${if (viewModel.currentLanguage == "zh") "$totalSongs 首歌曲" else "$totalSongs song${if (totalSongs > 1) "s" else ""}"}",
                             color = Color.White.copy(alpha = 0.8f),
                             fontSize = 14.sp
                         )
@@ -158,7 +158,10 @@ fun AlbumDetailScreen(
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("播放全部", color = Color.White)
+                                Text(
+                                    if (viewModel.currentLanguage == "zh") "播放全部" else "Play All",
+                                    color = Color.White
+                                )
                             }
                             Button(
                                 onClick = {
@@ -184,7 +187,10 @@ fun AlbumDetailScreen(
                                     contentColor = Color.White
                                 )
                             ) {
-                                Text("随机播放", color = Color.White)
+                                Text(
+                                    if (viewModel.currentLanguage == "zh") "随机播放" else "Shuffle",
+                                    color = Color.White
+                                )
                             }
                         }
                     }

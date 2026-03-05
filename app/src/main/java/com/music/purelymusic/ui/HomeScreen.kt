@@ -56,7 +56,7 @@ fun HomeScreen(viewModel: PlayerViewModel, onNavigateToPlayer: () -> Unit) {
             .background(Color.White)
     ) {
         Text(
-            text = "主页",
+            text = if (viewModel.currentLanguage == "zh") "主页" else "Home",
             fontSize = AppDimensions.textXXXL().value.sp,
             fontWeight = FontWeight.ExtraBold,
             color = Color.Black,
@@ -71,7 +71,7 @@ fun HomeScreen(viewModel: PlayerViewModel, onNavigateToPlayer: () -> Unit) {
                 item {
                     Column(modifier = Modifier.padding(vertical = AppDimensions.spacingS())) {
                         Text(
-                            text = "最近播放",
+                            text = if (viewModel.currentLanguage == "zh") "最近播放" else "Recently Played",
                             fontSize = AppDimensions.homeSectionTitleSize().value.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.Black,
@@ -95,7 +95,7 @@ fun HomeScreen(viewModel: PlayerViewModel, onNavigateToPlayer: () -> Unit) {
 
             item {
                 Text(
-                    text = "所有歌曲",
+                    text = if (viewModel.currentLanguage == "zh") "所有歌曲" else "All Songs",
                     fontSize = AppDimensions.homeSectionTitleSize().value.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
@@ -199,7 +199,7 @@ fun MiniPlayer(viewModel: PlayerViewModel, onClick: () -> Unit) {
     val currentSong = viewModel.currentSong ?: return
     Surface(
         modifier = Modifier.fillMaxWidth().height(AppDimensions.miniPlayerHeight()).padding(horizontal = AppDimensions.miniPlayerPaddingH()),
-        shape = RoundedCornerShape(AppDimensions.cornerRadiusL()),
+        shape = RoundedCornerShape(28.dp),
         color = Color.White,
         shadowElevation = AppDimensions.elevationL()
     ) {

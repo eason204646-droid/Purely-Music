@@ -23,16 +23,28 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -92,37 +104,120 @@ fun MainScreen(viewModel: PlayerViewModel) {
     Scaffold(
         containerColor = Color.White,
         bottomBar = {
-            if (currentRoute == "home" || currentRoute == "library") {
-                NavigationBar(
-                    containerColor = Color.White,
-                    tonalElevation = 0.dp
+            if (currentRoute == "home" || currentRoute == "library" || currentRoute == "settings") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    val itemColors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color(0xFFE53935),
-                        selectedTextColor = Color(0xFFE53935),
-                        indicatorColor = Color(0xFFFFCDD2),
-                        unselectedIconColor = Color.Gray,
-                        unselectedTextColor = Color.Gray
-                    )
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp),
+                        shape = RoundedCornerShape(32.dp),
+                        color = Color.White,
+                        shadowElevation = 8.dp,
+                        tonalElevation = 0.dp
+                    ) {
+                        NavigationBar(
+                            containerColor = Color.Transparent,
+                            tonalElevation = 0.dp
+                        ) {
+                            val itemColors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = Color(0xFFE53935),
+                                selectedTextColor = Color(0xFFE53935),
+                                indicatorColor = Color.Transparent,
+                                unselectedIconColor = Color(0xFFBDBDBD),
+                                unselectedTextColor = Color(0xFFBDBDBD)
+                            )
 
-                    NavigationBarItem(
-                        icon = { Icon(Icons.Default.Home, null, modifier = Modifier.size(AppDimensions.navigationBarIconSize())) },
-                        label = { Text("主页") },
-                        selected = currentRoute == "home",
-                        colors = itemColors,
-                        onClick = {
-                            if (currentRoute != "home") {
-                                navController.navigate("home") { popUpTo("home") { inclusive = true } }
+                            val navItems: List<Pair<String, String>> = listOf(
+                                Pair(if (viewModel.currentLanguage == "zh") "主页" else "Home", "home"),
+                                Pair(if (viewModel.currentLanguage == "zh") "资料库" else "Library", "library"),
+                                Pair(if (viewModel.currentLanguage == "zh") "设置" else "Settings", "settings")
+                            )
+
+                            // 使用Box作为容器，用于放置背景指示器
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                            ) {
+                                // 背景指示器
+                                val density = LocalDensity.current
+                                var containerWidth by remember { mutableStateOf(0f) }
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .onSizeChanged { size ->
+                                            containerWidth = size.width.toFloat()
+                                        }
+                                ) {
+                                    // 背景指示器层 - 只显示一个
+                                    val selectedIndex = navItems.indexOfFirst { it.second == currentRoute }
+                                    if (selectedIndex >= 0 && containerWidth > 0) {
+                                        val itemWidth = containerWidth / navItems.size
+                                        val offsetX by animateDpAsState(
+                                            targetValue = with(density) { (selectedIndex * itemWidth).toDp() },
+                                            animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic),
+                                            label = "navOffset"
+                                        )
+                                        
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxHeight()
+                                                .width(with(density) { itemWidth.toDp() })
+                                                .offset(x = offsetX)
+                                                .padding(vertical = 12.dp, horizontal = 16.dp)
+                                                .background(
+                                                    color = Color(0xFFE0E0E0),
+                                                    shape = RoundedCornerShape(20.dp)
+                                                )
+                                        )
+                                    }
+                                    
+                                    // 导航项层
+                                    Row(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalArrangement = Arrangement.SpaceEvenly,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        navItems.forEachIndexed { index, item ->
+                                            val isSelected = currentRoute == item.second
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .fillMaxHeight(),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                // 可点击的视觉区域 - 只在文字和背景指示器区域
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(with(density) { (containerWidth / navItems.size).toDp() })
+                                                        .fillMaxHeight()
+                                                        .padding(vertical = 12.dp, horizontal = 16.dp)
+                                                        .clip(RoundedCornerShape(20.dp))
+                                                        .clickable {
+                                                            if (currentRoute != item.second) {
+                                                                navController.navigate(item.second) { popUpTo("home") { inclusive = true } }
+                                                            }
+                                                        },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        item.first,
+                                                        fontSize = 14.sp,
+                                                        color = if (isSelected) Color(0xFFE53935) else Color(0xFFBDBDBD),
+                                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
-                    )
-                    NavigationBarItem(
-                        icon = { Icon(Icons.Default.LibraryMusic, null, modifier = Modifier.size(AppDimensions.navigationBarIconSize())) },
-                        label = { Text("资料库") },
-                        selected = currentRoute == "library",
-                        colors = itemColors,
-                        onClick = { if (currentRoute != "library") navController.navigate("library") }
-                    )
+                    }
                 }
             }
         }
@@ -225,6 +320,13 @@ fun MainScreen(viewModel: PlayerViewModel) {
 
                 composable("player") {
                     PlayerScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+                }
+
+                composable("settings") {
+                    SettingsScreen(
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() }
+                    )
                 }
             }
 
