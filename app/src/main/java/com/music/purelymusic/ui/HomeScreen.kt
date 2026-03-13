@@ -24,20 +24,33 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PauseCircleFilled
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircleFilled
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.util.UnstableApi
@@ -49,19 +62,89 @@ import com.music.purelymusic.ui.utils.AppDimensions
 
 @OptIn(UnstableApi::class)
 @Composable
-fun HomeScreen(viewModel: PlayerViewModel, onNavigateToPlayer: () -> Unit) {
+fun HomeScreen(
+    viewModel: PlayerViewModel,
+    onNavigateToPlayer: () -> Unit,
+    onPickFile: () -> Unit,
+    onPickCover: () -> Unit,
+    onPickLrc: () -> Unit,
+    onNavigateToCreatePlaylist: () -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
+            .padding(horizontal = AppDimensions.paddingScreen())
     ) {
-        Text(
-            text = if (viewModel.currentLanguage == "zh") "主页" else "Home",
-            fontSize = AppDimensions.textXXXL().value.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = Color.Black,
-            modifier = Modifier.padding(start = AppDimensions.homeHeaderPadding(), top = AppDimensions.paddingScreen(), bottom = AppDimensions.spacingM())
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = AppDimensions.paddingScreen(), bottom = AppDimensions.paddingCard()),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (viewModel.currentLanguage == "zh") "主页" else "Home",
+                fontSize = AppDimensions.textXXXL().value.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.Black
+            )
+            Box {
+                IconButton(
+                    onClick = { showMenu = !showMenu },
+                    modifier = Modifier.size(AppDimensions.iconButtonSizeM())
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = if (viewModel.currentLanguage == "zh") "添加" else "Add",
+                        tint = Color(0xFFE53935),
+                        modifier = Modifier.size(AppDimensions.iconM())
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                    modifier = Modifier
+                        .background(Color(0xFFF5F5F5), RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(12.dp)),
+                    offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (viewModel.currentLanguage == "zh") "导入歌曲" else "Import Song",
+                                color = Color.Black
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.Black)
+                        },
+                        onClick = {
+                            showMenu = false
+                            onPickFile()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (viewModel.currentLanguage == "zh") "创建播放列表" else "Create Playlist",
+                                color = Color.Black
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.PlaylistAdd, contentDescription = null, tint = Color.Black)
+                        },
+                        onClick = {
+                            showMenu = false
+                            onNavigateToCreatePlaylist()
+                        }
+                    )
+                }
+            }
+        }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -75,11 +158,10 @@ fun HomeScreen(viewModel: PlayerViewModel, onNavigateToPlayer: () -> Unit) {
                             fontSize = AppDimensions.homeSectionTitleSize().value.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.Black,
-                            modifier = Modifier.padding(start = AppDimensions.homeHeaderPadding(), bottom = AppDimensions.spacingM())
+                            modifier = Modifier.padding(bottom = AppDimensions.paddingCard())
                         )
 
                         LazyRow(
-                            contentPadding = PaddingValues(horizontal = AppDimensions.homeHeaderPadding()),
                             horizontalArrangement = Arrangement.spacedBy(AppDimensions.spacingM())
                         ) {
                             items(viewModel.recentSongs) { song ->
@@ -99,13 +181,50 @@ fun HomeScreen(viewModel: PlayerViewModel, onNavigateToPlayer: () -> Unit) {
                     fontSize = AppDimensions.homeSectionTitleSize().value.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
-                    modifier = Modifier.padding(start = AppDimensions.homeHeaderPadding(), top = AppDimensions.paddingScreen(), bottom = AppDimensions.spacingM())
+                    modifier = Modifier.padding(top = AppDimensions.paddingScreen(), bottom = AppDimensions.paddingCard())
                 )
             }
 
             items(viewModel.libraryList) { song ->
                 SongItem(song = song, onClick = { viewModel.playSong(song) })
             }
+        }
+
+        // 监听文件选择，尝试读取元数据
+        LaunchedEffect(viewModel.tempMusicUri) {
+            val uri = viewModel.tempMusicUri
+            if (uri != null) {
+                // 尝试读取音频文件的元数据
+                val (title, artist) = viewModel.readAudioMetadata(uri)
+                
+                // 如果元数据完整（有歌名和歌手），直接自动获取信息并保存
+                if (!title.isNullOrBlank() && !artist.isNullOrBlank()) {
+                    try {
+                        val (coverPath, lrcPath) = viewModel.fetchAllFromNetwork(title, artist)
+                        if (coverPath != null) {
+                            viewModel.tempCoverUri = android.net.Uri.parse(coverPath)
+                        }
+                        if (lrcPath != null) {
+                            viewModel.tempLrcUri = android.net.Uri.parse("file://$lrcPath")
+                        }
+                        // 保存歌曲
+                        viewModel.saveSong(title, artist)
+                    } catch (e: Exception) {
+                        // 自动获取失败，清除 tempMusicUri，不显示对话框
+                        viewModel.tempMusicUri = null
+                    }
+                }
+                // 如果元数据不完整，保持 tempMusicUri 不变，弹窗会显示
+            }
+        }
+
+        // 显示导入歌曲对话框（只有当没有成功保存时才显示）
+        if (viewModel.tempMusicUri != null) {
+            HomeImportMusicDialog(
+                viewModel = viewModel,
+                onPickCover = onPickCover,
+                onPickLrc = onPickLrc
+            )
         }
     }
 }
@@ -151,7 +270,7 @@ fun SongItem(song: Song, onClick: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onClick() }
-                .padding(horizontal = AppDimensions.paddingScreen(), vertical = AppDimensions.spacingM()),
+                .padding(vertical = AppDimensions.spacingM()),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
@@ -187,8 +306,7 @@ fun SongItem(song: Song, onClick: () -> Unit) {
         }
         androidx.compose.material3.Divider(
             color = Color(0xFFF5F5F5),
-            thickness = 1.dp,
-            modifier = Modifier.padding(horizontal = AppDimensions.paddingScreen())
+            thickness = 1.dp
         )
     }
 }
@@ -226,5 +344,321 @@ fun MiniPlayer(viewModel: PlayerViewModel, onClick: () -> Unit) {
                 )
             }
         }
+    }
+}
+
+@Composable
+fun HomeImportMusicDialog(
+    viewModel: PlayerViewModel,
+    onPickCover: () -> Unit,
+    onPickLrc: () -> Unit
+) {
+    val coroutineScope = rememberCoroutineScope()
+    var title by remember { mutableStateOf("") }
+    var artist by remember { mutableStateOf("") }
+    var showManualImport by remember { mutableStateOf(false) }
+    var showFetchErrorDialog by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
+
+    // 监听自动获取失败
+    LaunchedEffect(viewModel.fetchAllError) {
+        if (viewModel.fetchAllError != null && isSaving) {
+            showFetchErrorDialog = true
+        }
+    }
+
+    // 监听保存成功
+    LaunchedEffect(viewModel.saveSongError) {
+        if (viewModel.saveSongError == null && isSaving) {
+            isSaving = false
+        }
+    }
+
+    val saveSong: () -> Unit = {
+        if (title.isNotBlank()) {
+            isSaving = true
+            viewModel.clearSaveSongError()
+            viewModel.fetchAllError = null
+            
+            // 先尝试自动获取信息
+            coroutineScope.launch {
+                try {
+                    if (title.isNotBlank() && artist.isNotBlank()) {
+                        val (coverPath, lrcPath) = viewModel.fetchAllFromNetwork(title, artist)
+                        if (coverPath != null) {
+                            viewModel.tempCoverUri = android.net.Uri.parse(coverPath)
+                        }
+                        if (lrcPath != null) {
+                            viewModel.tempLrcUri = android.net.Uri.parse("file://$lrcPath")
+                        }
+                        
+                        // 自动获取成功，直接保存
+                        viewModel.saveSong(title, artist)
+                    } else {
+                        // 没有歌名或歌手，直接保存
+                        viewModel.saveSong(title, artist)
+                    }
+                } catch (e: Exception) {
+                    // 自动获取失败，显示错误弹窗
+                    showFetchErrorDialog = true
+                    isSaving = false
+                }
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = {
+            if (!isSaving) {
+                viewModel.tempMusicUri = null
+                viewModel.fetchAllError = null
+                viewModel.saveSongError = null
+            }
+        },
+        containerColor = Color(0xFFF5F5F5),
+        title = { Text(if (viewModel.currentLanguage == "zh") "补充歌曲信息" else "Add Song Info", color = Color.Black) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(AppDimensions.spacingS())) {
+                TextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text(if (viewModel.currentLanguage == "zh") "歌曲名称" else "Song Title") },
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedTextColor = Color.Black,
+                        unfocusedTextColor = Color.Black,
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White,
+                        focusedIndicatorColor = Color(0xFFE53935),
+                        unfocusedIndicatorColor = Color.Gray,
+                        focusedLabelColor = Color(0xFFE53935),
+                        unfocusedLabelColor = Color.Gray
+                    )
+                )
+                TextField(
+                    value = artist,
+                    onValueChange = { artist = it },
+                    label = { Text(if (viewModel.currentLanguage == "zh") "歌手" else "Artist") },
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedTextColor = Color.Black,
+                        unfocusedTextColor = Color.Black,
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White,
+                        focusedIndicatorColor = Color(0xFFE53935),
+                        unfocusedIndicatorColor = Color.Gray,
+                        focusedLabelColor = Color(0xFFE53935),
+                        unfocusedLabelColor = Color.Gray
+                    )
+                )
+                
+                Spacer(modifier = Modifier.height(AppDimensions.paddingCard()))
+
+                // 手动导入区域（可展开/收起）
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showManualImport = !showManualImport }
+                            .padding(vertical = AppDimensions.paddingSmall()),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (viewModel.currentLanguage == "zh") "手动导入" else "Manual Import",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.Black
+                        )
+                        Icon(
+                            imageVector = if (showManualImport) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = Color.Black.copy(alpha = 0.7f)
+                        )
+                    }
+                    
+                    if (showManualImport) {
+                        Spacer(modifier = Modifier.height(AppDimensions.spacingS()))
+                        
+                        Column {
+                            Text(
+                                text = if (viewModel.currentLanguage == "zh") "歌曲封面" else "Album Cover",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Black.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(bottom = AppDimensions.spacingXS())
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                OutlinedButton(
+                                    onClick = onPickCover,
+                                    modifier = Modifier.height(AppDimensions.buttonHeightM())
+                                ) {
+                                    Text(if (viewModel.currentLanguage == "zh") "选择图片" else "Select Image")
+                                }
+                                Spacer(modifier = Modifier.width(AppDimensions.paddingCard()))
+                                if (viewModel.tempCoverUri != null) {
+                                    AsyncImage(
+                                        model = viewModel.tempCoverUri,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(AppDimensions.coverS()).clip(RoundedCornerShape(AppDimensions.cornerRadiusS())),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier.size(AppDimensions.coverS()).clip(RoundedCornerShape(AppDimensions.cornerRadiusS())).background(MaterialTheme.colorScheme.surfaceVariant),
+                                        contentAlignment = Alignment.Center
+                                    ) { Icon(Icons.Default.MusicNote, contentDescription = null, modifier = Modifier.size(AppDimensions.iconM())) }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(AppDimensions.spacingM()))
+
+                        Column {
+                            Text(
+                                text = if (viewModel.currentLanguage == "zh") "歌词文件 (LRC)" else "Lyrics File (LRC)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Black.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(bottom = AppDimensions.spacingXS())
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                OutlinedButton(
+                                    onClick = onPickLrc,
+                                    modifier = Modifier.height(AppDimensions.buttonHeightM())
+                                ) {
+                                    Text(if (viewModel.currentLanguage == "zh") "选择文件" else "Select File")
+                                }
+                                Spacer(modifier = Modifier.width(AppDimensions.paddingCard()))
+                                if (viewModel.tempLrcUri != null) {
+                                    Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(AppDimensions.iconS()))
+                                    Text(if (viewModel.currentLanguage == "zh") "已选择" else "Selected", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+
+                            val uriHandler = LocalUriHandler.current
+                            val annotatedString = buildAnnotatedString {
+                                append(if (viewModel.currentLanguage == "zh") "可以从 " else "You can download from ")
+                                pushStringAnnotation(tag = "URL", annotation = "https://xiaojiangclub.com/")
+                                withStyle(
+                                    style = SpanStyle(
+                                        color = MaterialTheme.colorScheme.primary,
+                                        textDecoration = TextDecoration.Underline
+                                    )
+                                ) {
+                                    append("https://xiaojiangclub.com/")
+                                }
+                                pop()
+                                append(if (viewModel.currentLanguage == "zh") " 等网站下载" else " and other sites")
+                            }
+
+                            ClickableText(
+                                text = annotatedString,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = Color.Black.copy(alpha = 0.6f),
+                                    fontSize = AppDimensions.textXS().value.sp
+                                ),
+                                modifier = Modifier.padding(top = AppDimensions.spacingXS(), start = AppDimensions.spacingXS()),
+                                onClick = { offset ->
+                                    annotatedString.getStringAnnotations(tag = "URL", start = offset, end = offset)
+                                        .firstOrNull()?.let { annotation ->
+                                            uriHandler.openUri(annotation.item)
+                                        }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = saveSong,
+                modifier = Modifier.height(AppDimensions.buttonHeightM()),
+                enabled = !isSaving
+            ) {
+                if (isSaving) {
+                    Box(
+                        modifier = Modifier.size(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                    }
+                } else {
+                    Text(if (viewModel.currentLanguage == "zh") "保存" else "Save")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = {
+                    if (!isSaving) {
+                        viewModel.tempMusicUri = null
+                        viewModel.saveSongError = null
+                        viewModel.fetchAllError = null
+                    }
+                },
+                modifier = Modifier.height(AppDimensions.buttonHeightM()),
+                enabled = !isSaving
+            ) {
+                Text(if (viewModel.currentLanguage == "zh") "取消" else "Cancel")
+            }
+        }
+    )
+
+    // 自动获取失败弹窗
+    if (showFetchErrorDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showFetchErrorDialog = false
+                isSaving = false
+            },
+            title = {
+                Text(
+                    if (viewModel.currentLanguage == "zh") "自动获取失败" else "Auto-fetch Failed",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        viewModel.fetchAllError ?: (if (viewModel.currentLanguage == "zh") "无法自动获取歌曲信息" else "Failed to fetch song information"),
+                        color = Color.Black.copy(alpha = 0.8f),
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        if (viewModel.currentLanguage == "zh") "您可以选择重试或手动导入信息" else "You can retry or manually import the information",
+                        color = Color.Black.copy(alpha = 0.6f),
+                        fontSize = 12.sp
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showFetchErrorDialog = false
+                        isSaving = false
+                        showManualImport = true  // 展开手动导入区域
+                    }
+                ) {
+                    Text(if (viewModel.currentLanguage == "zh") "手动导入" else "Manual Import", color = Color(0xFFE53935))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showFetchErrorDialog = false
+                        isSaving = false
+                        // 重试自动获取
+                        saveSong()
+                    }
+                ) {
+                    Text(if (viewModel.currentLanguage == "zh") "重试" else "Retry", color = Color(0xFFE53935))
+                }
+            },
+            containerColor = Color(0xFFF5F5F5)
+        )
     }
 }

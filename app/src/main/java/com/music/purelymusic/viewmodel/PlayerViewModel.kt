@@ -22,6 +22,7 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.media.Spatializer
 import android.net.Uri
@@ -50,7 +51,6 @@ import java.io.FileOutputStream
 import java.nio.charset.Charset
 import kotlin.math.sin
 
-@RequiresApi(Build.VERSION_CODES.S_V2)
 @SuppressLint("RestrictedApi")
 @UnstableApi
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
@@ -346,6 +346,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     var tempLrcUri by mutableStateOf<Uri?>(null)
     var tempAlbumName by mutableStateOf<String?>(null)
     var tempAlbumArtist by mutableStateOf<String?>(null)
+    var isProcessingImport by mutableStateOf(false)
 
     // 编辑歌曲状态
     var editingSong by mutableStateOf<Song?>(null)
@@ -1102,6 +1103,35 @@ private fun stopSurroundEffect() {
     }
 
     
+    // --- 读取音频文件元数据 ---
+    /**
+     * 从音频文件中读取元数据（歌名和歌手名）
+     * @return Pair(歌名, 歌手名)，如果读取失败则返回 Pair(null, null)
+     */
+    fun readAudioMetadata(uri: Uri): Pair<String?, String?> {
+        return try {
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(context, uri)
+
+            // 尝试读取歌名（使用多个键位尝试）
+            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+
+            // 尝试读取歌手名（使用多个键位尝试）
+            val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
+                ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_AUTHOR)
+                ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_COMPOSER)
+
+            retriever.release()
+
+            Log.d("AudioMetadata", "读取元数据成功: title=$title, artist=$artist")
+            Pair(title, artist)
+        } catch (e: Exception) {
+            Log.e("AudioMetadata", "读取元数据失败: ${e.message}", e)
+            Pair(null, null)
+        }
+    }
+
     // --- 自动获取所有信息（封面+歌词）---
     suspend fun fetchAllFromNetwork(title: String, artist: String): Pair<String?, String?> {
         return withContext(Dispatchers.IO) {

@@ -75,11 +75,69 @@ fun LibraryScreen(
     onNavigateToPlayer: () -> Unit,
     onPickLrc: () -> Unit
 ) {
+    // 监听文件选择，尝试读取元数据
+    LaunchedEffect(viewModel.tempMusicUri) {
+        val uri = viewModel.tempMusicUri
+        if (uri != null) {
+            // 显示加载中弹窗
+            viewModel.isProcessingImport = true
+            
+            // 尝试读取音频文件的元数据
+            val (title, artist) = viewModel.readAudioMetadata(uri)
+            
+            // 如果元数据完整（有歌名和歌手），尝试自动获取信息并保存
+            if (!title.isNullOrBlank() && !artist.isNullOrBlank()) {
+                try {
+                    val (coverPath, lrcPath) = viewModel.fetchAllFromNetwork(title, artist)
+                    
+                    // 检查是否成功获取到信息
+                    if (coverPath != null || lrcPath != null) {
+                        // 至少获取到了封面或歌词，保存歌曲
+                        if (coverPath != null) {
+                            viewModel.tempCoverUri = android.net.Uri.parse(coverPath)
+                        }
+                        if (lrcPath != null) {
+                            viewModel.tempLrcUri = android.net.Uri.parse("file://$lrcPath")
+                        }
+                        
+                        // 保存歌曲
+                        viewModel.saveSong(title, artist)
+                        
+                        // 保存成功后，关闭加载中弹窗并清除 tempMusicUri
+                        viewModel.isProcessingImport = false
+                        viewModel.tempMusicUri = null
+                    } else {
+                        // 没有获取到任何信息，显示补充信息弹窗
+                        viewModel.isProcessingImport = false
+                        // 保持 tempMusicUri 不变，ImportMusicDialog 会显示
+                    }
+                } catch (e: Exception) {
+                    // 自动获取失败，显示补充信息弹窗
+                    viewModel.isProcessingImport = false
+                    // 保持 tempMusicUri 不变，ImportMusicDialog 会显示
+                }
+            } else {
+                // 元数据不完整，显示补充信息弹窗
+                viewModel.isProcessingImport = false
+                // 保持 tempMusicUri 不变，ImportMusicDialog 会显示
+            }
+        }
+    }
+
     if (viewModel.tempMusicUri != null) {
         ImportMusicDialog(
             viewModel = viewModel,
             onPickCover = onPickCover,
             onPickLrc = onPickLrc
+        )
+    }
+
+    // 显示加载中弹窗（当正在处理导入时）
+    if (viewModel.isProcessingImport) {
+        ImportProcessingDialog(
+            onDismiss = {
+                // 加载中弹窗不允许手动关闭
+            }
         )
     }
 
@@ -959,4 +1017,43 @@ fun AlbumItem(album: com.music.purelymusic.model.Album, viewModel: PlayerViewMod
             )
         }
     }
+}
+
+// 加载中弹窗组件
+@Composable
+fun ImportProcessingDialog(
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFFF5F5F5),
+        title = {
+            Text(
+                text = "处理中",
+                color = Color.Black,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(32.dp)
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(48.dp),
+                    strokeWidth = 4.dp,
+                    color = Color(0xFFE53935)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "正在读取音频文件信息...",
+                    color = Color.Black.copy(alpha = 0.7f),
+                    fontSize = 14.sp
+                )
+            }
+        },
+        confirmButton = { },
+        dismissButton = { }
+    )
 }

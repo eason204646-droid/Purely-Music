@@ -16,6 +16,8 @@
 //January 2020 http://license.coscl.org.cn/MulanPSL2
 package com.music.purelymusic.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -30,6 +32,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,8 +44,12 @@ fun SettingsScreen(
     viewModel: PlayerViewModel,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
     var showLyricStyleDialog by remember { mutableStateOf(false) }
     var showTranslateLogDialog by remember { mutableStateOf(false) }
+    var showHelpDialog by remember { mutableStateOf(false) }
+    var helpDialogTitle by remember { mutableStateOf("") }
+    var helpDialogContent by remember { mutableStateOf("") }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -134,6 +141,88 @@ fun SettingsScreen(
                     subtitle = if (viewModel.currentLanguage == "zh") "查看歌词翻译的详细日志" else "View detailed logs of lyric translation",
                     showChevron = true,
                     onClick = { showTranslateLogDialog = true }
+                )
+            }
+
+            // 贡献
+            SettingsSection(
+                title = if (viewModel.currentLanguage == "zh") "贡献" else "Support",
+                icon = Icons.Default.Favorite
+            ) {
+                Text(
+                    text = if (viewModel.currentLanguage == "zh") {
+                        "如果觉得我们的软件不错的话，欢迎为我们发电，或是在GitHub上给一个免费的star，都是对我的很大鼓励。"
+                    } else {
+                        "If you like our app, please consider supporting us on Afdian or giving us a free star on GitHub. Your support is greatly appreciated."
+                    },
+                    fontSize = AppDimensions.textS().value.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(bottom = AppDimensions.paddingCard())
+                )
+                SettingsOption(
+                    title = if (viewModel.currentLanguage == "zh") "爱发电" else "Afdian",
+                    subtitle = "ifdian.net/a/purelymusic",
+                    showChevron = true,
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://ifdian.net/a/purelymusic"))
+                        context.startActivity(intent)
+                    }
+                )
+                SettingsOption(
+                    title = if (viewModel.currentLanguage == "zh") "GitHub" else "GitHub",
+                    subtitle = "github.com/eason204646-droid/Purely-Music",
+                    showChevron = true,
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/eason204646-droid/Purely-Music"))
+                        context.startActivity(intent)
+                    }
+                )
+            }
+
+            // 帮助
+            SettingsSection(
+                title = if (viewModel.currentLanguage == "zh") "帮助" else "Help",
+                icon = Icons.Default.Help
+            ) {
+                SettingsOption(
+                    title = if (viewModel.currentLanguage == "zh") "使用说明" else "User Guide",
+                    subtitle = if (viewModel.currentLanguage == "zh") "如何使用 Purely Music" else "How to use Purely Music",
+                    showChevron = true,
+                    onClick = {
+                        helpDialogTitle = if (viewModel.currentLanguage == "zh") "使用说明" else "User Guide"
+                        helpDialogContent = loadHelpDocument(context, "help/使用说明.md")
+                        showHelpDialog = true
+                    }
+                )
+                SettingsOption(
+                    title = if (viewModel.currentLanguage == "zh") "功能特性" else "Features",
+                    subtitle = if (viewModel.currentLanguage == "zh") "了解 Purely Music 的功能" else "Learn about Purely Music features",
+                    showChevron = true,
+                    onClick = {
+                        helpDialogTitle = if (viewModel.currentLanguage == "zh") "功能特性" else "Features"
+                        helpDialogContent = loadHelpDocument(context, "help/功能特性.md")
+                        showHelpDialog = true
+                    }
+                )
+                SettingsOption(
+                    title = if (viewModel.currentLanguage == "zh") "疑难解答" else "Troubleshooting",
+                    subtitle = if (viewModel.currentLanguage == "zh") "常见问题与解决方案" else "Common issues and solutions",
+                    showChevron = true,
+                    onClick = {
+                        helpDialogTitle = if (viewModel.currentLanguage == "zh") "疑难解答" else "Troubleshooting"
+                        helpDialogContent = loadHelpDocument(context, "help/疑难解答.md")
+                        showHelpDialog = true
+                    }
+                )
+                SettingsOption(
+                    title = if (viewModel.currentLanguage == "zh") "歌词翻译说明" else "Lyric Translation Guide",
+                    subtitle = if (viewModel.currentLanguage == "zh") "如何使用歌词翻译功能" else "How to use lyric translation",
+                    showChevron = true,
+                    onClick = {
+                        helpDialogTitle = if (viewModel.currentLanguage == "zh") "歌词翻译说明" else "Lyric Translation Guide"
+                        helpDialogContent = loadHelpDocument(context, "help/歌词翻译说明.md")
+                        showHelpDialog = true
+                    }
                 )
             }
 
@@ -310,6 +399,52 @@ fun SettingsScreen(
             containerColor = Color.White
         )
     }
+
+    // 帮助文档弹窗
+    if (showHelpDialog) {
+        val scrollState = androidx.compose.foundation.rememberScrollState()
+
+        AlertDialog(
+            onDismissRequest = { showHelpDialog = false },
+            title = {
+                Text(
+                    helpDialogTitle,
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .height(500.dp)
+                        .fillMaxWidth()
+                        .background(Color(0xFFF5F5F5))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .verticalScroll(scrollState)
+                            .fillMaxSize()
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = helpDialogContent,
+                            color = Color.Black.copy(alpha = 0.9f),
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showHelpDialog = false }) {
+                    Text(
+                        if (viewModel.currentLanguage == "zh") "关闭" else "Close",
+                        color = Color(0xFFE53935)
+                    )
+                }
+            },
+            containerColor = Color.White
+        )
+    }
 }
 
 @Composable
@@ -329,7 +464,7 @@ fun SettingsSection(
             Icon(
                 icon,
                 contentDescription = null,
-                tint = Color(0xFF757575),
+                tint = Color(0xFFE53935),
                 modifier = Modifier.size(AppDimensions.iconM())
             )
             Spacer(modifier = Modifier.width(AppDimensions.spacingS()))
@@ -446,4 +581,17 @@ fun SettingsSwitch(
                 uncheckedTrackColor = Color(0xFFE0E0E0)
             )
         )    }
+}
+
+fun loadHelpDocument(context: android.content.Context, fileName: String): String {
+    return try {
+        val inputStream = context.assets.open(fileName)
+        val size = inputStream.available()
+        val buffer = ByteArray(size)
+        inputStream.read(buffer)
+        inputStream.close()
+        String(buffer, Charsets.UTF_8)
+    } catch (e: Exception) {
+        "无法加载文档：${e.message}"
+    }
 }

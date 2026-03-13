@@ -36,6 +36,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -200,8 +201,8 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = currentSong?.title ?: "未知曲目", color = Color.White, fontSize = AppDimensions.textXXL().value.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(text = currentSong?.artist ?: "未知艺术家", color = Color.White.copy(alpha = 0.8f), fontSize = AppDimensions.textM().value.sp)
+                    Text(text = currentSong?.title ?: stringResource(R.string.unknown_track), color = Color.White, fontSize = AppDimensions.textXXL().value.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(text = currentSong?.artist ?: stringResource(R.string.unknown_artist), color = Color.White.copy(alpha = 0.8f), fontSize = AppDimensions.textM().value.sp)
                 }
 
                 IconButton(
@@ -217,7 +218,7 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                 ) {
                     Icon(
                         imageVector = if (showLyrics) Icons.Default.Album else Icons.Default.Notes,
-                        contentDescription = "模式切换",
+                        contentDescription = stringResource(R.string.mode_switch),
                         tint = Color.White.copy(alpha = 0.9f),
                         modifier = Modifier.size(AppDimensions.iconM())
                     )
@@ -262,7 +263,7 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                     ) {
                         Icon(
                             imageVector = if (viewModel.playMode == PlayerViewModel.PlayMode.REPEAT_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                            contentDescription = "播放模式",
+                            contentDescription = stringResource(R.string.play_mode),
                             tint = Color.White.copy(alpha = 0.9f),
                             modifier = Modifier.size(AppDimensions.iconL())
                         )
@@ -332,7 +333,7 @@ fun PlaylistView(viewModel: PlayerViewModel, modifier: Modifier = Modifier) {
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "关闭",
+                    contentDescription = stringResource(R.string.close),
                     tint = Color.White.copy(alpha = 0.9f),
                     modifier = Modifier.size(AppDimensions.iconM())
                 )
@@ -353,7 +354,7 @@ fun PlaylistView(viewModel: PlayerViewModel, modifier: Modifier = Modifier) {
 
                             Text(
 
-                                text = "播放清单为空",
+                                text = stringResource(R.string.player_empty),
 
                                 color = Color.White.copy(alpha = 0.6f),
 
@@ -430,7 +431,7 @@ fun PlaylistItem(
             if (isPlaying) {
                 Icon(
                     imageVector = Icons.Default.VolumeUp,
-                    contentDescription = "正在播放",
+                    contentDescription = stringResource(R.string.now_playing),
                     tint = Color.White.copy(alpha = 0.9f),
                     modifier = Modifier.size(AppDimensions.iconS())
                 )
@@ -448,7 +449,7 @@ fun PlaylistItem(
             modifier = Modifier.background(Color.Black.copy(alpha = 0.9f))
         ) {
             DropdownMenuItem(
-                text = { Text("删除", color = Color.White) },
+                text = { Text(stringResource(R.string.delete), color = Color.White) },
                 leadingIcon = {
                     Icon(
                         Icons.Default.Delete,

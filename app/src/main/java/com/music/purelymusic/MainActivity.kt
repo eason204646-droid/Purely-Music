@@ -228,7 +228,11 @@ fun MainScreen(viewModel: PlayerViewModel) {
                 composable("home") {
                     HomeScreen(
                         viewModel = viewModel,
-                        onNavigateToPlayer = { navController.navigate("player") }
+                        onNavigateToPlayer = { navController.navigate("player") },
+                        onPickFile = { filePickerLauncher.launch("audio/*") },
+                        onPickCover = { coverPickerLauncher.launch("image/*") },
+                        onPickLrc = { lrcPickerLauncher.launch("*/*") },
+                        onNavigateToCreatePlaylist = { navController.navigate("create_playlist") }
                     )
                 }
 

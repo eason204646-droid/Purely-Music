@@ -43,6 +43,7 @@ import com.music.purelymusic.R
 import com.music.purelymusic.model.Album
 import com.music.purelymusic.model.Song
 import com.music.purelymusic.viewmodel.PlayerViewModel
+import com.music.purelymusic.ui.utils.AppDimensions
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -198,13 +199,19 @@ fun AlbumDetailScreen(
             }
 
             items(albumSongs) { song ->
-                SongItem(
-                    song = song,
-                    onClick = {
-                        viewModel.playSong(song)
-                        onNavigateToPlayer()
-                    }
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = AppDimensions.paddingScreen())
+                ) {
+                    SongItem(
+                        song = song,
+                        onClick = {
+                            viewModel.playSong(song)
+                            onNavigateToPlayer()
+                        }
+                    )
+                }
             }
         }
     }
