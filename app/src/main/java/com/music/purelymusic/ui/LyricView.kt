@@ -1,4 +1,4 @@
-﻿//Copyright (c) [2026] [eason204646]
+//Copyright (c) [2026] [eason204646]
 //[purelymusic] is licensed under Mulan PSL v2.
 //You can use this software according to the terms and conditions of the Mulan
 //PSL v2.
@@ -179,7 +179,13 @@ fun LyricView(
                     IconButton(
                         onClick = {
                             Log.d("LyricView", "翻译按钮被点击")
-                            viewModel.translateLyrics()
+                            if (showTranslation) {
+                                // 取消翻译
+                                viewModel.showTranslation = false
+                            } else {
+                                // 开始翻译
+                                viewModel.translateLyrics()
+                            }
                         },
                         modifier = Modifier
                             .background(

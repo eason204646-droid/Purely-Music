@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
@@ -150,7 +151,8 @@ fun AlbumDetailScreen(
                                 modifier = Modifier.weight(1f).height(48.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.primary
-                                )
+                                ),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.PlayArrow,
@@ -186,7 +188,8 @@ fun AlbumDetailScreen(
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color.White.copy(alpha = 0.2f),
                                     contentColor = Color.White
-                                )
+                                ),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
                                 Text(
                                     if (viewModel.currentLanguage == "zh") "随机播放" else "Shuffle",

@@ -32,10 +32,13 @@ android {
         applicationId = "com.music.purelymusic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
-        versionName = "2.1"
+        versionCode = 23
+        versionName = "2.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
         vectorDrawables {
             useSupportLibrary = true
             lint {
@@ -124,12 +127,16 @@ dependencies {
     // ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.compose.runtime)
+    implementation(libs.androidx.foundation)
 
     // Media3 (代替过时的 ExoPlayer 2.x)
     val media3Version = "1.5.0"
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
+    // FFmpeg 解码器（Jellyfin 发布版）
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1")
 
     // Room 数据库
     val room_version = "2.6.1"

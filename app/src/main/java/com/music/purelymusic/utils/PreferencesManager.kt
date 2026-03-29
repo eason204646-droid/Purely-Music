@@ -36,6 +36,14 @@ object PreferencesManager {
     private const val KEY_LYRIC_FILTER = "lyric_filter"
     private const val KEY_LYRIC_STYLE = "lyric_style"
     
+    // 自动获取源设置
+    private const val KEY_AUTO_FETCH_SOURCE = "auto_fetch_source"
+    const val SOURCE_NETEASE = "netease"   // 网易云（默认）
+    const val SOURCE_MIXED = "mixed"        // 混合（QQ封面 + 咪咕歌词）
+    
+    // 自动从元数据获取封面和歌词开关
+    private const val KEY_AUTO_FETCH_METADATA = "auto_fetch_metadata"
+    
     private var prefs: SharedPreferences? = null
     
     /**
@@ -99,5 +107,34 @@ object PreferencesManager {
      */
     fun saveLyricStyle(style: String) {
         prefs?.edit()?.putString(KEY_LYRIC_STYLE, style)?.apply()
+    }
+    
+    /**
+     * 获取自动获取源设置
+     */
+    fun getAutoFetchSource(): String {
+        return prefs?.getString(KEY_AUTO_FETCH_SOURCE, SOURCE_NETEASE) ?: SOURCE_NETEASE
+    }
+    
+    /**
+     * 保存自动获取源设置
+     */
+    fun saveAutoFetchSource(source: String) {
+        prefs?.edit()?.putString(KEY_AUTO_FETCH_SOURCE, source)?.apply()
+    }
+    
+    /**
+     * 获取自动从元数据获取封面和歌词设置
+     * 默认为 true（开启）
+     */
+    fun getAutoFetchMetadata(): Boolean {
+        return prefs?.getBoolean(KEY_AUTO_FETCH_METADATA, true) ?: true
+    }
+    
+    /**
+     * 保存自动从元数据获取封面和歌词设置
+     */
+    fun saveAutoFetchMetadata(enabled: Boolean) {
+        prefs?.edit()?.putBoolean(KEY_AUTO_FETCH_METADATA, enabled)?.apply()
     }
 }

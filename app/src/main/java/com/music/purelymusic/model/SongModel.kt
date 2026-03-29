@@ -151,3 +151,65 @@ data class Album(
     val coverUri: String?,
     val createdAt: Long = System.currentTimeMillis()
 )
+
+/**
+ * 7. QQ音乐API响应模型 (https://api.yaohud.cn/api/music/qq)
+ * 用于获取封面
+ */
+data class QqApiData(
+    val songname: String,      // 歌手名
+    val name: String,          // 歌曲名
+    val picture: String,       // 封面图片URL
+    val musicurl: String,
+    val html: String,
+    val vip: String,
+    val viplrc: String,
+    val vipmusicurl: String,
+    val vipjsonurl: String,
+    val GET: String
+)
+
+data class QqApiDebug(
+    val cache: String,
+    val tips: String
+)
+
+data class QqApiResponse(
+    val code: Int,
+    val msg: String,
+    val data: QqApiData,
+    val debug: QqApiDebug,
+    val exec_time: Double,
+    val tips: String,
+    val ip: String
+)
+
+/**
+ * 8. 咪咕单曲详情API响应模型 (https://api.yaohud.cn/api/music/migu)
+ * 用于获取歌词
+ */
+data class MiguDetailData(
+    val code: Int,
+    val title: String,         // 歌曲名
+    val singer: String,        // 歌手名
+    val cover: String,         // 封面URL
+    val lrc_url: String,       // 歌词URL
+    val music_url: String,     // 音乐URL
+    val detail_link: String,
+    val contentId: String,
+    val copyrightId: String
+)
+
+data class MiguDetailDebug(
+    val tips: String
+)
+
+data class MiguDetailResponse(
+    val code: Int,
+    val msg: String,
+    val data: MiguDetailData,
+    val debug: MiguDetailDebug,
+    val exec_time: Double,
+    val tips: String,
+    val ip: String
+)

@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Warning
@@ -59,6 +60,7 @@ import com.music.purelymusic.model.Song
 import com.music.purelymusic.viewmodel.PlayerViewModel
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.runtime.Composable
 import androidx.media3.common.util.UnstableApi
 import com.music.purelymusic.ui.utils.AppDimensions
 
@@ -68,6 +70,7 @@ import com.music.purelymusic.ui.utils.AppDimensions
 fun LibraryScreen(
     viewModel: PlayerViewModel,
     onPickFile: () -> Unit,
+    onBatchPickFile: () -> Unit,
     onPickCover: () -> Unit,
     onNavigateToCreatePlaylist: () -> Unit,
     onNavigateToPlaylistDetail: (Playlist) -> Unit,
@@ -79,48 +82,52 @@ fun LibraryScreen(
     LaunchedEffect(viewModel.tempMusicUri) {
         val uri = viewModel.tempMusicUri
         if (uri != null) {
-            // 显示加载中弹窗
-            viewModel.isProcessingImport = true
-            
-            // 尝试读取音频文件的元数据
-            val (title, artist) = viewModel.readAudioMetadata(uri)
-            
-            // 如果元数据完整（有歌名和歌手），尝试自动获取信息并保存
-            if (!title.isNullOrBlank() && !artist.isNullOrBlank()) {
-                try {
-                    val (coverPath, lrcPath) = viewModel.fetchAllFromNetwork(title, artist)
-                    
-                    // 检查是否成功获取到信息
-                    if (coverPath != null || lrcPath != null) {
-                        // 至少获取到了封面或歌词，保存歌曲
-                        if (coverPath != null) {
-                            viewModel.tempCoverUri = android.net.Uri.parse(coverPath)
-                        }
-                        if (lrcPath != null) {
-                            viewModel.tempLrcUri = android.net.Uri.parse("file://$lrcPath")
-                        }
+            // 只有在开启自动获取元数据时才自动读取
+            if (viewModel.autoFetchMetadata) {
+                // 显示加载中弹窗
+                viewModel.isProcessingImport = true
+                
+                // 尝试读取音频文件的元数据
+                val (title, artist) = viewModel.readAudioMetadata(uri)
+                
+                // 如果元数据完整（有歌名和歌手），尝试自动获取信息并保存
+                if (!title.isNullOrBlank() && !artist.isNullOrBlank()) {
+                    try {
+                        val (coverPath, lrcPath) = viewModel.fetchAllFromNetwork(title, artist)
                         
-                        // 保存歌曲
-                        viewModel.saveSong(title, artist)
-                        
-                        // 保存成功后，关闭加载中弹窗并清除 tempMusicUri
-                        viewModel.isProcessingImport = false
-                        viewModel.tempMusicUri = null
-                    } else {
-                        // 没有获取到任何信息，显示补充信息弹窗
+                        // 检查是否成功获取到信息
+                        if (coverPath != null || lrcPath != null) {
+                            // 至少获取到了封面或歌词，保存歌曲
+                            if (coverPath != null) {
+                                viewModel.tempCoverUri = android.net.Uri.parse(coverPath)
+                            }
+                            if (lrcPath != null) {
+                                viewModel.tempLrcUri = android.net.Uri.parse("file://$lrcPath")
+                            }
+                            
+                            // 保存歌曲
+                            viewModel.saveSong(title, artist)
+                            
+                            // 保存成功后，关闭加载中弹窗并清除 tempMusicUri
+                            viewModel.isProcessingImport = false
+                            viewModel.tempMusicUri = null
+                        } else {
+                            // 没有获取到任何信息，显示补充信息弹窗
+                            viewModel.isProcessingImport = false
+                            // 保持 tempMusicUri 不变，ImportMusicDialog 会显示
+                        }
+                    } catch (e: Exception) {
+                        // 自动获取失败，显示补充信息弹窗
                         viewModel.isProcessingImport = false
                         // 保持 tempMusicUri 不变，ImportMusicDialog 会显示
                     }
-                } catch (e: Exception) {
-                    // 自动获取失败，显示补充信息弹窗
+                } else {
+                    // 元数据不完整，显示补充信息弹窗
                     viewModel.isProcessingImport = false
                     // 保持 tempMusicUri 不变，ImportMusicDialog 会显示
                 }
-            } else {
-                // 元数据不完整，显示补充信息弹窗
-                viewModel.isProcessingImport = false
-                // 保持 tempMusicUri 不变，ImportMusicDialog 会显示
             }
+            // 如果关闭了自动获取元数据，直接显示弹窗让用户手动输入（不设置 isProcessingImport）
         }
     }
 
@@ -137,6 +144,33 @@ fun LibraryScreen(
         ImportProcessingDialog(
             onDismiss = {
                 // 加载中弹窗不允许手动关闭
+            }
+        )
+    }
+
+    // 批量导入进度弹窗
+    if (viewModel.isBatchImporting && !viewModel.batchImportPaused) {
+        BatchImportProgressDialog(
+            progress = viewModel.batchImportProgress,
+            total = viewModel.batchImportTotal,
+            currentSong = viewModel.batchImportCurrentSong,
+            currentLanguage = viewModel.currentLanguage
+        )
+    }
+
+    // 批量导入暂停时的歌曲信息输入弹窗
+    if (viewModel.batchImportPaused) {
+        BatchImportPausedDialog(
+            fileName = viewModel.batchImportPendingFileName ?: "",
+            currentLanguage = viewModel.currentLanguage,
+            onConfirm = { title, artist ->
+                viewModel.continueBatchImport(title, artist)
+            },
+            onSkip = {
+                viewModel.skipBatchImport()
+            },
+            onCancel = {
+                viewModel.cancelBatchImport()
             }
         )
     }
@@ -207,6 +241,21 @@ fun LibraryScreen(
                             onClick = {
                                 showMenu = false
                                 onPickFile()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { 
+                                Text(
+                                    if (viewModel.currentLanguage == "zh") "批量导入" else "Batch Import",
+                                    color = Color.Black
+                                ) 
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Color.Black)
+                            },
+                            onClick = {
+                                showMenu = false
+                                onBatchPickFile()
                             }
                         )
                         DropdownMenuItem(
@@ -374,7 +423,7 @@ fun ImportMusicDialog(
                 viewModel.saveSongError = null
             }
         },
-        containerColor = Color(0xFFF5F5F5),
+        containerColor = Color.White,
         title = { Text(if (viewModel.currentLanguage == "zh") "补充歌曲信息" else "Add Song Info", color = Color.Black) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(AppDimensions.spacingS())) {
@@ -617,7 +666,7 @@ fun ImportMusicDialog(
                     Text(if (viewModel.currentLanguage == "zh") "重试" else "Retry", color = Color(0xFFE53935))
                 }
             },
-            containerColor = Color(0xFFF5F5F5)
+            containerColor = Color.White
         )
     }
 }
@@ -1055,5 +1104,85 @@ fun ImportProcessingDialog(
         },
         confirmButton = { },
         dismissButton = { }
+    )
+}
+
+// 批量导入暂停时的歌曲信息输入弹窗
+@Composable
+fun BatchImportPausedDialog(
+    fileName: String,
+    currentLanguage: String,
+    onConfirm: (String, String) -> Unit,
+    onSkip: () -> Unit,
+    onCancel: () -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var artist by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = { /* 不允许手动关闭 */ },
+        containerColor = Color.White,
+        title = {
+            Text(
+                text = if (currentLanguage == "zh") "补充歌曲信息" else "Add Song Info",
+                color = Color.Black,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(AppDimensions.spacingM())
+            ) {
+                // 显示文件名
+                Text(
+                    text = if (currentLanguage == "zh") "文件: $fileName" else "File: $fileName",
+                    fontSize = 12.sp,
+                    color = Color.Gray,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text(if (currentLanguage == "zh") "歌名" else "Title") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                OutlinedTextField(
+                    value = artist,
+                    onValueChange = { artist = it },
+                    label = { Text(if (currentLanguage == "zh") "歌手" else "Artist") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (title.isNotBlank()) {
+                        onConfirm(title, artist.ifBlank { "Unknown Artist" })
+                    }
+                },
+                enabled = title.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFE53935)
+                )
+            ) {
+                Text(if (currentLanguage == "zh") "确定" else "OK", color = Color.White)
+            }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onSkip) {
+                    Text(if (currentLanguage == "zh") "跳过" else "Skip", color = Color.Gray)
+                }
+                TextButton(onClick = onCancel) {
+                    Text(if (currentLanguage == "zh") "取消全部" else "Cancel All", color = Color(0xFFE53935))
+                }
+            }
+        }
     )
 }

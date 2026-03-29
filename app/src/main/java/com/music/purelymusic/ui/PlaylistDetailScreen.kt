@@ -21,7 +21,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -46,6 +49,13 @@ import com.music.purelymusic.R
 import com.music.purelymusic.model.Playlist
 import com.music.purelymusic.model.Song
 import com.music.purelymusic.viewmodel.PlayerViewModel
+import com.music.purelymusic.ui.utils.AppDimensions
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.lifecycle.viewModelScope
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,13 +75,29 @@ fun PlaylistDetailScreen(
     }
 
     val totalSongs = playlistSongs.size
+    val listState = rememberLazyListState()
+    val isDragging = remember { mutableStateOf(false) }
+    val draggedItemIndex = remember { mutableStateOf(-1) }
+    val targetIndex = remember { mutableStateOf(-1) }
+
+    // 处理拖动逻辑
+    suspend fun handleDrag(fromIndex: Int, toIndex: Int) {
+        if (fromIndex == toIndex) return
+        
+        val newSongIds = playlist.songIds.toMutableList()
+        val movedId = newSongIds.removeAt(fromIndex)
+        newSongIds.add(toIndex, movedId)
+        
+        viewModel.updatePlaylistSongs(playlist.id.toString(), newSongIds)
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(bottom = 100.dp)
+            contentPadding = PaddingValues(bottom = 100.dp),
+            state = listState
         ) {
             item {
                 Box(modifier = Modifier.fillMaxWidth().height(380.dp)) {
@@ -141,7 +167,8 @@ fun PlaylistDetailScreen(
                                 modifier = Modifier.weight(1f).height(48.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.primary
-                                )
+                                ),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.PlayArrow,
@@ -161,7 +188,8 @@ fun PlaylistDetailScreen(
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color.White.copy(alpha = 0.2f),
                                     contentColor = Color.White
-                                )
+                                ),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
                                 Text("随机播放", color = Color.White)
                             }
@@ -170,19 +198,58 @@ fun PlaylistDetailScreen(
                 }
             }
 
-            items(playlistSongs) { song ->
-                SongItem(
-                    song = song,
-                    onClick = {
-                        viewModel.playSong(song)
-                        onNavigateToPlayer()
-                    }
-                )
+            itemsIndexed(playlistSongs) { index, song ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = AppDimensions.paddingScreen())
+                        .pointerInput(Unit) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = { offset ->
+                                    isDragging.value = true
+                                    draggedItemIndex.value = index
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    val layoutInfo = listState.layoutInfo
+                                    val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                                    
+                                    if (visibleItemsInfo.isNotEmpty()) {
+                                        val startOffset = visibleItemsInfo.first().offset
+                                        val itemSize = visibleItemsInfo.first().size
+                                        val calculatedTargetIndex = ((change.position.y - startOffset) / itemSize).roundToInt()
+                                        
+                                        if (calculatedTargetIndex >= 0 && calculatedTargetIndex < playlistSongs.size) {
+                                            targetIndex.value = calculatedTargetIndex
+                                        }
+                                    }
+                                },
+                                onDragEnd = {
+                                    if (draggedItemIndex.value != -1 && targetIndex.value != -1) {
+                                        viewModel.viewModelScope.launch {
+                                            handleDrag(draggedItemIndex.value, targetIndex.value)
+                                        }
+                                    }
+                                    isDragging.value = false
+                                    draggedItemIndex.value = -1
+                                    targetIndex.value = -1
+                                }
+                            )
+                        }
+                ) {
+                    SongItem(
+                        song = song,
+                        onClick = {
+                            viewModel.playSong(song)
+                            onNavigateToPlayer()
+                        }
+                    )
+                }
             }
 
             // 添加歌曲按钮
             item {
-                Row(
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
@@ -191,21 +258,27 @@ fun PlaylistDetailScreen(
                             viewModel.selectedPlaylistForAdd = playlist.id.toString()
                             viewModel.selectedSongsForAdd = emptySet()
                         },
-                    verticalAlignment = Alignment.CenterVertically
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.Transparent
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = "添加歌曲",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "添加歌曲",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
         }
@@ -244,7 +317,7 @@ fun AddSongsToPlaylistDialog(
                 .fillMaxWidth(0.9f)
                 .fillMaxHeight(0.8f),
             shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface,
+            color = Color.White,
             tonalElevation = 8.dp
         ) {
             Column(
@@ -263,16 +336,16 @@ fun AddSongsToPlaylistDialog(
                             text = "添加歌曲",
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = Color.Black
                         )
                         Text(
                             text = "选择要添加到歌单的歌曲",
                             fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = Color.Black.copy(alpha = 0.6f)
                         )
                     }
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "关闭")
+                        Icon(Icons.Default.Close, contentDescription = "关闭", tint = Color.Black)
                     }
                 }
 
@@ -312,10 +385,12 @@ fun AddSongsToPlaylistDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    OutlinedButton(
+                    TextButton(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = Color(0xFFE53935)
+                        )
                     ) {
                         Text("取消", fontSize = 15.sp)
                     }
@@ -361,7 +436,7 @@ fun SelectableSongItem(
         color = if (isSelected) {
             MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
         } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            Color.Black.copy(alpha = 0.05f)
         },
         border = if (isSelected) {
             androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
@@ -383,10 +458,10 @@ fun SelectableSongItem(
                 color = if (isSelected) {
                     MaterialTheme.colorScheme.primary
                 } else {
-                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    Color.Gray.copy(alpha = 0.3f)
                 },
                 border = if (!isSelected) {
-                    androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.outlineVariant)
+                    androidx.compose.foundation.BorderStroke(2.dp, Color.Gray)
                 } else {
                     null
                 }
@@ -429,7 +504,7 @@ fun SelectableSongItem(
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = Color.Black
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
@@ -437,7 +512,7 @@ fun SelectableSongItem(
                     fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color.Black.copy(alpha = 0.6f)
                 )
             }
         }

@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -66,6 +67,7 @@ fun HomeScreen(
     viewModel: PlayerViewModel,
     onNavigateToPlayer: () -> Unit,
     onPickFile: () -> Unit,
+    onBatchPickFile: () -> Unit,
     onPickCover: () -> Unit,
     onPickLrc: () -> Unit,
     onNavigateToCreatePlaylist: () -> Unit
@@ -125,6 +127,21 @@ fun HomeScreen(
                         onClick = {
                             showMenu = false
                             onPickFile()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (viewModel.currentLanguage == "zh") "批量导入" else "Batch Import",
+                                color = Color.Black
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Color.Black)
+                        },
+                        onClick = {
+                            showMenu = false
+                            onBatchPickFile()
                         }
                     )
                     DropdownMenuItem(
@@ -194,27 +211,31 @@ fun HomeScreen(
         LaunchedEffect(viewModel.tempMusicUri) {
             val uri = viewModel.tempMusicUri
             if (uri != null) {
-                // 尝试读取音频文件的元数据
-                val (title, artist) = viewModel.readAudioMetadata(uri)
-                
-                // 如果元数据完整（有歌名和歌手），直接自动获取信息并保存
-                if (!title.isNullOrBlank() && !artist.isNullOrBlank()) {
-                    try {
-                        val (coverPath, lrcPath) = viewModel.fetchAllFromNetwork(title, artist)
-                        if (coverPath != null) {
-                            viewModel.tempCoverUri = android.net.Uri.parse(coverPath)
+                // 只有在开启自动获取元数据时才自动读取
+                if (viewModel.autoFetchMetadata) {
+                    // 尝试读取音频文件的元数据
+                    val (title, artist) = viewModel.readAudioMetadata(uri)
+                    
+                    // 如果元数据完整（有歌名和歌手），自动获取信息并保存
+                    if (!title.isNullOrBlank() && !artist.isNullOrBlank()) {
+                        try {
+                            val (coverPath, lrcPath) = viewModel.fetchAllFromNetwork(title, artist)
+                            if (coverPath != null) {
+                                viewModel.tempCoverUri = android.net.Uri.parse(coverPath)
+                            }
+                            if (lrcPath != null) {
+                                viewModel.tempLrcUri = android.net.Uri.parse("file://$lrcPath")
+                            }
+                            // 保存歌曲
+                            viewModel.saveSong(title, artist)
+                        } catch (e: Exception) {
+                            // 自动获取失败，清除 tempMusicUri，不显示对话框
+                            viewModel.tempMusicUri = null
                         }
-                        if (lrcPath != null) {
-                            viewModel.tempLrcUri = android.net.Uri.parse("file://$lrcPath")
-                        }
-                        // 保存歌曲
-                        viewModel.saveSong(title, artist)
-                    } catch (e: Exception) {
-                        // 自动获取失败，清除 tempMusicUri，不显示对话框
-                        viewModel.tempMusicUri = null
                     }
+                    // 如果元数据不完整，保持 tempMusicUri 不变，弹窗会显示
                 }
-                // 如果元数据不完整，保持 tempMusicUri 不变，弹窗会显示
+                // 如果关闭了自动获取元数据，保持 tempMusicUri 不变，弹窗会显示让用户手动输入
             }
         }
 
@@ -224,6 +245,33 @@ fun HomeScreen(
                 viewModel = viewModel,
                 onPickCover = onPickCover,
                 onPickLrc = onPickLrc
+            )
+        }
+
+        // 批量导入进度弹窗
+        if (viewModel.isBatchImporting && !viewModel.batchImportPaused) {
+            BatchImportProgressDialog(
+                progress = viewModel.batchImportProgress,
+                total = viewModel.batchImportTotal,
+                currentSong = viewModel.batchImportCurrentSong,
+                currentLanguage = viewModel.currentLanguage
+            )
+        }
+
+        // 批量导入暂停时的歌曲信息输入弹窗
+        if (viewModel.batchImportPaused) {
+            BatchImportPausedDialog(
+                fileName = viewModel.batchImportPendingFileName ?: "",
+                currentLanguage = viewModel.currentLanguage,
+                onConfirm = { title, artist ->
+                    viewModel.continueBatchImport(title, artist)
+                },
+                onSkip = {
+                    viewModel.skipBatchImport()
+                },
+                onCancel = {
+                    viewModel.cancelBatchImport()
+                }
             )
         }
     }
@@ -662,3 +710,60 @@ fun HomeImportMusicDialog(
         )
     }
 }
+
+// 批量导入进度弹窗
+@Composable
+fun BatchImportProgressDialog(
+    progress: Int,
+    total: Int,
+    currentSong: String?,
+    currentLanguage: String
+) {
+    AlertDialog(
+        onDismissRequest = { /* 不允许手动关闭 */ },
+        containerColor = Color.White,
+        title = {
+            Text(
+                text = if (currentLanguage == "zh") "批量导入中" else "Batch Importing",
+                color = Color.Black,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(AppDimensions.spacingM()),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                CircularProgressIndicator(
+                    progress = { if (total > 0) progress.toFloat() / total.toFloat() else 0f },
+                    modifier = Modifier.size(64.dp),
+                    strokeWidth = 6.dp,
+                    color = Color(0xFFE53935),
+                    trackColor = Color(0xFFE0E0E0)
+                )
+                
+                Text(
+                    text = "$progress / $total",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+                
+                if (currentSong != null) {
+                    Text(
+                        text = if (currentLanguage == "zh") "正在处理: $currentSong" else "Processing: $currentSong",
+                        fontSize = 14.sp,
+                        color = Color.Gray,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        },
+        confirmButton = { },
+        dismissButton = { }
+    )
+}
+
+// BatchImportPausedDialog 定义在 LibraryScreen.kt 中，同包名可共享

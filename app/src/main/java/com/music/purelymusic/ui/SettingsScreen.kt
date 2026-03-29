@@ -97,6 +97,39 @@ fun SettingsScreen(
                 )
             }
 
+            // 自动获取源设置
+            SettingsSection(
+                title = if (viewModel.currentLanguage == "zh") "自动获取源" else "Auto Fetch Source",
+                icon = Icons.Default.CloudDownload
+            ) {
+                SettingsOption(
+                    title = if (viewModel.currentLanguage == "zh") "网易云" else "Netease",
+                    subtitle = if (viewModel.currentLanguage == "zh") "最稳定，支持大部分歌曲" else "Most stable, supports most songs",
+                    isSelected = viewModel.autoFetchSource == "netease",
+                    onClick = { viewModel.autoFetchSource = "netease" }
+                )
+                SettingsOption(
+                    title = if (viewModel.currentLanguage == "zh") "混合" else "Mixed",
+                    subtitle = if (viewModel.currentLanguage == "zh") "如果遇到网易云曲库没有的歌，可以尝试这个选项" else "Try this if songs are missing from Netease library",
+                    isSelected = viewModel.autoFetchSource == "mixed",
+                    onClick = { viewModel.autoFetchSource = "mixed" }
+                )
+            }
+
+            // 导入设置
+            SettingsSection(
+                title = if (viewModel.currentLanguage == "zh") "导入" else "Import",
+                icon = Icons.Default.LibraryMusic
+            ) {
+                // 自动从元数据获取封面和歌词开关
+                SettingsSwitch(
+                    title = if (viewModel.currentLanguage == "zh") "自动获取封面和歌词" else "Auto Fetch Cover & Lyrics",
+                    subtitle = if (viewModel.currentLanguage == "zh") "尝试从元数据自动获取封面和歌词" else "Try to fetch cover and lyrics from metadata",
+                    checked = viewModel.autoFetchMetadata,
+                    onCheckedChange = { viewModel.autoFetchMetadata = it }
+                )
+            }
+
             // 歌词设置
             SettingsSection(
                 title = if (viewModel.currentLanguage == "zh") "歌词" else "Lyrics",

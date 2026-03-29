@@ -88,6 +88,15 @@ fun MainScreen(viewModel: PlayerViewModel) {
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? -> uri?.let { viewModel.tempMusicUri = it } }
 
+    // 批量导入文件选择器
+    val batchFilePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            viewModel.batchImportSongs(uris)
+        }
+    }
+
     val coverPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? -> uri?.let { viewModel.tempCoverUri = it } }
@@ -230,6 +239,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
                         viewModel = viewModel,
                         onNavigateToPlayer = { navController.navigate("player") },
                         onPickFile = { filePickerLauncher.launch("audio/*") },
+                        onBatchPickFile = { batchFilePickerLauncher.launch(arrayOf("audio/*")) },
                         onPickCover = { coverPickerLauncher.launch("image/*") },
                         onPickLrc = { lrcPickerLauncher.launch("*/*") },
                         onNavigateToCreatePlaylist = { navController.navigate("create_playlist") }
@@ -240,6 +250,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
                     LibraryScreen(
                         viewModel = viewModel,
                         onPickFile = { filePickerLauncher.launch("audio/*") },
+                        onBatchPickFile = { batchFilePickerLauncher.launch(arrayOf("audio/*")) },
                         onPickCover = { coverPickerLauncher.launch("image/*") },
                         onNavigateToCreatePlaylist = { navController.navigate("create_playlist") },
                         onNavigateToPlaylistDetail = { playlist ->

@@ -18,21 +18,28 @@ package com.music.purelymusic.viewmodel
 import android.annotation.SuppressLint
 import android.app.Application
 import android.graphics.BitmapFactory
-import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.MediaMetadataRetriever
-import android.media.MediaPlayer
 import android.media.Spatializer
 import android.net.Uri
 import android.os.Build
+import android.provider.OpenableColumns
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.AudioAttributes as ExoAudioAttributes
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.Tracks
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.legacy.MediaMetadataCompat
 import androidx.media3.session.legacy.MediaSessionCompat
 import com.music.purelymusic.BuildConfig
@@ -87,8 +94,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 android.util.Log.d("purelymusic", "开始复制文件")
-                // 拷贝文件到私有目录，防止系统清理或权限丢失
-                val pMusic = copyFile(mUri, "mus_${System.currentTimeMillis()}.mp3")
+                // 拷贝文件到私有目录，防止系统清理或权限丢失（不指定扩展名，让 copyFile 自动检测）
+                val pMusic = copyFile(mUri, "mus_${System.currentTimeMillis()}")
                 
                 // 处理封面：如果是本地文件路径，直接使用；如果是 URI，需要复制
                 val pCover: String? = tempCoverUri?.let { uri ->
@@ -251,10 +258,86 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /**
+     * 从 URI 获取文件扩展名
+     */
+    private fun getFileExtension(uri: Uri): String {
+        // 1) Try display name from ContentResolver
+        context.contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (nameIndex >= 0 && cursor.moveToFirst()) {
+                val name = cursor.getString(nameIndex)
+                val dotIndex = name?.lastIndexOf('.') ?: -1
+                if (dotIndex >= 0 && dotIndex < name.length - 1) {
+                    return name.substring(dotIndex).lowercase()
+                }
+            }
+        }
+
+        // 2) Try MIME type
+        val mimeType = context.contentResolver.getType(uri)?.lowercase()
+        if (mimeType != null) {
+            return when (mimeType) {
+                "audio/mpeg", "audio/mp3" -> ".mp3"
+                "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/mp4a-latm", "audio/mp4a" -> ".m4a"
+                "audio/ogg", "audio/x-ogg" -> ".ogg"
+                "audio/flac", "audio/x-flac" -> ".flac"
+                "audio/wav", "audio/x-wav" -> ".wav"
+                "audio/aac", "audio/x-aac", "audio/aacp" -> ".aac"
+                "audio/x-ms-wma" -> ".wma"
+                "image/jpeg", "image/jpg" -> ".jpg"
+                "image/png" -> ".png"
+                "text/plain", "application/lrc" -> ".lrc"
+                else -> ""
+            }
+        }
+
+        // 3) Fallback to path
+        val path = uri.path
+        val dotIndex = path?.lastIndexOf('.') ?: -1
+        return if (dotIndex >= 0 && dotIndex < (path?.length ?: 0) - 1) {
+            "." + path?.substring(dotIndex + 1)?.lowercase()
+        } else {
+            ""
+        }
+    }
+
+    private fun getDisplayName(uri: Uri): String? {
+        context.contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (nameIndex >= 0 && cursor.moveToFirst()) {
+                val name = cursor.getString(nameIndex)
+                if (!name.isNullOrBlank()) {
+                    return name
+                }
+            }
+        }
+        return null
+    }
+
     private fun copyFile(uri: Uri, fileName: String): String? {
         return try {
             val input = context.contentResolver.openInputStream(uri)
-            val file = File(context.filesDir, fileName)
+            // If fileName has no extension, auto-append
+            val finalFileName = if (!fileName.contains(".")) {
+                val ext = getFileExtension(uri)
+                fileName + ext
+            } else {
+                fileName
+            }
+            val file = File(context.filesDir, finalFileName)
             val output = FileOutputStream(file)
             input?.copyTo(output)
             input?.close()
@@ -262,18 +345,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             file.absolutePath
         } catch (e: Exception) { null }
     }
+
     fun savePlaylist(name: String) {
         viewModelScope.launch {
             val finalCoverPath: String? = tempPlaylistCoverUri?.let {
-                copyFile(it, "pl_cov_${System.currentTimeMillis()}.jpg")
+                copyFile(it, "pl_cov_" + System.currentTimeMillis() + ".jpg")
             }
             val newPlaylist = Playlist(
                 name = name,
                 coverUri = finalCoverPath,
                 songIds = selectedSongsForPlaylist.map { it.id.toLong() },
-                description = null, // 默认没有描述
-                createdAt = System.currentTimeMillis(), // 创建时间
-                updatedAt = System.currentTimeMillis() // 更新时间
+                description = null, // 榛樿娌℃湁鎻忚堪
+                createdAt = System.currentTimeMillis(), // 鍒涘缓鏃堕棿
+                updatedAt = System.currentTimeMillis() // 鏇存柊鏃堕棿
             )
             playlistDao.insertPlaylist(newPlaylist.toEntity())
             playlists.add(0, newPlaylist)
@@ -287,9 +371,67 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val songDao = AppDatabase.getDatabase(application).songDao()
     private val playlistDao = AppDatabase.getDatabase(application).playlistDao()
     private val albumDao = AppDatabase.getDatabase(application).albumDao()
-    private var mediaPlayer: MediaPlayer? = null
+    private var exoPlayer: ExoPlayer? = null
     @SuppressLint("RestrictedApi")
     private var mediaSession: MediaSessionCompat? = null
+    private val playerListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlayingNow: Boolean) {
+            this@PlayerViewModel.isPlaying = isPlayingNow
+            updatePlaybackState(isPlayingNow)
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_READY) {
+                this@PlayerViewModel.duration = exoPlayer?.duration ?: 0L
+            } else if (playbackState == Player.STATE_ENDED) {
+                playNext()
+            }
+        }
+
+        override fun onTracksChanged(tracks: Tracks) {
+            tracks.groups.forEach { group ->
+                if (group.type == C.TRACK_TYPE_AUDIO) {
+                    for (i in 0 until group.mediaTrackGroup.length) {
+                        val format = group.mediaTrackGroup.getFormat(i)
+                        Log.d(
+                            "ExoTrack",
+                            "audio format: mime=${format.sampleMimeType}, codecs=${format.codecs}, " +
+                                "sr=${format.sampleRate}, ch=${format.channelCount}"
+                        )
+                    }
+                }
+            }
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            Log.e("PlayError", "ExoPlayer错误: ${error.errorCodeName}, ${error.message}")
+            this@PlayerViewModel.isPlaying = false
+        }
+    }
+
+    private fun getOrCreatePlayer(): ExoPlayer {
+        val existing = exoPlayer
+        if (existing != null) return existing
+
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setEnableDecoderFallback(true)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+        val player = ExoPlayer.Builder(context, renderersFactory).build()
+        val audioAttributes = ExoAudioAttributes.Builder()
+            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+            .setUsage(C.USAGE_MEDIA)
+            .build()
+        player.setAudioAttributes(audioAttributes, true)
+        player.volume = 1.0f
+        player.addListener(playerListener)
+        exoPlayer = player
+        return player
+    }
+
+    private fun setPlayerVolume(left: Float, right: Float) {
+        val volume = ((left + right) / 2f).coerceIn(0.0f, 1.0f)
+        exoPlayer?.volume = volume
+    }
 
     // Android 12+ Spatializer 支持
     private var spatializer: Spatializer? = null
@@ -365,6 +507,37 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private set
     var fetchAllError by mutableStateOf<String?>(null)
 
+    // 批量导入状态
+    var isBatchImporting by mutableStateOf(false)
+        private set
+    var batchImportProgress by mutableStateOf(0)
+        private set
+    var batchImportTotal by mutableStateOf(0)
+        private set
+    var batchImportCurrentSong by mutableStateOf<String?>(null)
+        private set
+    
+    // 批量导入暂停状态（需要用户输入歌曲信息）
+    var batchImportPaused by mutableStateOf(false)
+        private set
+    var batchImportPendingUri by mutableStateOf<Uri?>(null)
+        private set
+    var batchImportPendingFileName by mutableStateOf<String?>(null)
+        private set
+    var batchImportPendingMusicPath by mutableStateOf<String?>(null)
+        private set
+    
+    // 批量导入待处理的歌曲队列
+    private var batchImportQueue = mutableListOf<BatchImportItem>()
+    
+    data class BatchImportItem(
+        val uri: Uri,
+        val index: Int,
+        val musicPath: String? = null,
+        val title: String? = null,
+        val artist: String? = null
+    )
+
     // 保存歌曲错误状态
     var saveSongError by mutableStateOf<String?>(null)
 
@@ -409,6 +582,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             com.music.purelymusic.utils.PreferencesManager.saveLyricStyle(value)
         }
 
+    // 自动获取源设置状态（带持久化）
+    private var _autoFetchSource by mutableStateOf("netease") // "netease" or "mixed"
+    var autoFetchSource: String
+        get() = _autoFetchSource
+        set(value) {
+            _autoFetchSource = value
+            com.music.purelymusic.utils.PreferencesManager.saveAutoFetchSource(value)
+        }
+
+    // 自动从元数据获取封面和歌词开关（带持久化）
+    private var _autoFetchMetadata by mutableStateOf(true)
+    var autoFetchMetadata: Boolean
+        get() = _autoFetchMetadata
+        set(value) {
+            _autoFetchMetadata = value
+            com.music.purelymusic.utils.PreferencesManager.saveAutoFetchMetadata(value)
+        }
+
     // 翻译API服务
     private val translateService: TranslateApiService by lazy {
         retrofit2.Retrofit.Builder()
@@ -427,6 +618,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         _lyricGlowEnabled = com.music.purelymusic.utils.PreferencesManager.getLyricGlow()
         _lyricFilterEnabled = com.music.purelymusic.utils.PreferencesManager.getLyricFilter()
         _lyricStyle = com.music.purelymusic.utils.PreferencesManager.getLyricStyle()
+        _autoFetchSource = com.music.purelymusic.utils.PreferencesManager.getAutoFetchSource()
+        _autoFetchMetadata = com.music.purelymusic.utils.PreferencesManager.getAutoFetchMetadata()
         
         // 初始化 MediaSession
         mediaSession = MediaSessionCompat(context, "purelymusic").apply {
@@ -520,13 +713,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             currentPlayingList.addAll(libraryList)
         }
 
-        if (currentSong?.id == song.id && mediaPlayer != null) {
+        if (currentSong?.id == song.id && exoPlayer != null) {
             togglePlayPause()
             return
         }
 
-        mediaPlayer?.stop()
-        mediaPlayer?.release()
+        exoPlayer?.stop()
         currentSong = song
 
         Log.d("PlaySong", "开始播放歌曲: ${song.title}, 歌词路径: ${song.lrcPath}")
@@ -543,29 +735,26 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         updateBlurBackground(song.coverUri)
 
         try {
-            mediaPlayer = MediaPlayer().apply {
-                setDataSource(context, Uri.parse(song.musicUri))
-                prepareAsync()
-                setOnPreparedListener {
-                    start()
-                    this@PlayerViewModel.isPlaying = true
-                    this@PlayerViewModel.duration = it.duration.toLong()
-                    updatePlaybackState(true)
-                    // 启动环绕音效果
-                    startSurroundEffect()
-                }
-                setOnCompletionListener { playNext() }
+            val player = getOrCreatePlayer()
+            val musicPath = song.musicUri ?: return
+            val mediaItem = if (musicPath.startsWith("content://") || musicPath.startsWith("file://")) {
+                MediaItem.fromUri(Uri.parse(musicPath))
+            } else {
+                MediaItem.fromUri(Uri.fromFile(File(musicPath)))
             }
+            player.setMediaItem(mediaItem)
+            player.prepare()
+            player.volume = 1.0f
+            player.play()
+
             // 更新数据库播放时间
             viewModelScope.launch {
                 songDao.updateSong(song.toEntity(System.currentTimeMillis()))
             }
         } catch (e: Exception) {
-            Log.e("PlayError", "${e.message}")
+            Log.e("PlayError", "播放失败: ${e.message}, 歌曲路径=${song.musicUri}")
         }
     }
-
-    // 从播放列表中删除歌曲
     fun removeSongFromPlayingList(song: Song) {
         if (currentPlayingList.isEmpty()) return
         val index = currentPlayingList.indexOfFirst { it.id == song.id }
@@ -578,15 +767,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    // 跳转到指定歌曲（删除该歌曲之前的所有歌曲）
+    // 跳转到指定歌曲（不删除前面的播放历史）
     fun jumpToSong(song: Song) {
         if (currentPlayingList.isEmpty()) return
         val index = currentPlayingList.indexOfFirst { it.id == song.id }
         if (index != -1) {
-            // 保留从当前歌曲开始的列表
-            val newList = currentPlayingList.subList(index, currentPlayingList.size).toList()
-            currentPlayingList.clear()
-            currentPlayingList.addAll(newList)
+            // 直接播放指定歌曲，不修改播放列表
             playSong(song, false)
         }
     }
@@ -612,12 +798,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun togglePlayPause() {
-        mediaPlayer?.let {
+        exoPlayer?.let {
             if (it.isPlaying) {
                 it.pause()
                 stopSurroundEffect()
             } else {
-                it.start()
+                it.play()
                 startSurroundEffect()
             }
             isPlaying = it.isPlaying
@@ -652,7 +838,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun seekTo(pos: Float) {
-        mediaPlayer?.seekTo(pos.toInt())
+        exoPlayer?.seekTo(pos.toLong())
         currentPosition = pos.toLong()
         // 确保歌词索引立即更新，拖动进度条时自动导航到对应歌词
         // currentLyricIndex 使用 derivedStateOf 会自动根据 currentPosition 重新计算
@@ -662,7 +848,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             while (true) {
                 if (isPlaying) {
-                    currentPosition = mediaPlayer?.currentPosition?.toLong() ?: 0L
+                    currentPosition = exoPlayer?.currentPosition ?: 0L
                     // 🚩 核心修复：每秒钟同步一次给系统，确保锁屏进度条在走
                     updatePlaybackState(true)
                 }
@@ -700,12 +886,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         SurroundMode.IMMERSIVE -> applyImmersiveSurround()
                         SurroundMode.THREE_D -> apply3DSurround()
                         SurroundMode.NONE -> {
-                            mediaPlayer?.setVolume(1.0f, 1.0f)
+                            setPlayerVolume(1.0f, 1.0f)
                             delay(100)
                         }
                     }
                 } else {
-                    mediaPlayer?.setVolume(1.0f, 1.0f)
+                    setPlayerVolume(1.0f, 1.0f)
                     delay(100)
                 }
             }
@@ -717,7 +903,7 @@ private fun stopSurroundEffect() {
         surroundJob = null
 
         // 恢复平衡音量
-        mediaPlayer?.setVolume(1.0f, 1.0f)
+        setPlayerVolume(1.0f, 1.0f)
         // 重置缓冲区
         leftDelayBuffer.clear()
         repeat(50) { leftDelayBuffer.add(0.5f) }
@@ -805,7 +991,7 @@ private fun stopSurroundEffect() {
         rightMix = rightMix.coerceIn(0.35f, 1.6f)
 
         // 应用到MediaPlayer
-        mediaPlayer?.setVolume(leftMix, rightMix)
+        setPlayerVolume(leftMix, rightMix)
 
         delay(20) // ~50fps
     }
@@ -892,7 +1078,7 @@ private fun stopSurroundEffect() {
         rightVolume = rightVolume.coerceIn(0.2f, 1.8f)
 
         // 应用到MediaPlayer
-        mediaPlayer?.setVolume(leftVolume, rightVolume)
+        setPlayerVolume(leftVolume, rightVolume)
 
         delay(20)
     }
@@ -900,7 +1086,7 @@ private fun stopSurroundEffect() {
     private fun stop3DSurroundEffect() {
         surroundJob?.cancel()
         surroundJob = null
-        mediaPlayer?.setVolume(1.0f, 1.0f)
+        setPlayerVolume(1.0f, 1.0f)
         // 重置缓冲区
         leftDelayBuffer.clear()
         repeat(50) { leftDelayBuffer.add(0.5f) }
@@ -967,7 +1153,7 @@ private fun stopSurroundEffect() {
             songDao.deleteSong(song.toEntity())
             refreshData()
             if (currentSong?.id == song.id) {
-                mediaPlayer?.stop()
+                exoPlayer?.stop()
                 isPlaying = false
             }
         }
@@ -1098,7 +1284,7 @@ private fun stopSurroundEffect() {
     override fun onCleared() {
         super.onCleared()
         stop3DSurroundEffect()
-        mediaPlayer?.release()
+        exoPlayer?.release()
         mediaSession?.release()
     }
 
@@ -1132,6 +1318,263 @@ private fun stopSurroundEffect() {
         }
     }
 
+    // --- 批量导入歌曲 ---
+    /**
+     * 开始批量导入歌曲
+     * @param uris 音频文件URI列表
+     */
+    fun batchImportSongs(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+
+        // 初始化队列
+        batchImportQueue = uris.mapIndexed { index, uri ->
+            BatchImportItem(uri = uri, index = index)
+        }.toMutableList()
+
+        isBatchImporting = true
+        batchImportTotal = uris.size
+        batchImportProgress = 0
+        batchImportCurrentSong = null
+        batchImportPaused = false
+
+        // 开始处理队列
+        processBatchImportQueue()
+    }
+
+    /**
+     * 处理批量导入队列
+     */
+    private fun processBatchImportQueue() {
+        viewModelScope.launch {
+            while (batchImportQueue.isNotEmpty() && !batchImportPaused) {
+                val item = batchImportQueue.removeAt(0)
+                batchImportProgress = batchImportTotal - batchImportQueue.size
+
+                try {
+                    // 获取文件名用于显示
+                    val fileName = getDisplayName(item.uri)
+                        ?: item.uri.path?.substringAfterLast('/')
+                        ?: "歌曲 ${item.index + 1}"
+
+                    // 如果关闭了自动获取元数据，直接暂停让用户输入
+                    if (!_autoFetchMetadata) {
+                        batchImportCurrentSong = fileName
+                        batchImportPaused = true
+                        batchImportPendingUri = item.uri
+                        batchImportPendingFileName = fileName
+                        // 将项目放回队列开头
+                        batchImportQueue.add(0, item)
+                        return@launch
+                    }
+
+                    // 读取元数据
+                    val (title, artist) = readAudioMetadata(item.uri)
+
+                    // 如果元数据不完整，暂停并等待用户输入
+                    if (title.isNullOrBlank() || artist.isNullOrBlank()) {
+                        batchImportCurrentSong = fileName
+                        batchImportPaused = true
+                        batchImportPendingUri = item.uri
+                        batchImportPendingFileName = fileName
+                        // 将项目放回队列开头
+                        batchImportQueue.add(0, item)
+                        return@launch
+                    }
+
+                    // 显示当前正在处理的歌曲
+                    batchImportCurrentSong = title
+
+                    // 复制音乐文件到私有目录
+                    val pMusic = copyFile(item.uri, "mus_${System.currentTimeMillis()}_${item.index}")
+
+                    if (pMusic != null) {
+                        processBatchImportSong(title, artist, pMusic, item.index)
+                    } else {
+                        Log.e("BatchImport", "复制音乐文件失败: ${item.uri}")
+                    }
+                } catch (e: Exception) {
+                    Log.e("BatchImport", "导入歌曲失败: ${e.message}", e)
+                }
+            }
+
+            // 队列处理完成
+            if (batchImportQueue.isEmpty()) {
+                refreshData()
+                isBatchImporting = false
+                batchImportCurrentSong = null
+                batchImportPaused = false
+            }
+        }
+    }
+
+    /**
+     * 处理单首歌曲的导入（带元数据）
+     */
+    private suspend fun processBatchImportSong(title: String, artist: String, musicPath: String, index: Int) {
+        var pCover: String? = null
+        var pLrc: String? = null
+        var albumName: String? = null
+        var albumArtist: String? = null
+
+        // 如果开启了自动获取元数据，则获取封面和歌词
+        if (_autoFetchMetadata) {
+            // 每首歌间隔1秒，避免API速率限制
+            if (index > 0) {
+                delay(1000)
+            }
+
+            try {
+                val (coverPath, lrcPath) = fetchAllFromNetwork(title, artist)
+                pCover = coverPath
+                pLrc = lrcPath
+                albumName = tempAlbumName
+                albumArtist = tempAlbumArtist
+            } catch (e: Exception) {
+                Log.e("BatchImport", "获取歌曲 $title 的封面和歌词失败: ${e.message}")
+            }
+        }
+
+        // 处理专辑逻辑
+        if (!albumName.isNullOrEmpty()) {
+            val existingAlbum = albumDao.getAlbumByName(albumName)
+            if (existingAlbum == null) {
+                val albumId = java.util.UUID.randomUUID().toString()
+                val newAlbum = Album(
+                    id = albumId,
+                    name = albumName,
+                    artist = albumArtist ?: artist,
+                    coverUri = pCover
+                )
+                albumDao.insertAlbum(newAlbum.toEntity())
+            }
+        }
+
+        // 创建歌曲对象并保存
+        val newSong = Song(
+            id = 0,
+            title = title,
+            artist = artist,
+            coverUri = pCover,
+            musicUri = musicPath,
+            lrcPath = pLrc,
+            album = albumName
+        )
+
+        songDao.insertSong(newSong.toEntity())
+        Log.d("BatchImport", "成功导入歌曲: ${newSong.title}")
+    }
+
+    /**
+     * 用户输入歌曲信息后继续批量导入
+     * 注意：用户手动输入后，总是尝试从网络获取封面和歌词（不受 autoFetchMetadata 设置影响）
+     */
+    fun continueBatchImport(title: String, artist: String) {
+        val musicPath = batchImportPendingMusicPath
+        val uri = batchImportPendingUri
+        val index = batchImportTotal - batchImportQueue.size - 1
+
+        viewModelScope.launch {
+            var pMusic = musicPath
+            
+            // 如果没有音乐文件路径，需要先复制文件
+            if (pMusic == null && uri != null) {
+                pMusic = copyFile(uri, "mus_${System.currentTimeMillis()}")
+            }
+
+            if (pMusic != null) {
+                var pCover: String? = null
+                var pLrc: String? = null
+                var albumName: String? = null
+                var albumArtist: String? = null
+
+                // 用户手动输入后，总是尝试从网络获取封面和歌词
+                try {
+                    val (coverPath, lrcPath) = fetchAllFromNetwork(title, artist)
+                    pCover = coverPath
+                    pLrc = lrcPath
+                    albumName = tempAlbumName
+                    albumArtist = tempAlbumArtist
+                } catch (e: Exception) {
+                    Log.e("BatchImport", "获取歌曲 $title 的封面和歌词失败: ${e.message}")
+                }
+
+                // 处理专辑逻辑
+                if (!albumName.isNullOrEmpty()) {
+                    val existingAlbum = albumDao.getAlbumByName(albumName)
+                    if (existingAlbum == null) {
+                        val albumId = java.util.UUID.randomUUID().toString()
+                        val newAlbum = Album(
+                            id = albumId,
+                            name = albumName,
+                            artist = albumArtist ?: artist,
+                            coverUri = pCover
+                        )
+                        albumDao.insertAlbum(newAlbum.toEntity())
+                    }
+                }
+
+                // 创建歌曲对象并保存
+                val newSong = Song(
+                    id = 0,
+                    title = title,
+                    artist = artist,
+                    coverUri = pCover,
+                    musicUri = pMusic,
+                    lrcPath = pLrc,
+                    album = albumName
+                )
+
+                songDao.insertSong(newSong.toEntity())
+                Log.d("BatchImport", "成功导入歌曲: ${newSong.title}")
+            }
+
+            // 重置暂停状态
+            batchImportPaused = false
+            batchImportPendingUri = null
+            batchImportPendingFileName = null
+            batchImportPendingMusicPath = null
+
+            // 从队列中移除已处理的项目
+            if (batchImportQueue.isNotEmpty()) {
+                batchImportQueue.removeAt(0)
+            }
+
+            // 继续处理队列
+            processBatchImportQueue()
+        }
+    }
+
+    /**
+     * 跳过当前歌曲继续批量导入
+     */
+    fun skipBatchImport() {
+        batchImportPaused = false
+        batchImportPendingUri = null
+        batchImportPendingFileName = null
+        batchImportPendingMusicPath = null
+
+        // 从队列中移除跳过的项目
+        if (batchImportQueue.isNotEmpty()) {
+            batchImportQueue.removeAt(0)
+        }
+
+        // 继续处理队列
+        processBatchImportQueue()
+    }
+
+    /**
+     * 取消批量导入
+     */
+    fun cancelBatchImport() {
+        batchImportQueue.clear()
+        isBatchImporting = false
+        batchImportPaused = false
+        batchImportCurrentSong = null
+        batchImportPendingUri = null
+        batchImportPendingFileName = null
+        batchImportPendingMusicPath = null
+    }
+
     // --- 自动获取所有信息（封面+歌词）---
     suspend fun fetchAllFromNetwork(title: String, artist: String): Pair<String?, String?> {
         return withContext(Dispatchers.IO) {
@@ -1142,11 +1585,39 @@ private fun stopSurroundEffect() {
                 }
 
                 val keywords = "$title $artist"
-                Log.d("FetchAll", "开始获取所有信息: keywords=$keywords")
+                Log.d("FetchAll", "开始获取所有信息: keywords=$keywords, source=${_autoFetchSource}")
 
-                // 使用新的API获取所有信息
+                // 根据设置选择数据源
+                if (_autoFetchSource == "mixed") {
+                    // 混合模式：QQ获取封面 + 咪咕获取歌词
+                    fetchFromMixedSource(keywords)
+                } else {
+                    // 网易云模式（默认）
+                    fetchFromNetease(keywords)
+                }
+            } catch (e: Exception) {
+                val errorMsg = "获取所有信息失败: ${e.javaClass.simpleName} - ${e.message}"
+                Log.e("FetchAll", errorMsg, e)
+                withContext(Dispatchers.Main) {
+                    fetchAllError = errorMsg
+                }
+                Pair(null, null)
+            } finally {
+                withContext(Dispatchers.Main) {
+                    isFetchingAll = false
+                }
+            }
+        }
+    }
+
+    /**
+     * 从网易云获取封面和歌词（原有逻辑）
+     */
+    private suspend fun fetchFromNetease(keywords: String): Pair<String?, String?> {
+        return withContext(Dispatchers.IO) {
+            try {
                 val apiUrl = "https://api.yaohud.cn/api/music/wy?key=${BuildConfig.MUSIC_API_KEY}&msg=${java.net.URLEncoder.encode(keywords, "UTF-8")}&n=1"
-                Log.d("FetchAll", "请求URL: $apiUrl")
+                Log.d("FetchAll", "网易云请求URL: $apiUrl")
 
                 val connection = java.net.URL(apiUrl).openConnection() as java.net.HttpURLConnection
                 connection.requestMethod = "GET"
@@ -1174,86 +1645,10 @@ private fun stopSurroundEffect() {
                         }
 
                         // 处理封面
-                        var coverPath: String? = null
-                        if (!data.picture.isNullOrEmpty()) {
-                            try {
-                                val coverConnection = java.net.URL(data.picture).openConnection() as java.net.HttpURLConnection
-                                coverConnection.requestMethod = "GET"
-                                coverConnection.connect()
+                        val coverPath = downloadCover(data.picture)
 
-                                if (coverConnection.responseCode == 200) {
-                                    val inputStream = coverConnection.inputStream
-                                    val fileName = "cover_${System.currentTimeMillis()}.jpg"
-                                    val file = java.io.File(context.filesDir, fileName)
-                                    val outputStream = java.io.FileOutputStream(file)
-                                    inputStream.copyTo(outputStream)
-                                    inputStream.close()
-                                    outputStream.close()
-                                    coverPath = file.absolutePath
-                                    Log.d("FetchAll", "封面已下载: $coverPath")
-                                }
-                            } catch (e: Exception) {
-                                Log.e("FetchAll", "下载封面失败", e)
-                            }
-                        }
-
-                        // 处理歌词 - 使用 data.lrc 字段获取歌词
-                        var lrcPath: String? = null
-
-                        // 使用 data.lrc 字段获取歌词URL，然后请求获取歌词内容
-                        val lrcContent = if (!data.lrc.isNullOrEmpty()) {
-                            try {
-                                val lrcUrl = data.lrc
-                                Log.d("FetchAll", "通过 data.lrc URL获取歌词: $lrcUrl")
-
-                                val lrcConnection = java.net.URL(lrcUrl).openConnection() as java.net.HttpURLConnection
-                                lrcConnection.requestMethod = "GET"
-                                lrcConnection.connectTimeout = 10000
-                                lrcConnection.readTimeout = 10000
-                                lrcConnection.connect()
-
-                                if (lrcConnection.responseCode == 200) {
-                                    val rawResponse = lrcConnection.inputStream.bufferedReader().use { it.readText() }
-                                    Log.d("FetchAll", "歌词API响应: ${rawResponse.take(500)}")
-
-                                    val gson = com.google.gson.Gson()
-                                    val lrcResponse = gson.fromJson(rawResponse, com.music.purelymusic.model.LrcJsonResponse::class.java)
-
-                                    if (lrcResponse.code == 200 && !lrcResponse.data?.lyric.isNullOrEmpty()) {
-                                        lrcResponse.data.lyric
-                                    } else {
-                                        null
-                                    }
-                                } else {
-                                    Log.e("FetchAll", "歌词URL请求失败，响应码: ${lrcConnection.responseCode}")
-                                    null
-                                }
-                            } catch (e: Exception) {
-                                Log.e("FetchAll", "下载歌词失败", e)
-                                null
-                            }
-                        } else {
-                            Log.d("FetchAll", "API返回的 data.lrc 为空")
-                            null
-                        }
-
-                        // 保存歌词文件
-                        if (!lrcContent.isNullOrEmpty()) {
-                            val fileName = "lrc_${System.currentTimeMillis()}.lrc"
-                            val file = java.io.File(context.filesDir, fileName)
-                            file.writeText(lrcContent, Charsets.UTF_8)
-                            lrcPath = file.absolutePath
-                            Log.d("FetchAll", "歌词已保存: $lrcPath, 文件大小: ${file.length()} 字节")
-
-                            // 测试解析
-                            val testParse = com.music.purelymusic.utils.LrcParser.parse(lrcContent)
-                            Log.d("FetchAll", "歌词解析测试结果: 共${testParse.size}行")
-                            if (testParse.isNotEmpty()) {
-                                Log.d("FetchAll", "第一行: 时间=${testParse[0].time}ms, 内容=${testParse[0].content}")
-                            }
-                        } else {
-                            Log.d("FetchAll", "歌词内容为空")
-                        }
+                        // 处理歌词
+                        val lrcPath = downloadAndSaveLyricsFromUrl(data.lrc)
 
                         Pair(coverPath, lrcPath)
                     } else {
@@ -1273,18 +1668,264 @@ private fun stopSurroundEffect() {
                     Pair(null, null)
                 }
             } catch (e: Exception) {
-                val errorMsg = "获取所有信息失败: ${e.javaClass.simpleName} - ${e.message}"
+                val errorMsg = "网易云获取失败: ${e.message}"
                 Log.e("FetchAll", errorMsg, e)
                 withContext(Dispatchers.Main) {
                     fetchAllError = errorMsg
                 }
                 Pair(null, null)
-            } finally {
-                withContext(Dispatchers.Main) {
-                    isFetchingAll = false
-                }
             }
         }
+    }
+
+    /**
+     * 混合模式：从QQ获取封面，从咪咕获取歌词
+     */
+    private suspend fun fetchFromMixedSource(keywords: String): Pair<String?, String?> {
+        return withContext(Dispatchers.IO) {
+            var coverPath: String? = null
+            var lrcPath: String? = null
+
+            // 并行请求QQ和咪咕API
+            try {
+                // 1. 从QQ API获取封面
+                coverPath = fetchCoverFromQQ(keywords)
+            } catch (e: Exception) {
+                Log.e("FetchAll", "QQ获取封面失败", e)
+            }
+
+            try {
+                // 2. 从咪咕API获取歌词
+                lrcPath = fetchLyricsFromMigu(keywords)
+            } catch (e: Exception) {
+                Log.e("FetchAll", "咪咕获取歌词失败", e)
+            }
+
+            if (coverPath == null && lrcPath == null) {
+                withContext(Dispatchers.Main) {
+                    fetchAllError = "混合模式获取失败：封面和歌词均未获取到"
+                }
+            }
+
+            Pair(coverPath, lrcPath)
+        }
+    }
+
+    /**
+     * 从QQ音乐API获取封面
+     */
+    private suspend fun fetchCoverFromQQ(keywords: String): String? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val apiUrl = "https://api.yaohud.cn/api/music/qq?key=${BuildConfig.MUSIC_API_KEY}&msg=${java.net.URLEncoder.encode(keywords, "UTF-8")}&n=1"
+                Log.d("FetchAll", "QQ API请求URL: $apiUrl")
+
+                val connection = java.net.URL(apiUrl).openConnection() as java.net.HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 10000
+                connection.readTimeout = 10000
+
+                val responseCode = connection.responseCode
+                Log.d("FetchAll", "QQ API响应码: $responseCode")
+
+                if (responseCode == 200) {
+                    val rawResponse = connection.inputStream.bufferedReader().use { it.readText() }
+                    Log.d("FetchAll", "QQ API响应: $rawResponse")
+
+                    val gson = com.google.gson.Gson()
+                    val response = gson.fromJson(rawResponse, com.music.purelymusic.model.QqApiResponse::class.java)
+
+                    if (response.code == 200 && !response.data.picture.isNullOrEmpty()) {
+                        val pictureUrl = response.data.picture
+                        Log.d("FetchAll", "QQ封面URL: $pictureUrl")
+
+                        // 保存专辑信息
+                        withContext(Dispatchers.Main) {
+                            tempAlbumArtist = response.data.songname
+                        }
+
+                        // 下载封面
+                        downloadCover(pictureUrl)
+                    } else {
+                        Log.e("FetchAll", "QQ API返回错误或无封面: code=${response.code}")
+                        null
+                    }
+                } else {
+                    Log.e("FetchAll", "QQ API HTTP错误: $responseCode")
+                    null
+                }
+            } catch (e: Exception) {
+                Log.e("FetchAll", "QQ API请求失败", e)
+                null
+            }
+        }
+    }
+
+    /**
+     * 从咪咕API获取歌词
+     */
+    private suspend fun fetchLyricsFromMigu(keywords: String): String? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val apiUrl = "https://api.yaohud.cn/api/music/migu?key=${BuildConfig.MUSIC_API_KEY}&msg=${java.net.URLEncoder.encode(keywords, "UTF-8")}&n=1"
+                Log.d("FetchAll", "咪咕API请求URL: $apiUrl")
+
+                val connection = java.net.URL(apiUrl).openConnection() as java.net.HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 10000
+                connection.readTimeout = 10000
+
+                val responseCode = connection.responseCode
+                Log.d("FetchAll", "咪咕API响应码: $responseCode")
+
+                if (responseCode == 200) {
+                    val rawResponse = connection.inputStream.bufferedReader().use { it.readText() }
+                    Log.d("FetchAll", "咪咕API响应: $rawResponse")
+
+                    val gson = com.google.gson.Gson()
+                    val response = gson.fromJson(rawResponse, com.music.purelymusic.model.MiguDetailResponse::class.java)
+
+                    if (response.code == 200 && !response.data.lrc_url.isNullOrEmpty()) {
+                        val lrcUrl = response.data.lrc_url
+                        Log.d("FetchAll", "咪咕歌词URL: $lrcUrl")
+
+                        // 下载歌词内容
+                        downloadAndSaveLyricsFromDirectUrl(lrcUrl)
+                    } else {
+                        Log.e("FetchAll", "咪咕API返回错误或无歌词: code=${response.code}")
+                        null
+                    }
+                } else {
+                    Log.e("FetchAll", "咪咕API HTTP错误: $responseCode")
+                    null
+                }
+            } catch (e: Exception) {
+                Log.e("FetchAll", "咪咕API请求失败", e)
+                null
+            }
+        }
+    }
+
+    /**
+     * 下载封面图片
+     */
+    private fun downloadCover(pictureUrl: String?): String? {
+        if (pictureUrl.isNullOrEmpty()) return null
+
+        return try {
+            val coverConnection = java.net.URL(pictureUrl).openConnection() as java.net.HttpURLConnection
+            coverConnection.requestMethod = "GET"
+            coverConnection.connect()
+
+            if (coverConnection.responseCode == 200) {
+                val inputStream = coverConnection.inputStream
+                val fileName = "cover_${System.currentTimeMillis()}.jpg"
+                val file = java.io.File(context.filesDir, fileName)
+                val outputStream = java.io.FileOutputStream(file)
+                inputStream.copyTo(outputStream)
+                inputStream.close()
+                outputStream.close()
+                Log.d("FetchAll", "封面已下载: ${file.absolutePath}")
+                file.absolutePath
+            } else {
+                Log.e("FetchAll", "下载封面失败，响应码: ${coverConnection.responseCode}")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("FetchAll", "下载封面失败", e)
+            null
+        }
+    }
+
+    /**
+     * 从歌词URL下载并保存歌词（网易云模式，需要二次请求）
+     */
+    private fun downloadAndSaveLyricsFromUrl(lrcUrl: String?): String? {
+        if (lrcUrl.isNullOrEmpty()) {
+            Log.d("FetchAll", "歌词URL为空")
+            return null
+        }
+
+        return try {
+            Log.d("FetchAll", "通过URL获取歌词: $lrcUrl")
+
+            val lrcConnection = java.net.URL(lrcUrl).openConnection() as java.net.HttpURLConnection
+            lrcConnection.requestMethod = "GET"
+            lrcConnection.connectTimeout = 10000
+            lrcConnection.readTimeout = 10000
+            lrcConnection.connect()
+
+            if (lrcConnection.responseCode == 200) {
+                val rawResponse = lrcConnection.inputStream.bufferedReader().use { it.readText() }
+                Log.d("FetchAll", "歌词API响应: ${rawResponse.take(500)}")
+
+                val gson = com.google.gson.Gson()
+                val lrcResponse = gson.fromJson(rawResponse, com.music.purelymusic.model.LrcJsonResponse::class.java)
+
+                if (lrcResponse.code == 200 && !lrcResponse.data?.lyric.isNullOrEmpty()) {
+                    saveLyricsFile(lrcResponse.data.lyric)
+                } else {
+                    null
+                }
+            } else {
+                Log.e("FetchAll", "歌词URL请求失败，响应码: ${lrcConnection.responseCode}")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("FetchAll", "下载歌词失败", e)
+            null
+        }
+    }
+
+    /**
+     * 直接从歌词URL下载并保存歌词（咪咕模式，直接是lrc文件）
+     */
+    private fun downloadAndSaveLyricsFromDirectUrl(lrcUrl: String): String? {
+        return try {
+            Log.d("FetchAll", "直接下载歌词文件: $lrcUrl")
+
+            val lrcConnection = java.net.URL(lrcUrl).openConnection() as java.net.HttpURLConnection
+            lrcConnection.requestMethod = "GET"
+            lrcConnection.connectTimeout = 10000
+            lrcConnection.readTimeout = 10000
+            lrcConnection.connect()
+
+            if (lrcConnection.responseCode == 200) {
+                val lrcContent = lrcConnection.inputStream.bufferedReader().use { it.readText() }
+                Log.d("FetchAll", "歌词内容长度: ${lrcContent.length}")
+                saveLyricsFile(lrcContent)
+            } else {
+                Log.e("FetchAll", "下载歌词文件失败，响应码: ${lrcConnection.responseCode}")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("FetchAll", "下载歌词文件失败", e)
+            null
+        }
+    }
+
+    /**
+     * 保存歌词文件
+     */
+    private fun saveLyricsFile(lrcContent: String): String? {
+        if (lrcContent.isBlank()) {
+            Log.d("FetchAll", "歌词内容为空")
+            return null
+        }
+
+        val fileName = "lrc_${System.currentTimeMillis()}.lrc"
+        val file = java.io.File(context.filesDir, fileName)
+        file.writeText(lrcContent, Charsets.UTF_8)
+        Log.d("FetchAll", "歌词已保存: ${file.absolutePath}, 文件大小: ${file.length()} 字节")
+
+        // 测试解析
+        val testParse = com.music.purelymusic.utils.LrcParser.parse(lrcContent)
+        Log.d("FetchAll", "歌词解析测试结果: 共${testParse.size}行")
+        if (testParse.isNotEmpty()) {
+            Log.d("FetchAll", "第一行: 时间=${testParse[0].time}ms, 内容=${testParse[0].content}")
+        }
+
+        return file.absolutePath
     }
 
     // --- 翻译功能 ---
