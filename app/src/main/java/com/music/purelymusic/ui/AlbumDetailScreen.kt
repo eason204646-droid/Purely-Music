@@ -1,4 +1,4 @@
-//Copyright (c) [2026] [eason204646]
+﻿//Copyright (c) [2026] [eason204646]
 //[purelymusic] is licensed under Mulan PSL v2.
 //You can use this software according to the terms and conditions of the Mulan
 //PSL v2.
@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.media3.common.util.UnstableApi
 import coil.compose.AsyncImage
 import com.music.purelymusic.R
@@ -66,10 +67,11 @@ fun AlbumDetailScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(bottom = 100.dp)
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentPadding = PaddingValues(bottom = 100.dp)
+            ) {
             item {
                 Box(modifier = Modifier.fillMaxWidth().height(380.dp)) {
                     AsyncImage(
@@ -88,21 +90,6 @@ fun AlbumDetailScreen(
                             )
                         )
                     ))
-
-                    // 返回按钮
-                    Surface(
-                        modifier = Modifier.padding(top = 12.dp, start = 8.dp),
-                        shape = CircleShape,
-                        color = Color.Black.copy(alpha = 0.3f),
-                        onClick = onBack
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = if (viewModel.currentLanguage == "zh") "返回" else "Back",
-                            tint = Color.White,
-                            modifier = Modifier.padding(8.dp).size(24.dp)
-                        )
-                    }
 
                     Column(
                         modifier = Modifier
@@ -201,20 +188,38 @@ fun AlbumDetailScreen(
                 }
             }
 
-            items(albumSongs) { song ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = AppDimensions.paddingScreen())
-                ) {
-                    SongItem(
-                        song = song,
-                        onClick = {
-                            viewModel.playSong(song)
-                            onNavigateToPlayer()
-                        }
-                    )
+                items(albumSongs) { song ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = AppDimensions.paddingScreen())
+                    ) {
+                        SongItem(
+                            song = song,
+                            onClick = {
+                                viewModel.playSong(song)
+                                onNavigateToPlayer()
+                            }
+                        )
+                    }
                 }
+            }
+
+            Surface(
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(top = 12.dp, start = 8.dp)
+                    .zIndex(1f),
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.3f),
+                onClick = onBack
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = if (viewModel.currentLanguage == "zh") "返回" else "Back",
+                    tint = Color.White,
+                    modifier = Modifier.padding(8.dp).size(24.dp)
+                )
             }
         }
     }

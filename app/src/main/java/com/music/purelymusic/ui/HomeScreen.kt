@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -312,37 +313,48 @@ fun RecentSongItem(song: Song, onClick: () -> Unit) {
 }
 
 @Composable
-fun SongItem(song: Song, onClick: () -> Unit) {
+fun SongItem(
+    song: Song, 
+    onClick: () -> Unit,
+    showDragHandle: Boolean = false,
+    isDragging: Boolean = false,
+    dragHandleModifier: Modifier = Modifier
+) {
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onClick() }
                 .padding(vertical = AppDimensions.spacingM()),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = song.coverUri ?: R.drawable.default_cover,
-                contentDescription = null,
+            Row(
                 modifier = Modifier
-                    .size(AppDimensions.coverM())
-                    .clip(RoundedCornerShape(AppDimensions.cornerRadiusS())),
-                contentScale = ContentScale.Crop
-            )
-            Column(
-                modifier = Modifier
-                    .padding(start = AppDimensions.spacingM())
                     .weight(1f)
+                    .clickable { onClick() },
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                AsyncImage(
+                    model = song.coverUri ?: R.drawable.default_cover,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(AppDimensions.coverM())
+                        .clip(RoundedCornerShape(AppDimensions.cornerRadiusS())),
+                    contentScale = ContentScale.Crop
+                )
+                Column(
+                    modifier = Modifier
+                        .padding(start = AppDimensions.spacingM())
+                        .weight(1f)
+                ) {
                 Text(
                     song.title,
                     color = Color.Black,
                     fontSize = AppDimensions.textL().value.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = if (isDragging) FontWeight.Bold else FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(AppDimensions.spacingXS()))
+                    Spacer(modifier = Modifier.height(AppDimensions.spacingXS()))
                 Text(
                     song.artist,
                     color = Color.Gray,
@@ -350,6 +362,23 @@ fun SongItem(song: Song, onClick: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                }
+            }
+            // 拖拽手柄
+            if (showDragHandle) {
+                Box(
+                    modifier = dragHandleModifier
+                        .size(40.dp)
+                        .padding(end = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DragHandle,
+                        contentDescription = "鎷栨嫿鎺掑簭",
+                        tint = if (isDragging) Color.Gray else Color.Gray.copy(alpha = 0.5f),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
         }
         androidx.compose.material3.Divider(
@@ -395,6 +424,7 @@ fun MiniPlayer(viewModel: PlayerViewModel, onClick: () -> Unit) {
     }
 }
 
+@OptIn(UnstableApi::class)
 @Composable
 fun HomeImportMusicDialog(
     viewModel: PlayerViewModel,

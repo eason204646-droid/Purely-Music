@@ -32,8 +32,8 @@ android {
         applicationId = "com.music.purelymusic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 23
-        versionName = "2.2"
+        versionCode = 24
+        versionName = "2.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
@@ -129,6 +129,7 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.foundation)
+    implementation(libs.androidx.compose.ui.unit)
 
     // Media3 (代替过时的 ExoPlayer 2.x)
     val media3Version = "1.5.0"
@@ -148,4 +149,7 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("com.google.android.material:material:1.12.0")
+
+    // Markdown rendering
+    implementation("io.noties.markwon:core:4.6.2")
 }

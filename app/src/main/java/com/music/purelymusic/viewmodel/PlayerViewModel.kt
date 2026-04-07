@@ -65,9 +65,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         playSong(song, updateInternalList = false)
     }
     fun playPlaylist(playlist: Playlist, isRandom: Boolean) {
-        val songs = libraryList.filter { song: Song ->
-            playlist.songIds.contains(song.id.toLong())
-        }
+        val latestPlaylist = playlists.firstOrNull { it.id == playlist.id } ?: playlist
+        val songMap = libraryList.associateBy { it.id.toLong() }
+        val songs = latestPlaylist.songIds.mapNotNull { songId -> songMap[songId] }
         if (songs.isEmpty()) return
         currentPlayingList.clear()
         currentPlayingList.addAll(if (isRandom) songs.shuffled() else songs)
@@ -290,6 +290,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 "audio/flac", "audio/x-flac" -> ".flac"
                 "audio/wav", "audio/x-wav" -> ".wav"
                 "audio/aac", "audio/x-aac", "audio/aacp" -> ".aac"
+                "audio/opus" -> ".opus"
+                "audio/ape", "audio/x-ape" -> ".ape"
+                "audio/amr" -> ".amr"
+                "audio/3gpp" -> ".3gp"
+                "audio/3gpp2" -> ".3g2"
+                "audio/x-matroska" -> ".mka"
                 "audio/x-ms-wma" -> ".wma"
                 "image/jpeg", "image/jpg" -> ".jpg"
                 "image/png" -> ".png"
@@ -305,6 +311,47 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             "." + path?.substring(dotIndex + 1)?.lowercase()
         } else {
             ""
+        }
+    }
+
+    private fun guessMimeTypeFromExtension(extension: String): String? {
+        return when (extension.lowercase()) {
+            "mp3" -> "audio/mpeg"
+            "m4a", "mp4" -> "audio/mp4"
+            "aac" -> "audio/aac"
+            "flac" -> "audio/flac"
+            "wav" -> "audio/wav"
+            "ogg" -> "audio/ogg"
+            "opus" -> "audio/opus"
+            "ape" -> "audio/ape"
+            "wma" -> "audio/x-ms-wma"
+            "amr" -> "audio/amr"
+            "3gp", "3gpp" -> "audio/3gpp"
+            "3g2", "3gpp2" -> "audio/3gpp2"
+            "mka" -> "audio/x-matroska"
+            else -> null
+        }
+    }
+
+    private fun resolveMimeType(musicPath: String): String? {
+        return try {
+            if (musicPath.startsWith("content://")) {
+                val uri = Uri.parse(musicPath)
+                val resolverType = context.contentResolver.getType(uri)
+                if (!resolverType.isNullOrBlank()) {
+                    return resolverType
+                }
+                val ext = getFileExtension(uri).trimStart('.')
+                if (ext.isNotBlank()) {
+                    return guessMimeTypeFromExtension(ext)
+                }
+                null
+            } else {
+                val ext = musicPath.substringAfterLast('.', "").lowercase()
+                if (ext.isNotBlank()) guessMimeTypeFromExtension(ext) else null
+            }
+        } catch (e: Exception) {
+            null
         }
     }
 
@@ -737,11 +784,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         try {
             val player = getOrCreatePlayer()
             val musicPath = song.musicUri ?: return
-            val mediaItem = if (musicPath.startsWith("content://") || musicPath.startsWith("file://")) {
-                MediaItem.fromUri(Uri.parse(musicPath))
+            val uri = if (musicPath.startsWith("content://") || musicPath.startsWith("file://")) {
+                Uri.parse(musicPath)
             } else {
-                MediaItem.fromUri(Uri.fromFile(File(musicPath)))
+                Uri.fromFile(File(musicPath))
             }
+            val mimeType = resolveMimeType(musicPath)
+            val mediaItem = MediaItem.Builder()
+                .setUri(uri)
+                .apply {
+                    if (!mimeType.isNullOrBlank()) {
+                        setMimeType(mimeType)
+                    }
+                }
+                .build()
             player.setMediaItem(mediaItem)
             player.prepare()
             player.volume = 1.0f

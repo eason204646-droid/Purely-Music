@@ -18,6 +18,10 @@ package com.music.purelymusic.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.text.method.LinkMovementMethod
+import android.util.TypedValue
+import android.view.ViewGroup
+import android.widget.TextView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -36,8 +40,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.widget.NestedScrollView
 import com.music.purelymusic.viewmodel.PlayerViewModel
 import com.music.purelymusic.ui.utils.AppDimensions
+import io.noties.markwon.Markwon
 
 @Composable
 fun SettingsScreen(
@@ -123,7 +130,7 @@ fun SettingsScreen(
             ) {
                 // 自动从元数据获取封面和歌词开关
                 SettingsSwitch(
-                    title = if (viewModel.currentLanguage == "zh") "自动获取封面和歌词" else "Auto Fetch Cover & Lyrics",
+                    title = if (viewModel.currentLanguage == "zh") "从元数据自动获取封面和歌词" else "Auto Fetch Cover & Lyrics",
                     subtitle = if (viewModel.currentLanguage == "zh") "尝试从元数据自动获取封面和歌词" else "Try to fetch cover and lyrics from metadata",
                     checked = viewModel.autoFetchMetadata,
                     onCheckedChange = { viewModel.autoFetchMetadata = it }
@@ -433,50 +440,76 @@ fun SettingsScreen(
         )
     }
 
-    // 帮助文档弹窗
+    // 帮助文档全屏弹窗（Markdown 渲染）
     if (showHelpDialog) {
-        val scrollState = androidx.compose.foundation.rememberScrollState()
-
-        AlertDialog(
+        val markwon = remember { Markwon.create(context) }
+        androidx.compose.ui.window.Dialog(
             onDismissRequest = { showHelpDialog = false },
-            title = {
-                Text(
-                    helpDialogTitle,
-                    color = Color.Black,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Box(
-                    modifier = Modifier
-                        .height(500.dp)
-                        .fillMaxWidth()
-                        .background(Color(0xFFF5F5F5))
-                ) {
-                    Column(
+            properties = androidx.compose.ui.window.DialogProperties(
+                dismissOnBackPress = true,
+                dismissOnClickOutside = false,
+                usePlatformDefaultWidth = false
+            )
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Color.White
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Row(
                         modifier = Modifier
-                            .verticalScroll(scrollState)
-                            .fillMaxSize()
-                            .padding(8.dp)
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(horizontal = AppDimensions.paddingScreen(), vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = helpDialogContent,
-                            color = Color.Black.copy(alpha = 0.9f),
-                            fontSize = 13.sp
+                            text = helpDialogTitle,
+                            fontSize = AppDimensions.textL().value.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black,
+                            modifier = Modifier.weight(1f)
                         )
+                        IconButton(onClick = { showHelpDialog = false }) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = if (viewModel.currentLanguage == "zh") "关闭" else "Close",
+                                tint = Color.Black
+                            )
+                        }
                     }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showHelpDialog = false }) {
-                    Text(
-                        if (viewModel.currentLanguage == "zh") "关闭" else "Close",
-                        color = Color(0xFFE53935)
+
+                    Divider(color = Color(0xFFE0E0E0))
+
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = { ctx ->
+                            val scrollView = NestedScrollView(ctx)
+                            val textView = TextView(ctx)
+                            textView.setTextColor(android.graphics.Color.BLACK)
+                            textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                            textView.setLineSpacing(0f, 1.2f)
+                            textView.movementMethod = LinkMovementMethod.getInstance()
+                            val padding = (16 * ctx.resources.displayMetrics.density).toInt()
+                            textView.setPadding(padding, padding, padding, padding)
+                            scrollView.addView(
+                                textView,
+                                ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.WRAP_CONTENT
+                                )
+                            )
+                            scrollView.tag = textView
+                            scrollView
+                        },
+                        update = { scrollView ->
+                            val textView = scrollView.tag as TextView
+                            markwon.setMarkdown(textView, helpDialogContent)
+                        }
                     )
                 }
-            },
-            containerColor = Color.White
-        )
+            }
+        }
     }
 }
 
