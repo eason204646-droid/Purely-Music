@@ -1,8 +1,8 @@
-﻿//Copyright (c) [2026] [eason204646]
+//Copyright (c) [2026] [eason204646]
 //[purelymusic] is licensed under Mulan PSL v2.
 //You can use this software according to the terms and conditions of the Mulan
 //PSL v2.
-//You may obtain a copy ，of Mulan PSL v2 at:
+//You may obtain a copy of Mulan PSL v2 at:
 //         http://license.coscl.org.cn/MulanPSL2
 //THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
 //KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
@@ -11,7 +11,7 @@
 //
 //Mulan Permissive Software License，Version 2
 //
-//Mulan Permissive Software License，Version 2
+//Mulan Permissive Software License，Version 2 (Mulan PSL v2)
 //
 //January 2020 http://license.coscl.org.cn/MulanPSL2
 package com.music.purelymusic.ui
@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -85,55 +86,40 @@ fun SettingsScreen(
                 .padding(horizontal = AppDimensions.paddingScreen()),
             verticalArrangement = Arrangement.spacedBy(AppDimensions.spacingM())
         ) {
-            // 语言设置
+            // 播放设置
             SettingsSection(
-                title = if (viewModel.currentLanguage == "zh") "语言" else "Language",
-                icon = Icons.Default.Language
+                title = if (viewModel.currentLanguage == "zh") "播放" else "Playback",
+                icon = Icons.Default.GraphicEq
             ) {
-                SettingsOption(
-                    title = if (viewModel.currentLanguage == "zh") "中文" else "中文",
-                    subtitle = "Chinese",
-                    isSelected = viewModel.currentLanguage == "zh",
-                    onClick = { viewModel.currentLanguage = "zh" }
-                )
-                SettingsOption(
-                    title = if (viewModel.currentLanguage == "zh") "英语" else "English",
-                    subtitle = "English",
-                    isSelected = viewModel.currentLanguage == "en",
-                    onClick = { viewModel.currentLanguage = "en" }
-                )
-            }
-
-            // 自动获取源设置
-            SettingsSection(
-                title = if (viewModel.currentLanguage == "zh") "自动获取源" else "Auto Fetch Source",
-                icon = Icons.Default.CloudDownload
-            ) {
-                SettingsOption(
-                    title = if (viewModel.currentLanguage == "zh") "网易云" else "Netease",
-                    subtitle = if (viewModel.currentLanguage == "zh") "最稳定，支持大部分歌曲" else "Most stable, supports most songs",
-                    isSelected = viewModel.autoFetchSource == "netease",
-                    onClick = { viewModel.autoFetchSource = "netease" }
-                )
-                SettingsOption(
-                    title = if (viewModel.currentLanguage == "zh") "混合" else "Mixed",
-                    subtitle = if (viewModel.currentLanguage == "zh") "如果遇到网易云曲库没有的歌，可以尝试这个选项" else "Try this if songs are missing from Netease library",
-                    isSelected = viewModel.autoFetchSource == "mixed",
-                    onClick = { viewModel.autoFetchSource = "mixed" }
-                )
-            }
-
-            // 导入设置
-            SettingsSection(
-                title = if (viewModel.currentLanguage == "zh") "导入" else "Import",
-                icon = Icons.Default.LibraryMusic
-            ) {
-                // 自动从元数据获取封面和歌词开关
                 SettingsSwitch(
-                    title = if (viewModel.currentLanguage == "zh") "从元数据自动获取封面和歌词" else "Auto Fetch Cover & Lyrics",
-                    subtitle = if (viewModel.currentLanguage == "zh") "尝试从元数据自动获取封面和歌词" else "Try to fetch cover and lyrics from metadata",
-                    checked = viewModel.autoFetchMetadata,
-                    onCheckedChange = { viewModel.autoFetchMetadata = it }
+                    title = if (viewModel.currentLanguage == "zh") "自动切歌交叉渐入渐出" else "Auto Track Crossfade",
+                    subtitle = if (viewModel.currentLanguage == "zh") "仅在歌曲自然播放结束后自动切到下一首时生效" else "Only applies when a song naturally advances to the next track",
+                    checked = viewModel.crossfadeEnabled,
+                    onCheckedChange = { viewModel.crossfadeEnabled = it }
+                )
+                SettingsSlider(
+                    title = if (viewModel.currentLanguage == "zh") "渐入渐出时长" else "Crossfade Duration",
+                    subtitle = if (viewModel.currentLanguage == "zh") {
+                        "默认 3 秒，可调 1-10 秒"
+                    } else {
+                        "Default 3 seconds, adjustable from 1 to 10 seconds"
+                    },
+                    value = viewModel.crossfadeDurationSeconds.toFloat(),
+                    valueText = if (viewModel.currentLanguage == "zh") {
+                        "${viewModel.crossfadeDurationSeconds} 秒"
+                    } else {
+                        "${viewModel.crossfadeDurationSeconds} s"
+                    },
+                    enabled = viewModel.crossfadeEnabled,
+                    onValueChange = { viewModel.crossfadeDurationSeconds = it.toInt() },
+                    valueRange = 1f..10f,
+                    steps = 8
+                )
+                SettingsSwitch(
+                    title = if (viewModel.currentLanguage == "zh") "均衡器（beta）" else "Equalizer (beta)",
+                    subtitle = if (viewModel.currentLanguage == "zh") "开启后可在播放界面进入均衡器" else "Enable access to the equalizer from the player screen",
+                    checked = viewModel.equalizerEnabled,
+                    onCheckedChange = { viewModel.equalizerEnabled = it }
                 )
             }
 
@@ -168,6 +154,86 @@ fun SettingsScreen(
                     },
                     showChevron = true,
                     onClick = { showLyricStyleDialog = true }
+                )
+            }
+
+            // 导入设置
+            SettingsSection(
+                title = if (viewModel.currentLanguage == "zh") "导入" else "Import",
+                icon = Icons.Default.LibraryMusic
+            ) {
+                // 自动从元数据获取封面和歌词开关
+                SettingsSwitch(
+                    title = if (viewModel.currentLanguage == "zh") "从元数据自动获取封面和歌词" else "Auto Fetch Cover & Lyrics",
+                    subtitle = if (viewModel.currentLanguage == "zh") "尝试从元数据自动获取封面和歌词" else "Try to fetch cover and lyrics from metadata",
+                    checked = viewModel.autoFetchMetadata,
+                    onCheckedChange = { viewModel.autoFetchMetadata = it }
+                )
+            }
+
+            // 自动获取源设置
+            SettingsSection(
+                title = if (viewModel.currentLanguage == "zh") "自动获取源" else "Auto Fetch Source",
+                icon = Icons.Default.CloudDownload
+            ) {
+                SettingsOption(
+                    title = if (viewModel.currentLanguage == "zh") "网易云" else "Netease",
+                    subtitle = if (viewModel.currentLanguage == "zh") "最稳定，支持大部分歌曲" else "Most stable, supports most songs",
+                    isSelected = viewModel.autoFetchSource == "netease",
+                    onClick = { viewModel.autoFetchSource = "netease" }
+                )
+                SettingsOption(
+                    title = if (viewModel.currentLanguage == "zh") "混合" else "Mixed",
+                    subtitle = if (viewModel.currentLanguage == "zh") "如果遇到网易云曲库没有的歌，可以尝试这个选项" else "Try this if songs are missing from Netease library",
+                    isSelected = viewModel.autoFetchSource == "mixed",
+                    onClick = { viewModel.autoFetchSource = "mixed" }
+                )
+            }
+
+            // 帮助
+            SettingsSection(
+                title = if (viewModel.currentLanguage == "zh") "帮助" else "Help",
+                icon = Icons.Default.Help
+            ) {
+                SettingsOption(
+                    title = if (viewModel.currentLanguage == "zh") "使用说明" else "User Guide",
+                    subtitle = if (viewModel.currentLanguage == "zh") "如何使用 Purely Music" else "How to use Purely Music",
+                    showChevron = true,
+                    onClick = {
+                        helpDialogTitle = if (viewModel.currentLanguage == "zh") "使用说明" else "User Guide"
+                        helpDialogContent = loadHelpDocument(context, "help/使用说明.md")
+                        showHelpDialog = true
+                    }
+                )
+                SettingsOption(
+                    title = if (viewModel.currentLanguage == "zh") "功能特性" else "Features",
+                    subtitle = if (viewModel.currentLanguage == "zh") "了解 Purely Music 的功能" else "Learn about Purely Music features",
+                    showChevron = true,
+                    onClick = {
+                        helpDialogTitle = if (viewModel.currentLanguage == "zh") "功能特性" else "Features"
+                        helpDialogContent = loadHelpDocument(context, "help/功能特性.md")
+                        showHelpDialog = true
+                    }
+                )
+                SettingsOption(
+                    title = if (viewModel.currentLanguage == "zh") "疑难解答" else "Troubleshooting",
+                    subtitle = if (viewModel.currentLanguage == "zh") "常见问题与解决方案" else "Common issues and solutions",
+                    showChevron = true,
+                    onClick = {
+                        helpDialogTitle = if (viewModel.currentLanguage == "zh") "疑难解答" else "Troubleshooting"
+                        helpDialogContent = loadHelpDocument(context, "help/疑难解答.md")
+                        showHelpDialog = true
+                    }
+                )
+                SettingsOption(
+                    title = if (viewModel.currentLanguage == "zh") "歌词翻译说明" else "Lyric Translation Guide",
+                    subtitle = if (viewModel.currentLanguage == "zh") "如何使用歌词翻译功能" else "How to use lyric translation",
+                    showChevron = true,
+                    onClick = {
+                        helpDialogTitle = if (viewModel.currentLanguage == "zh") "歌词翻译说明" else "Lyric Translation Guide"
+                        helpDialogContent = loadHelpDocument(context, "help/歌词翻译说明.md")
+                        showHelpDialog = true
+                    }
                 )
             }
 
@@ -219,50 +285,22 @@ fun SettingsScreen(
                 )
             }
 
-            // 帮助
+            // 语言设置
             SettingsSection(
-                title = if (viewModel.currentLanguage == "zh") "帮助" else "Help",
-                icon = Icons.Default.Help
+                title = if (viewModel.currentLanguage == "zh") "语言" else "Language",
+                icon = Icons.Default.Language
             ) {
                 SettingsOption(
-                    title = if (viewModel.currentLanguage == "zh") "使用说明" else "User Guide",
-                    subtitle = if (viewModel.currentLanguage == "zh") "如何使用 Purely Music" else "How to use Purely Music",
-                    showChevron = true,
-                    onClick = {
-                        helpDialogTitle = if (viewModel.currentLanguage == "zh") "使用说明" else "User Guide"
-                        helpDialogContent = loadHelpDocument(context, "help/使用说明.md")
-                        showHelpDialog = true
-                    }
+                    title = if (viewModel.currentLanguage == "zh") "中文" else "中文",
+                    subtitle = "Chinese",
+                    isSelected = viewModel.currentLanguage == "zh",
+                    onClick = { viewModel.currentLanguage = "zh" }
                 )
                 SettingsOption(
-                    title = if (viewModel.currentLanguage == "zh") "功能特性" else "Features",
-                    subtitle = if (viewModel.currentLanguage == "zh") "了解 Purely Music 的功能" else "Learn about Purely Music features",
-                    showChevron = true,
-                    onClick = {
-                        helpDialogTitle = if (viewModel.currentLanguage == "zh") "功能特性" else "Features"
-                        helpDialogContent = loadHelpDocument(context, "help/功能特性.md")
-                        showHelpDialog = true
-                    }
-                )
-                SettingsOption(
-                    title = if (viewModel.currentLanguage == "zh") "疑难解答" else "Troubleshooting",
-                    subtitle = if (viewModel.currentLanguage == "zh") "常见问题与解决方案" else "Common issues and solutions",
-                    showChevron = true,
-                    onClick = {
-                        helpDialogTitle = if (viewModel.currentLanguage == "zh") "疑难解答" else "Troubleshooting"
-                        helpDialogContent = loadHelpDocument(context, "help/疑难解答.md")
-                        showHelpDialog = true
-                    }
-                )
-                SettingsOption(
-                    title = if (viewModel.currentLanguage == "zh") "歌词翻译说明" else "Lyric Translation Guide",
-                    subtitle = if (viewModel.currentLanguage == "zh") "如何使用歌词翻译功能" else "How to use lyric translation",
-                    showChevron = true,
-                    onClick = {
-                        helpDialogTitle = if (viewModel.currentLanguage == "zh") "歌词翻译说明" else "Lyric Translation Guide"
-                        helpDialogContent = loadHelpDocument(context, "help/歌词翻译说明.md")
-                        showHelpDialog = true
-                    }
+                    title = if (viewModel.currentLanguage == "zh") "英语" else "English",
+                    subtitle = "English",
+                    isSelected = viewModel.currentLanguage == "en",
+                    onClick = { viewModel.currentLanguage = "en" }
                 )
             }
 
@@ -647,6 +685,70 @@ fun SettingsSwitch(
                 uncheckedTrackColor = Color(0xFFE0E0E0)
             )
         )    }
+}
+
+@Composable
+fun SettingsSlider(
+    title: String,
+    subtitle: String? = null,
+    value: Float,
+    valueText: String,
+    enabled: Boolean = true,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int = 0
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = AppDimensions.paddingCard(), horizontal = AppDimensions.paddingCard())
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontSize = AppDimensions.textM().value.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = if (enabled) Color.Black else Color.Gray
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        fontSize = AppDimensions.textS().value.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(AppDimensions.spacingS()))
+            Text(
+                text = valueText,
+                fontSize = AppDimensions.textS().value.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (enabled) Color(0xFFE53935) else Color.Gray,
+                textAlign = TextAlign.End
+            )
+        }
+        Spacer(modifier = Modifier.height(AppDimensions.spacingS()))
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            steps = steps,
+            enabled = enabled,
+            colors = SliderDefaults.colors(
+                thumbColor = Color(0xFFE53935),
+                activeTrackColor = Color(0xFFE53935),
+                inactiveTrackColor = Color(0xFFFFCDD2),
+                disabledThumbColor = Color(0xFFBDBDBD),
+                disabledActiveTrackColor = Color(0xFFBDBDBD),
+                disabledInactiveTrackColor = Color(0xFFE0E0E0)
+            )
+        )
+    }
 }
 
 fun loadHelpDocument(context: android.content.Context, fileName: String): String {

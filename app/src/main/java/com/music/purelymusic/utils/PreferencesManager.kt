@@ -1,8 +1,8 @@
-﻿//Copyright (c) [2026] [eason204646]
+//Copyright (c) [2026] [eason204646]
 //[purelymusic] is licensed under Mulan PSL v2.
 //You can use this software according to the terms and conditions of the Mulan
 //PSL v2.
-//You may obtain a copy ，of Mulan PSL v2 at:
+//You may obtain a copy of Mulan PSL v2 at:
 //         http://license.coscl.org.cn/MulanPSL2
 //THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
 //KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
@@ -11,7 +11,7 @@
 //
 //Mulan Permissive Software License，Version 2
 //
-//Mulan Permissive Software License，Version 2
+//Mulan Permissive Software License，Version 2 (Mulan PSL v2)
 //
 //January 2020 http://license.coscl.org.cn/MulanPSL2
 package com.music.purelymusic.utils
@@ -43,6 +43,14 @@ object PreferencesManager {
     
     // 自动从元数据获取封面和歌词开关
     private const val KEY_AUTO_FETCH_METADATA = "auto_fetch_metadata"
+
+    // 自动切歌交叉渐入渐出开关
+    private const val KEY_CROSSFADE_ENABLED = "crossfade_enabled"
+    private const val KEY_CROSSFADE_DURATION_SECONDS = "crossfade_duration_seconds"
+    private const val DEFAULT_CROSSFADE_DURATION_SECONDS = 3
+
+    // 均衡器开关
+    private const val KEY_EQUALIZER_ENABLED = "equalizer_enabled"
     
     private var prefs: SharedPreferences? = null
     
@@ -136,5 +144,42 @@ object PreferencesManager {
      */
     fun saveAutoFetchMetadata(enabled: Boolean) {
         prefs?.edit()?.putBoolean(KEY_AUTO_FETCH_METADATA, enabled)?.apply()
+    }
+
+    /**
+     * 获取自动切歌交叉渐入渐出设置
+     */
+    fun getCrossfadeEnabled(): Boolean {
+        return prefs?.getBoolean(KEY_CROSSFADE_ENABLED, false) ?: false
+    }
+
+    /**
+     * 保存自动切歌交叉渐入渐出设置
+     */
+    fun saveCrossfadeEnabled(enabled: Boolean) {
+        prefs?.edit()?.putBoolean(KEY_CROSSFADE_ENABLED, enabled)?.apply()
+    }
+
+    /**
+     * 获取自动切歌交叉渐入渐出时长设置
+     */
+    fun getCrossfadeDurationSeconds(): Int {
+        return prefs?.getInt(KEY_CROSSFADE_DURATION_SECONDS, DEFAULT_CROSSFADE_DURATION_SECONDS)
+            ?: DEFAULT_CROSSFADE_DURATION_SECONDS
+    }
+
+    /**
+     * 保存自动切歌交叉渐入渐出时长设置
+     */
+    fun saveCrossfadeDurationSeconds(seconds: Int) {
+        prefs?.edit()?.putInt(KEY_CROSSFADE_DURATION_SECONDS, seconds.coerceIn(1, 10))?.apply()
+    }
+
+    fun getEqualizerEnabled(): Boolean {
+        return prefs?.getBoolean(KEY_EQUALIZER_ENABLED, false) ?: false
+    }
+
+    fun saveEqualizerEnabled(enabled: Boolean) {
+        prefs?.edit()?.putBoolean(KEY_EQUALIZER_ENABLED, enabled)?.apply()
     }
 }

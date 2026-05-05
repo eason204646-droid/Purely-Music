@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Purely Music · 纯粹的本地音乐播放器</title>
+<meta name="description" content="开源 Android 本地音乐播放器，使用 Kotlin + Jetpack Compose + Material 3 构建。自动获取封面与歌词，纯粹聆听。" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --red-50:#fff1f2;
+    --red-100:#ffe4e6;
+    --red-300:#fda4af;
+    --red-500:#ef4444;
+    --red-600:#dc2626;
+    --red-700:#b91c1c;
+    --red-800:#991b1b;
+    --red-900:#7f1d1d;
+    --bg:#0a0a0b;
+    --bg-soft:#141416;
+    --bg-card:#1a1a1d;
+    --border:rgba(255,255,255,.08);
+    --text:#f5f5f7;
+    --text-soft:#b8b8bf;
+    --text-mute:#8a8a92;
+    --gradient-red:linear-gradient(135deg,#ff4d6d 0%,#dc2626 50%,#7f1d1d 100%);
+    --gradient-glow:radial-gradient(circle at 50% 0%,rgba(239,68,68,.35),transparent 60%);
+    --shadow-glow:0 20px 60px -20px rgba(220,38,38,.45);
+  }
+  html{scroll-behavior:smooth;}
+  body{
+    font-family:'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    line-height:1.6;
+    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;text-decoration:none;}
+  img,svg{display:block;max-width:100%;}
+
+  /* ========== Background decoration ========== */
+  .bg-deco{
+    position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(239,68,68,.18), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 30%, rgba(127,29,29,.20), transparent 60%),
+      radial-gradient(ellipse 50% 40% at 20% 70%, rgba(220,38,38,.10), transparent 60%);
+  }
+  .bg-grid{
+    position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.4;
+    background-image:
+      linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+    background-size:60px 60px;
+    mask-image:radial-gradient(ellipse 80% 60% at 50% 30%,black,transparent 80%);
+  }
+
+  /* ========== Navigation ========== */
+  .nav{
+    position:sticky;top:0;z-index:50;
+    backdrop-filter:saturate(180%) blur(18px);
+    background:rgba(10,10,11,.72);
+    border-bottom:1px solid var(--border);
+  }
+  .nav-inner{
+    max-width:1200px;margin:0 auto;
+    padding:16px 24px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .brand{display:flex;align-items:center;gap:12px;font-weight:700;font-size:18px;letter-spacing:.2px;}
+  .brand-logo{
+    width:36px;height:36px;border-radius:10px;
+    background:var(--gradient-red);
+    display:grid;place-items:center;
+    box-shadow:0 6px 20px -6px rgba(239,68,68,.6);
+  }
+  .brand-logo svg{width:20px;height:20px;color:#fff;}
+  .nav-links{display:flex;gap:28px;align-items:center;}
+  .nav-links a{font-size:14px;color:var(--text-soft);transition:color .2s;}
+  .nav-links a:hover{color:var(--text);}
+  .nav-cta{
+    padding:8px 16px;border-radius:10px;
+    background:var(--gradient-red);
+    font-size:14px;font-weight:600;color:#fff !important;
+    transition:transform .2s,box-shadow .2s;
+  }
+  .nav-cta:hover{transform:translateY(-1px);box-shadow:var(--shadow-glow);}
+  @media(max-width:720px){
+    .nav-links a:not(.nav-cta){display:none;}
+  }
+
+  /* ========== Hero ========== */
+  .hero{
+    position:relative;
+    padding:96px 24px 80px;
+    max-width:1200px;margin:0 auto;
+    text-align:center;
+  }
+  .hero-badge{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:6px 14px;border-radius:999px;
+    background:rgba(239,68,68,.10);
+    border:1px solid rgba(239,68,68,.25);
+    font-size:13px;color:var(--red-300);
+    margin-bottom:28px;
+    animation:fadeInUp .8s ease both;
+  }
+  .hero-badge .dot{
+    width:6px;height:6px;border-radius:50%;background:var(--red-500);
+    box-shadow:0 0 0 4px rgba(239,68,68,.18);
+    animation:pulse 2s infinite;
+  }
+  .hero h1{
+    font-size:clamp(40px,7vw,84px);
+    font-weight:900;
+    letter-spacing:-.03em;
+    line-height:1.05;
+    margin-bottom:24px;
+    animation:fadeInUp .8s .1s ease both;
+  }
+  .hero h1 .grad{
+    background:linear-gradient(135deg,#ff4d6d 0%,#ef4444 40%,#fca5a5 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .hero p.lead{
+    font-size:clamp(16px,1.6vw,20px);
+    color:var(--text-soft);
+    max-width:680px;margin:0 auto 40px;
+    animation:fadeInUp .8s .2s ease both;
+  }
+  .hero-actions{
+    display:flex;gap:14px;justify-content:center;flex-wrap:wrap;
+    animation:fadeInUp .8s .3s ease both;
+  }
+  .btn{
+    display:inline-flex;align-items:center;gap:10px;
+    padding:14px 26px;border-radius:14px;
+    font-weight:600;font-size:15px;
+    transition:transform .2s,box-shadow .2s,background .2s,border-color .2s;
+    cursor:pointer;border:1px solid transparent;
+  }
+  .btn svg{width:18px;height:18px;}
+  .btn-primary{
+    background:var(--gradient-red);color:#fff;
+    box-shadow:0 10px 30px -10px rgba(239,68,68,.55);
+  }
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 16px 40px -10px rgba(239,68,68,.7);}
+  .btn-ghost{
+    background:rgba(255,255,255,.04);color:var(--text);
+    border-color:var(--border);
+  }
+  .btn-ghost:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18);}
+
+  .hero-meta{
+    margin-top:48px;
+    display:flex;justify-content:center;gap:36px;flex-wrap:wrap;
+    animation:fadeInUp .8s .4s ease both;
+  }
+  .meta-item{display:flex;flex-direction:column;align-items:center;}
+  .meta-num{font-size:24px;font-weight:800;color:var(--text);}
+  .meta-label{font-size:12px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.1em;}
+
+  /* ========== Phone mockup ========== */
+  .showcase{
+    max-width:1200px;margin:40px auto 0;padding:0 24px;
+    animation:fadeInUp 1s .5s ease both;
+  }
+  .phone{
+    position:relative;width:280px;height:560px;margin:0 auto;
+    border-radius:38px;
+    background:linear-gradient(160deg,#1d1d20,#0e0e10);
+    border:1px solid rgba(255,255,255,.08);
+    box-shadow:
+      0 60px 120px -30px rgba(220,38,38,.35),
+      0 30px 60px -20px rgba(0,0,0,.7),
+      inset 0 0 0 6px #0a0a0b;
+    overflow:hidden;
+  }
+  .phone::before{
+    content:"";position:absolute;top:14px;left:50%;transform:translateX(-50%);
+    width:84px;height:22px;border-radius:14px;background:#000;z-index:3;
+  }
+  .phone-screen{
+    position:absolute;inset:14px;
+    border-radius:30px;overflow:hidden;
+    background:#111;
+    display:flex;flex-direction:column;
+  }
+  .phone-cover{
+    flex:1;
+    background:
+      radial-gradient(circle at 50% 30%,#ff6b81,#dc2626 40%,#450a0a 90%);
+    display:flex;align-items:flex-end;justify-content:center;
+    padding:30px 20px;position:relative;
+  }
+  .phone-cover::after{
+    content:"";position:absolute;inset:0;
+    background:
+      radial-gradient(circle at 30% 20%,rgba(255,255,255,.18),transparent 50%),
+      radial-gradient(circle at 80% 80%,rgba(255,255,255,.06),transparent 60%);
+  }
+  .album-disc{
+    width:160px;height:160px;border-radius:50%;
+    background:
+      radial-gradient(circle at 50% 50%,#1a1a1d 28%,#2a2a30 30%,#1a1a1d 32%,#0a0a0b 70%);
+    border:6px solid rgba(0,0,0,.4);
+    box-shadow:0 30px 50px -10px rgba(0,0,0,.5);
+    margin:0 auto;
+    position:relative;
+    animation:spin 12s linear infinite;
+  }
+  .album-disc::before{
+    content:"";position:absolute;inset:0;border-radius:50%;
+    background:repeating-radial-gradient(circle at 50% 50%,transparent 0 6px,rgba(255,255,255,.03) 6px 7px);
+  }
+  .album-disc::after{
+    content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:36px;height:36px;border-radius:50%;
+    background:linear-gradient(135deg,#ff4d6d,#dc2626);
+    box-shadow:0 0 0 4px rgba(0,0,0,.4);
+  }
+  .phone-info{
+    padding:20px 18px 16px;
+    background:rgba(0,0,0,.55);
+    backdrop-filter:blur(10px);
+    position:relative;z-index:2;
+  }
+  .track-title{font-size:15px;font-weight:700;color:#fff;margin-bottom:4px;}
+  .track-artist{font-size:12px;color:rgba(255,255,255,.6);margin-bottom:14px;}
+  .progress{
+    height:3px;border-radius:3px;background:rgba(255,255,255,.15);overflow:hidden;
+  }
+  .progress::after{
+    content:"";display:block;width:42%;height:100%;
+    background:linear-gradient(90deg,#fca5a5,#ef4444);
+  }
+  .controls{
+    display:flex;justify-content:space-around;align-items:center;padding:14px 0 4px;
+  }
+  .ctrl-btn{
+    width:32px;height:32px;border-radius:50%;
+    display:grid;place-items:center;
+    color:#fff;opacity:.85;
+  }
+  .ctrl-play{
+    width:48px;height:48px;
+    background:#fff;color:#dc2626;
+    box-shadow:0 8px 20px -6px rgba(255,255,255,.4);
+    opacity:1;
+  }
+
+  /* ========== Sections ========== */
+  section.block{padding:96px 24px;max-width:1200px;margin:0 auto;}
+  .section-head{text-align:center;margin-bottom:60px;}
+  .section-tag{
+    display:inline-block;padding:5px 12px;border-radius:999px;
+    background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.25);
+    color:var(--red-300);font-size:12px;font-weight:600;
+    letter-spacing:.1em;text-transform:uppercase;margin-bottom:16px;
+  }
+  .section-title{
+    font-size:clamp(28px,4vw,44px);font-weight:800;letter-spacing:-.02em;
+    margin-bottom:16px;
+  }
+  .section-sub{color:var(--text-soft);max-width:640px;margin:0 auto;}
+
+  /* ========== Feature grid ========== */
+  .feat-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+    gap:20px;
+  }
+  .feat-card{
+    position:relative;
+    padding:28px 26px;
+    background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.015));
+    border:1px solid var(--border);
+    border-radius:20px;
+    transition:transform .25s,border-color .25s,background .25s;
+    overflow:hidden;
+  }
+  .feat-card::before{
+    content:"";position:absolute;inset:-1px;border-radius:21px;
+    background:linear-gradient(135deg,rgba(239,68,68,.0),rgba(239,68,68,.0));
+    transition:background .3s;z-index:-1;
+  }
+  .feat-card:hover{
+    transform:translateY(-4px);
+    border-color:rgba(239,68,68,.35);
+    background:linear-gradient(180deg,rgba(239,68,68,.06),rgba(255,255,255,.015));
+  }
+  .feat-icon{
+    width:48px;height:48px;border-radius:12px;
+    background:linear-gradient(135deg,rgba(239,68,68,.18),rgba(239,68,68,.06));
+    border:1px solid rgba(239,68,68,.25);
+    display:grid;place-items:center;
+    color:#fca5a5;
+    margin-bottom:18px;
+  }
+  .feat-icon svg{width:22px;height:22px;}
+  .feat-card h3{font-size:18px;font-weight:700;margin-bottom:10px;}
+  .feat-card p{color:var(--text-soft);font-size:14.5px;line-height:1.65;}
+  .feat-card ul{list-style:none;margin-top:10px;}
+  .feat-card li{
+    color:var(--text-soft);font-size:13.5px;
+    padding-left:18px;position:relative;margin-top:4px;
+  }
+  .feat-card li::before{
+    content:"";position:absolute;left:0;top:9px;
+    width:6px;height:6px;border-radius:50%;
+    background:var(--red-500);
+  }
+
+  /* ========== Highlight (auto-fetch) ========== */
+  .highlight{
+    position:relative;
+    padding:80px 40px;
+    border-radius:32px;
+    background:
+      radial-gradient(circle at 0% 0%,rgba(239,68,68,.20),transparent 50%),
+      radial-gradient(circle at 100% 100%,rgba(127,29,29,.30),transparent 50%),
+      linear-gradient(160deg,#181012,#0e0a0c);
+    border:1px solid rgba(239,68,68,.20);
+    overflow:hidden;
+  }
+  .highlight-grid{
+    display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;
+  }
+  @media(max-width:880px){.highlight-grid{grid-template-columns:1fr;}.highlight{padding:48px 28px;}}
+  .highlight h2{
+    font-size:clamp(28px,3.5vw,40px);font-weight:800;letter-spacing:-.02em;
+    margin-bottom:18px;
+  }
+  .highlight h2 .grad{
+    background:linear-gradient(135deg,#fca5a5,#ef4444);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .highlight p{color:var(--text-soft);margin-bottom:24px;}
+  .check-list{list-style:none;display:grid;gap:12px;}
+  .check-list li{
+    display:flex;align-items:flex-start;gap:12px;font-size:15px;color:var(--text-soft);
+  }
+  .check-list svg{
+    flex-shrink:0;width:22px;height:22px;color:var(--red-500);margin-top:1px;
+  }
+  .check-list strong{color:var(--text);}
+
+  /* Visual: auto-fetch demo card */
+  .fetch-demo{
+    background:rgba(255,255,255,.02);
+    border:1px solid var(--border);
+    border-radius:20px;padding:24px;
+    box-shadow:0 30px 60px -20px rgba(0,0,0,.6);
+  }
+  .fetch-row{
+    display:flex;align-items:center;gap:14px;
+    padding:12px 14px;border-radius:12px;
+    background:rgba(255,255,255,.03);
+    margin-bottom:10px;
+    border:1px solid transparent;
+    transition:border-color .3s;
+  }
+  .fetch-row:hover{border-color:rgba(239,68,68,.35);}
+  .fetch-cover{
+    width:46px;height:46px;border-radius:10px;flex-shrink:0;
+    background:linear-gradient(135deg,#ff6b81,#dc2626);
+    display:grid;place-items:center;color:#fff;
+    box-shadow:0 6px 16px -4px rgba(220,38,38,.5);
+  }
+  .fetch-cover svg{width:22px;height:22px;}
+  .fetch-info{flex:1;min-width:0;}
+  .fetch-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .fetch-meta{font-size:12px;color:var(--text-mute);margin-top:2px;}
+  .fetch-status{
+    font-size:11px;padding:4px 10px;border-radius:999px;
+    background:rgba(34,197,94,.12);color:#86efac;border:1px solid rgba(34,197,94,.25);
+    flex-shrink:0;
+  }
+  .fetch-status.loading{
+    background:rgba(239,68,68,.12);color:#fca5a5;border-color:rgba(239,68,68,.25);
+  }
+
+  /* ========== Tech stack ========== */
+  .tech-grid{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+    gap:14px;
+  }
+  .tech-pill{
+    padding:18px 16px;border-radius:14px;
+    background:rgba(255,255,255,.025);
+    border:1px solid var(--border);
+    text-align:center;
+    transition:border-color .2s,transform .2s;
+  }
+  .tech-pill:hover{border-color:rgba(239,68,68,.4);transform:translateY(-2px);}
+  .tech-name{font-weight:600;font-size:14px;margin-bottom:4px;}
+  .tech-role{font-size:12px;color:var(--text-mute);}
+
+  /* ========== Download CTA ========== */
+  .cta{
+    position:relative;
+    margin:0 24px 80px;max-width:1200px;
+    margin-left:auto;margin-right:auto;
+    padding:64px 40px;
+    border-radius:28px;
+    background:
+      radial-gradient(circle at 50% 0%,rgba(239,68,68,.25),transparent 60%),
+      linear-gradient(160deg,#1a0e10,#0a0608);
+    border:1px solid rgba(239,68,68,.25);
+    text-align:center;
+    overflow:hidden;
+  }
+  .cta::before{
+    content:"";position:absolute;inset:auto -50% -80% -50%;height:200px;
+    background:radial-gradient(ellipse at 50% 0%,rgba(239,68,68,.18),transparent 70%);
+    pointer-events:none;
+  }
+  .cta h2{font-size:clamp(28px,4vw,42px);font-weight:800;letter-spacing:-.02em;margin-bottom:16px;}
+  .cta p{color:var(--text-soft);margin-bottom:32px;max-width:560px;margin-left:auto;margin-right:auto;}
+  .cta-version{
+    display:inline-flex;align-items:center;gap:10px;margin-top:24px;
+    padding:8px 16px;border-radius:999px;
+    background:rgba(255,255,255,.04);border:1px solid var(--border);
+    font-size:13px;color:var(--text-soft);
+  }
+  .cta-version code{
+    background:rgba(239,68,68,.12);padding:2px 8px;border-radius:6px;
+    color:var(--red-300);font-family:'JetBrains Mono',Consolas,monospace;font-size:12px;
+  }
+
+  /* ========== Footer ========== */
+  footer{
+    border-top:1px solid var(--border);
+    padding:40px 24px;
+    text-align:center;
+    color:var(--text-mute);font-size:13px;
+  }
+  footer a{color:var(--text-soft);transition:color .2s;}
+  footer a:hover{color:var(--red-300);}
+  footer .foot-links{display:flex;gap:24px;justify-content:center;margin-bottom:14px;flex-wrap:wrap;}
+
+  /* ========== Animations ========== */
+  @keyframes fadeInUp{
+    from{opacity:0;transform:translateY(24px);}
+    to{opacity:1;transform:translateY(0);}
+  }
+  @keyframes pulse{
+    0%,100%{box-shadow:0 0 0 4px rgba(239,68,68,.18);}
+    50%{box-shadow:0 0 0 8px rgba(239,68,68,.05);}
+  }
+  @keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
+
+  .reveal{opacity:0;transform:translateY(28px);transition:opacity .8s ease,transform .8s ease;}
+  .reveal.in{opacity:1;transform:none;}
+</style>
+</head>
+<body>
+<div class="bg-deco"></div>
+<div class="bg-grid"></div>
+
+<!-- ========== Nav ========== -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="#" class="brand">
+      <span class="brand-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      </span>
+      Purely Music
+    </a>
+    <div class="nav-links">
+      <a href="#features">功能</a>
+      <a href="#auto-fetch">自动获取</a>
+      <a href="#tech">技术栈</a>
+      <a href="https://github.com/eason204646-droid/purely-music" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/eason204646-droid/purely-music/releases" target="_blank" rel="noopener" class="nav-cta">下载</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ========== Hero ========== -->
+<section class="hero">
+  <div class="hero-badge">
+    <span class="dot"></span>
+    <span>v2.3 · 开源 · Material 3</span>
+  </div>
+  <h1>
+    纯粹聆听<br/>
+    <span class="grad">本地音乐的所有可能</span>
+  </h1>
+  <p class="lead">
+    一款使用 Kotlin、Jetpack Compose 与 Material 3 打造的开源 Android 本地音乐播放器。
+    自动补全封面与歌词、沉浸式播放体验、专辑歌单一站管理 —— 让你重新爱上本地音乐。
+  </p>
+  <div class="hero-actions">
+    <a href="https://github.com/eason204646-droid/purely-music/releases" target="_blank" rel="noopener" class="btn btn-primary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      立即下载 APK
+    </a>
+    <a href="https://github.com/eason204646-droid/purely-music" target="_blank" rel="noopener" class="btn btn-ghost">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.9 1.2 1.9 1.2 1.1 1.9 2.9 1.4 3.6 1 .1-.8.4-1.4.8-1.7-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/></svg>
+      在 GitHub 上查看
+    </a>
+  </div>
+  <div class="hero-meta">
+    <div class="meta-item"><div class="meta-num">100%</div><div class="meta-label">本地播放</div></div>
+    <div class="meta-item"><div class="meta-num">0</div><div class="meta-label">广告 / 追踪</div></div>
+    <div class="meta-item"><div class="meta-num">2</div><div class="meta-label">语言支持</div></div>
+    <div class="meta-item"><div class="meta-num">Mulan PSL v2</div><div class="meta-label">开源协议</div></div>
+  </div>
+
+  <!-- Phone mockup -->
+  <div class="showcase">
+    <div class="phone">
+      <div class="phone-screen">
+        <div class="phone-cover">
+          <div class="album-disc"></div>
+        </div>
+        <div class="phone-info">
+          <div class="track-title">Now Playing · 当前播放</div>
+          <div class="track-artist">Purely Music · 沉浸式音乐体验</div>
+          <div class="progress"></div>
+          <div class="controls">
+            <span class="ctrl-btn"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></span>
+            <span class="ctrl-btn ctrl-play"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>
+            <span class="ctrl-btn"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== Features ========== -->
+<section id="features" class="block">
+  <div class="section-head reveal">
+    <span class="section-tag">Features</span>
+    <h2 class="section-title">一切围绕「听好本地音乐」</h2>
+    <p class="section-sub">从导入、识别到播放、歌词与歌单管理，每一步都为纯粹聆听而生。</p>
+  </div>
+
+  <div class="feat-grid">
+    <div class="feat-card reveal">
+      <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+      <h3>本地音乐导入</h3>
+      <p>支持单曲与批量导入，导入后自动复制音频、封面、歌词到应用私有目录，避免被系统清理或权限失效后丢失。</p>
+      <ul>
+        <li>批量导入音频文件</li>
+        <li>元数据缺失时弹窗补全</li>
+        <li>按专辑信息自动归档</li>
+      </ul>
+    </div>
+
+    <div class="feat-card reveal">
+      <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/><polyline points="21 4 21 10 15 10"/></svg></div>
+      <h3>自动获取信息</h3>
+      <p>当前版本最突出的能力 —— 根据元数据自动联网补全封面与歌词。</p>
+      <ul>
+        <li>网易云 / 混合 双数据源切换</li>
+        <li>导入与手动保存均接入</li>
+        <li>开关持久化保存</li>
+      </ul>
+    </div>
+
+    <div class="feat-card reveal">
+      <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+      <h3>沉浸式播放器</h3>
+      <p>基于 Media3 / ExoPlayer，封面 / 歌词 / 队列三视图自由切换，背景按封面生成模糊沉浸效果。</p>
+      <ul>
+        <li>顺序播放与单曲循环</li>
+        <li>系统媒体会话与通知栏控制</li>
+        <li>常驻 Mini Player 与下滑返回</li>
+      </ul>
+    </div>
+
+    <div class="feat-card reveal">
+      <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h16"/><circle cx="19" cy="14" r="2"/></svg></div>
+      <h3>歌词能力</h3>
+      <p>LRC 解析与同步滚动，点击跳转、单行/多行样式、当前行发光、敏感词过滤一应俱全。</p>
+      <ul>
+        <li>非中文歌词翻译</li>
+        <li>翻译日志查看</li>
+        <li>样式偏好持久化</li>
+      </ul>
+    </div>
+
+    <div class="feat-card reveal">
+      <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></div>
+      <h3>资料库与歌单</h3>
+      <p>歌曲、播放列表、专辑分类管理，自定义歌单、自定义封面、拖拽排序、专辑详情整张播放。</p>
+      <ul>
+        <li>首页最近播放</li>
+        <li>歌单封面自定义</li>
+        <li>歌单内拖拽排序</li>
+      </ul>
+    </div>
+
+    <div class="feat-card reveal">
+      <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></div>
+      <h3>设置与个性化</h3>
+      <p>中 / 英双语切换，自动获取源、自动获取开关、歌词样式与发光、过滤偏好均可持久化保存。</p>
+      <ul>
+        <li>中文 / English 切换</li>
+        <li>主题深浅适配</li>
+        <li>内置帮助文档</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ========== Auto-fetch highlight ========== -->
+<section id="auto-fetch" class="block">
+  <div class="highlight reveal">
+    <div class="highlight-grid">
+      <div>
+        <span class="section-tag" style="margin-bottom:18px;">Flagship Feature</span>
+        <h2>导入即识别<br/><span class="grad">自动补全封面与歌词</span></h2>
+        <p>无论是单曲导入还是资料库批量导入，Purely Music 都会根据音频元数据中的歌名与歌手联网补全信息 —— 不再有匿名的灰色封面与孤独的纯音轨。</p>
+        <ul class="check-list">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span><strong>双数据源切换</strong> · 默认网易云稳定优先，混合源补充曲库覆盖。</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span><strong>封面 + 歌词同步获取</strong> · 自动下载并关联到歌曲，导入即播。</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span><strong>手动保存也走自动流</strong> · 歌名歌手完整时优先尝试在线匹配。</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span><strong>开关可控</strong> · 设置页一键关闭，纯本地模式同样自由。</span></li>
+        </ul>
+      </div>
+      <div class="fetch-demo">
+        <div class="fetch-row">
+          <div class="fetch-cover"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+          <div class="fetch-info">
+            <div class="fetch-title">夜空中最亮的星</div>
+            <div class="fetch-meta">逃跑计划 · 自动补全完成</div>
+          </div>
+          <span class="fetch-status">封面 ✓ 歌词 ✓</span>
+        </div>
+        <div class="fetch-row">
+          <div class="fetch-cover" style="background:linear-gradient(135deg,#7c3aed,#dc2626);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+          <div class="fetch-info">
+            <div class="fetch-title">起风了</div>
+            <div class="fetch-meta">买辣椒也用券 · 自动补全完成</div>
+          </div>
+          <span class="fetch-status">封面 ✓ 歌词 ✓</span>
+        </div>
+        <div class="fetch-row">
+          <div class="fetch-cover" style="background:linear-gradient(135deg,#f59e0b,#dc2626);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+          <div class="fetch-info">
+            <div class="fetch-title">海阔天空</div>
+            <div class="fetch-meta">Beyond · 正在匹配...</div>
+          </div>
+          <span class="fetch-status loading">获取中</span>
+        </div>
+        <div class="fetch-row">
+          <div class="fetch-cover" style="background:linear-gradient(135deg,#06b6d4,#dc2626);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+          <div class="fetch-info">
+            <div class="fetch-title">Lemon</div>
+            <div class="fetch-meta">米津玄師 · 含翻译歌词</div>
+          </div>
+          <span class="fetch-status">封面 ✓ 歌词 ✓</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== Tech ========== -->
+<section id="tech" class="block">
+  <div class="section-head reveal">
+    <span class="section-tag">Tech Stack</span>
+    <h2 class="section-title">现代 Android 工程实践</h2>
+    <p class="section-sub">基于 Jetpack Compose 与 Media3，依托 Room、Coil、Retrofit 等成熟组件构建。</p>
+  </div>
+  <div class="tech-grid">
+    <div class="tech-pill"><div class="tech-name">Kotlin</div><div class="tech-role">主语言</div></div>
+    <div class="tech-pill"><div class="tech-name">Jetpack Compose</div><div class="tech-role">UI 框架</div></div>
+    <div class="tech-pill"><div class="tech-name">Material 3</div><div class="tech-role">设计系统</div></div>
+    <div class="tech-pill"><div class="tech-name">Media3 / ExoPlayer</div><div class="tech-role">播放引擎</div></div>
+    <div class="tech-pill"><div class="tech-name">Room</div><div class="tech-role">本地数据库</div></div>
+    <div class="tech-pill"><div class="tech-name">Coil</div><div class="tech-role">图片加载</div></div>
+    <div class="tech-pill"><div class="tech-name">Retrofit</div><div class="tech-role">网络请求</div></div>
+    <div class="tech-pill"><div class="tech-name">Markwon</div><div class="tech-role">Markdown 渲染</div></div>
+    <div class="tech-pill"><div class="tech-name">Gradle KTS</div><div class="tech-role">构建系统</div></div>
+  </div>
+</section>
+
+<!-- ========== Download CTA ========== -->
+<div class="cta reveal">
+  <h2>准备好开始纯粹聆听了吗？</h2>
+  <p>从 Releases 直接下载最新 APK，或克隆仓库自行构建 —— 我们对所有平台的玩家都同等开放。</p>
+  <div class="hero-actions">
+    <a href="https://github.com/eason204646-droid/purely-music/releases" target="_blank" rel="noopener" class="btn btn-primary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      下载最新 Release
+    </a>
+    <a href="https://ifdian.net/a/purelymusic" target="_blank" rel="noopener" class="btn btn-ghost">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.7-4.35-9-8.28C1.18 9.7 3.1 5.5 7.26 5.5c2.05 0 3.58 1.1 4.74 2.66 1.16-1.56 2.69-2.66 4.74-2.66 4.16 0 6.08 4.2 4.26 7.22C18.7 16.65 12 21 12 21z"/></svg>
+      爱发电支持
+    </a>
+    <a href="https://github.com/eason204646-droid/purely-music" target="_blank" rel="noopener" class="btn btn-ghost">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.9 1.2 1.9 1.2 1.1 1.9 2.9 1.4 3.6 1 .1-.8.4-1.4.8-1.7-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/></svg>
+      访问 GitHub 仓库
+    </a>
+  </div>
+  <div class="cta-version">
+    <span>当前版本</span>
+    <code>v2.3</code>
+    <span>·</span>
+    <span>minSdk 26 · targetSdk 36</span>
+  </div>
+</div>
+
+<!-- ========== Footer ========== -->
+<footer>
+  <div class="foot-links">
+    <a href="https://github.com/eason204646-droid/purely-music" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/eason204646-droid/purely-music/releases" target="_blank" rel="noopener">Releases</a>
+    <a href="https://github.com/eason204646-droid/purely-music/issues" target="_blank" rel="noopener">Issues</a>
+    <a href="http://license.coscl.org.cn/MulanPSL2" target="_blank" rel="noopener">Mulan PSL v2</a>
+  </div>
+  <div>© 2026 Purely Music · 开源音乐播放器 · Built with Kotlin & Jetpack Compose</div>
+</footer>
+
+<script>
+  // Reveal-on-scroll
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+</script>
+</body>
+</html>

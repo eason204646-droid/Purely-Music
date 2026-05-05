@@ -134,6 +134,8 @@ fun LyricView(
         // 使用固定的行高，避免因字体大小变化导致的行高差异
         // 设置更大的行高以容纳24sp的粗体字体
         val fixedLineHeight = 60.sp
+        val translationFontSizeBase = 16f
+        val translationLineHeight = (translationFontSizeBase * 1.4f).sp
         val fixedLineHeightPx = with(density) { fixedLineHeight.toPx() }
         val itemSpacingPx = with(density) { 8.dp.toPx() }
 
@@ -237,10 +239,11 @@ fun LyricView(
 
                     // 所有歌词使用统一的字体大小，确保排版完全一致
                     val fontSize = 24f
-                    val translationFontSize = 16f // 翻译字体更小
+                    val translationFontSizeBase = 16f // 翻译字体更小
 
                     // 根据是否为续行调整行高：续行使用更小的行高，其他行使用较大行高
                     val actualLineHeight = if (line.isContinuation) 28.sp else fixedLineHeight
+                    val actualTranslationLineHeight = translationLineHeight
 
                     // 透明度动画也添加延迟，形成波浪效果
                     val textAlpha by animateFloatAsState(
@@ -297,7 +300,8 @@ fun LyricView(
 
                     Column(
                         modifier = Modifier
-                            .padding(top = if (line.isContinuation) 0.dp else 8.dp)
+                            .fillMaxWidth()
+                            .padding(top = if (line.isContinuation) 0.dp else 8.dp, end = 12.dp)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
@@ -328,6 +332,7 @@ fun LyricView(
                                 ) else null
                             ),
                             modifier = Modifier
+                                .fillMaxWidth()
                                 .alpha(textAlpha)
                                 .blur(radius = blurAmount.dp)
                         )
@@ -342,12 +347,13 @@ fun LyricView(
                             
                             Text(
                                 text = displayTranslation,
-                                fontSize = translationFontSize.sp,
-                                lineHeight = (translationFontSize * 1.4f).sp,
+                                fontSize = translationFontSizeBase.sp,
+                                lineHeight = actualTranslationLineHeight,
                                 fontWeight = FontWeight.Normal,
                                 color = Color.White.copy(alpha = 0.7f),
                                 textAlign = TextAlign.Start,
                                 modifier = Modifier
+                                    .fillMaxWidth()
                                     .padding(top = 4.dp)
                                     .alpha(textAlpha)
                                     .blur(radius = blurAmount.dp)

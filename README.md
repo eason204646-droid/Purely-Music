@@ -1,109 +1,117 @@
 # Purely Music
 
-[项目地址](https://github.com/eason204646-droid/Purely-Music)
+[GitHub 仓库](https://github.com/eason204646-droid/purely-music)
 
-一款开源的 Android 音乐播放器，采用现代化的 UI 设计，支持本地音乐播放、歌单管理、歌词显示等功能。
+Purely Music 是一款开源 Android 本地音乐播放器，使用 Kotlin、Jetpack Compose 和 Material 3 构建，围绕本地导入、自动补全信息、歌词体验和播放质感持续打磨。
 
-## 特性
+## 当前功能概览
 
-### 核心功能
+### 1. 本地音乐导入
 
-*   🎵 **本地音乐播放** - 支持导入和管理本地音乐文件
-*   📝 **歌词显示** - 支持 LRC 格式歌词同步显示，可切换封面/歌词视图
-*   📚 **歌单管理** - 创建、编辑和管理自定义歌单
-*   🔍 **歌曲编辑** - 支持编辑歌曲信息（标题、歌手、封面、歌词）
-*   🎨 **精美 UI** - 采用红色主题，简洁大气的设计风格
-*   🌙 **深色模式** - 自动适配系统深色模式
-*   🔔 **媒体通知** - 完整的媒体通知栏支持，包括进度条拖动
-*   📻 **后台播放** - 支持后台持续播放
-*   🎭 **封面虚化** - 播放界面背景使用歌曲封面虚化效果
+- 支持单曲导入
+- 支持批量导入音频文件
+- 导入后会将音乐、封面、歌词复制到应用私有目录，避免系统清理或权限失效后丢失
+- 如果音频元数据不完整，会弹出补充信息界面手动完善
 
-### 界面特点
+### 2. 自动获取信息
 
-*   **资料库页** - 展示所有歌单和歌曲，支持网格视图
-*   **播放列表详情** - 美观的封面展示，支持顺序/随机播放
-*   **播放界面** - 沉浸式设计，支持下滑返回手势
-*   **歌词界面** - 歌词高亮显示，自动滚动定位
-*   **底部播放条** - MiniPlayer 悬浮播放控制
+这是当前版本最突出的能力之一。
 
-### 交互优化
+- 可根据音频元数据中的歌名、歌手自动联网补全信息
+- 可自动获取歌曲封面
+- 可自动获取歌词文件并关联到歌曲
+- 设置页可切换自动获取源：
+  - `网易云`：默认方案，优先稳定性
+  - `混合`：用于曲库覆盖补充
+- 设置页可开启或关闭“从元数据自动获取封面和歌词”
+- 在单曲导入和资料库导入入口中都接入了自动获取流程
+- 手动保存歌曲时，如果歌名和歌手完整，也会优先尝试自动获取封面与歌词
 
-*   长按歌曲显示操作菜单（收藏、编辑、删除）
-*   长按歌单显示操作菜单（删除）
-*   直接在歌单详情页添加/删除歌曲
-*   流畅的页面切换和动画效果
+### 3. 播放与播放器体验
 
-## 截图预览
+- 使用 Media3 / ExoPlayer 播放本地音频
+- 支持播放 / 暂停 / 上一首 / 下一首
+- 支持顺序播放与单曲循环
+- 支持系统媒体会话控制
+- 支持通知栏 / 系统侧的播放控制与进度拖动
+- Mini Player 常驻底部，支持快速进入播放器
+- 播放详情页支持下滑返回
+- 播放页支持封面视图、歌词视图、播放队列视图切换
+- 背景会根据封面生成模糊沉浸效果
 
-### 🎵 播放界面
+### 4. 歌词能力
 
-<img width="393" height="699" alt="MuMuPlayer_lh9U1kT32c" src="https://p6-xtjj-sign.byteimg.com/tos-cn-i-73owjymdk6/3e5a00227d94469895678325e6dcf456~tplv-73owjymdk6-jj-mark-v1:0:0:0:0:5o6Y6YeR5oqA5pyv56S-5Yy6IEAg55So5oi3NDYxMDExNTkxMzc=:q75.awebp?rk3s=f64ab15b&x-expires=1771201864&x-signature=ez9fZn7B%2Bvpovl3GKTeTo39OugA%3D">
+- 支持 LRC 歌词解析与同步滚动
+- 支持点击歌词跳转播放进度
+- 支持多行歌词样式
+- 支持单行歌词样式
+- 支持当前歌词发光效果开关
+- 支持歌词敏感词过滤
+- 非中文歌词支持翻译功能
+- 提供翻译日志查看入口
 
-沉浸式播放体验，背景采用歌曲封面虚化效果，支持下滑返回手势
+### 5. 资料库与内容管理
 
-### 📝 歌词界面
+- 首页展示最近播放与全部歌曲
+- 资料库页展示歌曲、播放列表、专辑
+- 支持创建自定义播放列表
+- 支持为播放列表设置封面
+- 支持在播放列表详情页添加歌曲
+- 支持从播放列表中删除歌曲
+- 支持拖拽排序播放列表内歌曲
+- 支持专辑详情页查看与整张播放
+- 导入歌曲时会根据专辑信息自动归档专辑
 
-<img width="393" height="699" alt="MuMuPlayer_MpZjTnjalZ" src="https://p6-xtjj-sign.byteimg.com/tos-cn-i-73owjymdk6/1f6d8b6b63e24118ab51302d10b84610~tplv-73owjymdk6-jj-mark-v1:0:0:0:0:5o6Y6YeR5oqA5pyv56S-5Yy6IEAg55So5oi3NDYxMDExNTkxMzc=:q75.awebp?rk3s=f64ab15b&x-expires=1771201864&x-signature=TEx%2FoGjocYxSMYXVJryeKLUyBCM%3D">
+### 6. 设置与个性化
 
-支持 LRC 格式歌词同步显示，歌词高亮显示并自动滚动定位，可切换封面/歌词视图
+- 支持中文 / English 双语言切换
+- 支持自动获取源切换
+- 支持自动获取开关持久化保存
+- 支持歌词样式、歌词发光、歌词过滤等偏好持久化保存
+- 内置帮助文档查看
 
-### 🏠 主页
+## 界面特性
 
-<img width="393" height="699" alt="MuMuPlayer_lh9U1kT32c" src="https://p6-xtjj-sign.byteimg.com/tos-cn-i-73owjymdk6/59ae8f68cd0d455a9afa45f1704e9adf~tplv-73owjymdk6-jj-mark-v1:0:0:0:0:5o6Y6YeR5oqA5pyv56S-5Yy6IEAg55So5oi3NDYxMDExNTkxMzc=:q75.awebp?rk3s=f64ab15b&x-expires=1771201864&x-signature=baNLDYlniRQEP68Ncn2N%2FfbAAhU%3D">
-
-简洁大气的主页设计，底部 MiniPlayer 悬浮播放控制，方便快捷
-
-### 📚 资料库
-
-<img width="393" height="699" alt="MuMuPlayer_prqatopbzX" src="https://p6-xtjj-sign.byteimg.com/tos-cn-i-73owjymdk6/efb791b57022425b8b7a940696083607~tplv-73owjymdk6-jj-mark-v1:0:0:0:0:5o6Y6YeR5oqA5pyv56S-5Yy6IEAg55So5oi3NDYxMDExNTkxMzc=:q75.awebp?rk3s=f64ab15b&x-expires=1771201864&x-signature=KSN34oC9KR8gKAsxYd%2Blljf0F7A%3D">
-
-展示所有歌单和歌曲，支持网格视图，美观的封面展示
+- 红色主视觉主题
+- 深浅主题适配
+- Material 3 风格界面
+- 封面大卡片与沉浸式播放器布局
+- 资料库歌单 / 专辑横向卡片展示
+- 更现代的底部导航与 Mini Player 组合
 
 ## 技术栈
 
-*   **语言**: Kotlin
-*   **UI 框架**: Jetpack Compose
-*   **设计系统**: Material 3
-*   **播放引擎**: Media3 (ExoPlayer)
-*   **数据库**: Room
-*   **图片加载**: Coil
-*   **依赖管理**: Gradle (Kotlin DSL)
+- **语言**：Kotlin
+- **UI**：Jetpack Compose
+- **设计系统**：Material 3
+- **播放引擎**：Media3 / ExoPlayer
+- **数据库**：Room
+- **图片加载**：Coil
+- **网络请求**：Retrofit
+- **Markdown 渲染**：Markwon
+- **构建系统**：Gradle Kotlin DSL
 
-## 开发环境
+## 当前版本信息
 
-*   Android Studio Hedgehog | 2023.1.1 或更高版本
-*   JDK 17 或更高版本
-*   Android SDK 35 (compileSdkVersion 35)
-*   最低支持 Android 8.0 (API 26)
+- **applicationId**：`com.music.purelymusic`
+- **minSdk**：26
+- **targetSdk / compileSdk**：36
+- **versionName**：`2.3`
+- **versionCode**：24
 
 ## 构建
 
 ```bash
-# 克隆项目
-git clone https://github.com/eason204646-droid/Purely-Music.git
-
-# 进入项目目录
-cd Purely-Music
-
-# 构建项目
+git clone https://github.com/eason204646-droid/purely-music.git
+cd purely-music
 ./gradlew assembleDebug
-
-# 安装到设备
-./gradlew installDebug
 ```
+
+## 下载
+
+- 仓库主页：https://github.com/eason204646-droid/purely-music
+- Releases：https://github.com/eason204646-droid/purely-music/releases
 
 ## 许可证
 
 本项目采用 [Mulan PSL v2](http://license.coscl.org.cn/MulanPSL2) 开源许可证。
-
-## 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
-## 联系方式
-
-*   GitHub: [@eason204646-droid](https://github.com/eason204646-droid)
-
-***
-
-**享受音乐，享受生活！** 🎵

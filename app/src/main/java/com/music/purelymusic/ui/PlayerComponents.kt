@@ -1,4 +1,4 @@
-﻿//Copyright (c) [2026] [eason204646]
+//Copyright (c) [2026] [eason204646]
 //[purelymusic] is licensed under Mulan PSL v2.
 //You can use this software according to the terms and conditions of the Mulan
 //PSL v2.
@@ -100,7 +100,7 @@ fun BottomPlayerBar(viewModel: PlayerViewModel, onClick: () -> Unit) {
             // 播放/暂停快捷按钮
             IconButton(onClick = { viewModel.togglePlayPause() }) {
                 Icon(
-                    imageVector = if (viewModel.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    imageVector = if (viewModel.isActuallyPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = null,
                     modifier = Modifier.size(32.dp)
                 )

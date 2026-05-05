@@ -1,4 +1,4 @@
-﻿//Copyright (c) [2026] [eason204646]
+//Copyright (c) [2026] [eason204646]
 //[purelymusic] is licensed under Mulan PSL v2.
 //You can use this software according to the terms and conditions of the Mulan
 //PSL v2.
@@ -334,7 +334,18 @@ fun MainScreen(viewModel: PlayerViewModel) {
                 }
 
                 composable("player") {
-                    PlayerScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+                    PlayerScreen(
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() },
+                        onNavigateToEqualizer = { navController.navigate("equalizer") }
+                    )
+                }
+
+                composable("equalizer") {
+                    EqualizerScreen(
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() }
+                    )
                 }
 
                 composable("settings") {
@@ -346,7 +357,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
             }
 
             AnimatedVisibility(
-                visible = viewModel.currentSong != null && currentRoute != "player",
+                visible = viewModel.currentSong != null && currentRoute != "player" && currentRoute != "equalizer",
                 enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
                 modifier = Modifier

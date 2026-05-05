@@ -23,6 +23,7 @@ import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.MediaMetadataRetriever
 import android.media.Spatializer
+import android.media.audiofx.Equalizer
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
@@ -419,19 +420,36 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val playlistDao = AppDatabase.getDatabase(application).playlistDao()
     private val albumDao = AppDatabase.getDatabase(application).albumDao()
     private var exoPlayer: ExoPlayer? = null
+    private var transitionPlayer: ExoPlayer? = null
+    private var crossfadeJob: Job? = null
+    private var isCrossfadeInProgress = false
+    private var hasScheduledCrossfadeForCurrentSong = false
+    private var suppressNextEndedCallback = false
+    private val crossfadeDurationMs: Long
+        get() = crossfadeDurationSeconds * 1000L
+
+    var isActuallyPlaying by mutableStateOf(false)
+        private set
     @SuppressLint("RestrictedApi")
     private var mediaSession: MediaSessionCompat? = null
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlayingNow: Boolean) {
-            this@PlayerViewModel.isPlaying = isPlayingNow
-            updatePlaybackState(isPlayingNow)
+            syncPlaybackState()
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
+            syncPlaybackState()
             if (playbackState == Player.STATE_READY) {
                 this@PlayerViewModel.duration = exoPlayer?.duration ?: 0L
+                currentSong?.let { updateMediaSession(it) }
+                attachEqualizerToCurrentSession()
             } else if (playbackState == Player.STATE_ENDED) {
-                playNext()
+                if (suppressNextEndedCallback) {
+                    suppressNextEndedCallback = false
+                    return
+                }
+                if (isCrossfadeInProgress) return
+                playNextInternal(allowAutoCrossfade = false)
             }
         }
 
@@ -460,24 +478,107 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val existing = exoPlayer
         if (existing != null) return existing
 
-        val renderersFactory = DefaultRenderersFactory(context)
-            .setEnableDecoderFallback(true)
-            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
-        val player = ExoPlayer.Builder(context, renderersFactory).build()
-        val audioAttributes = ExoAudioAttributes.Builder()
-            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-            .setUsage(C.USAGE_MEDIA)
-            .build()
-        player.setAudioAttributes(audioAttributes, true)
-        player.volume = 1.0f
+        val player = createPlayer()
         player.addListener(playerListener)
         exoPlayer = player
         return player
     }
 
-    private fun setPlayerVolume(left: Float, right: Float) {
+    private fun createPlayer(): ExoPlayer {
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setEnableDecoderFallback(true)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+        return ExoPlayer.Builder(context, renderersFactory).build().apply {
+            val audioAttributes = ExoAudioAttributes.Builder()
+                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                .setUsage(C.USAGE_MEDIA)
+                .build()
+            setAudioAttributes(audioAttributes, true)
+            volume = 1.0f
+        }
+    }
+
+    private fun setPlayerVolume(player: ExoPlayer?, left: Float, right: Float) {
         val volume = ((left + right) / 2f).coerceIn(0.0f, 1.0f)
-        exoPlayer?.volume = volume
+        player?.volume = volume
+    }
+
+    private var equalizer: Equalizer? = null
+    private var equalizerSessionId: Int? = null
+    var equalizerBandLevels by mutableStateOf<List<Short>>(emptyList())
+        private set
+    var equalizerBandFrequencies by mutableStateOf<List<Pair<Int, Int>>>(emptyList())
+        private set
+    var equalizerLevelRange by mutableStateOf((-1500).toShort() to 1500.toShort())
+        private set
+
+    private fun attachEqualizerToCurrentSession() {
+        val sessionId = exoPlayer?.audioSessionId ?: return
+        if (sessionId == 0 || equalizerSessionId == sessionId) return
+
+        releaseEqualizer()
+
+        runCatching {
+            Equalizer(0, sessionId).apply {
+                enabled = true
+                equalizer = this
+                equalizerSessionId = sessionId
+                equalizerLevelRange = bandLevelRange[0] to bandLevelRange[1]
+                equalizerBandFrequencies = List(numberOfBands.toInt()) { band ->
+                    val range = getBandFreqRange(band.toShort())
+                    (range[0] / 1000) to (range[1] / 1000)
+                }
+                equalizerBandLevels = List(numberOfBands.toInt()) { band ->
+                    getBandLevel(band.toShort())
+                }
+            }
+        }.onFailure {
+            releaseEqualizer()
+        }
+    }
+
+    fun updateEqualizerBandLevel(bandIndex: Int, level: Short) {
+        val effect = equalizer ?: return
+        if (bandIndex !in equalizerBandLevels.indices) return
+        val clamped = level.coerceIn(equalizerLevelRange.first, equalizerLevelRange.second)
+        runCatching {
+            effect.setBandLevel(bandIndex.toShort(), clamped)
+        }.onSuccess {
+            equalizerBandLevels = equalizerBandLevels.toMutableList().apply {
+                this[bandIndex] = clamped
+            }
+        }
+    }
+
+    fun resetEqualizerBands() {
+        val effect = equalizer ?: return
+        val zeroLevel = 0.toShort().coerceIn(equalizerLevelRange.first, equalizerLevelRange.second)
+        repeat(equalizerBandLevels.size) { bandIndex ->
+            runCatching {
+                effect.setBandLevel(bandIndex.toShort(), zeroLevel)
+            }
+        }
+        equalizerBandLevels = List(equalizerBandLevels.size) { zeroLevel }
+    }
+
+    private fun releaseEqualizer() {
+        runCatching { equalizer?.release() }
+        equalizer = null
+        equalizerSessionId = null
+        equalizerBandLevels = emptyList()
+        equalizerBandFrequencies = emptyList()
+        equalizerLevelRange = (-1500).toShort() to 1500.toShort()
+    }
+
+    private fun setPlayerVolume(left: Float, right: Float) {
+        setPlayerVolume(exoPlayer, left, right)
+    }
+
+    private fun syncPlaybackState() {
+        val playingNow = exoPlayer?.isPlaying == true || transitionPlayer?.isPlaying == true || isCrossfadeInProgress
+        isPlaying = playingNow
+        isActuallyPlaying = playingNow
+        updatePlaybackState(playingNow)
     }
 
     // Android 12+ Spatializer 支持
@@ -647,6 +748,31 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             com.music.purelymusic.utils.PreferencesManager.saveAutoFetchMetadata(value)
         }
 
+    // 自动切歌交叉渐入渐出开关（带持久化）
+    private var _crossfadeEnabled by mutableStateOf(false)
+    var crossfadeEnabled: Boolean
+        get() = _crossfadeEnabled
+        set(value) {
+            _crossfadeEnabled = value
+            com.music.purelymusic.utils.PreferencesManager.saveCrossfadeEnabled(value)
+        }
+
+    private var _crossfadeDurationSeconds by mutableIntStateOf(3)
+    var crossfadeDurationSeconds: Int
+        get() = _crossfadeDurationSeconds
+        set(value) {
+            _crossfadeDurationSeconds = value.coerceIn(1, 10)
+            com.music.purelymusic.utils.PreferencesManager.saveCrossfadeDurationSeconds(_crossfadeDurationSeconds)
+        }
+
+    private var _equalizerEnabled by mutableStateOf(false)
+    var equalizerEnabled: Boolean
+        get() = _equalizerEnabled
+        set(value) {
+            _equalizerEnabled = value
+            com.music.purelymusic.utils.PreferencesManager.saveEqualizerEnabled(value)
+        }
+
     // 翻译API服务
     private val translateService: TranslateApiService by lazy {
         retrofit2.Retrofit.Builder()
@@ -667,7 +793,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         _lyricStyle = com.music.purelymusic.utils.PreferencesManager.getLyricStyle()
         _autoFetchSource = com.music.purelymusic.utils.PreferencesManager.getAutoFetchSource()
         _autoFetchMetadata = com.music.purelymusic.utils.PreferencesManager.getAutoFetchMetadata()
-        
+        _crossfadeEnabled = com.music.purelymusic.utils.PreferencesManager.getCrossfadeEnabled()
+        _crossfadeDurationSeconds = com.music.purelymusic.utils.PreferencesManager.getCrossfadeDurationSeconds()
+        _equalizerEnabled = com.music.purelymusic.utils.PreferencesManager.getEqualizerEnabled()
+
         // 初始化 MediaSession
         mediaSession = MediaSessionCompat(context, "purelymusic").apply {
             isActive = true
@@ -754,7 +883,153 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     // --- 播放控制逻辑 ---
+    private fun buildMediaItem(musicPath: String): MediaItem {
+        val uri = if (musicPath.startsWith("content://") || musicPath.startsWith("file://")) {
+            Uri.parse(musicPath)
+        } else {
+            Uri.fromFile(File(musicPath))
+        }
+        val mimeType = resolveMimeType(musicPath)
+        return MediaItem.Builder()
+            .setUri(uri)
+            .apply {
+                if (!mimeType.isNullOrBlank()) {
+                    setMimeType(mimeType)
+                }
+            }
+            .build()
+    }
+
+    private fun resetCrossfadeState() {
+        crossfadeJob?.cancel()
+        crossfadeJob = null
+        isCrossfadeInProgress = false
+        hasScheduledCrossfadeForCurrentSong = false
+        suppressNextEndedCallback = false
+        transitionPlayer?.release()
+        transitionPlayer = null
+        exoPlayer?.volume = 1.0f
+    }
+
+    private fun getCurrentSongIndex(): Int {
+        return currentPlayingList.indexOfFirst { it.id == currentSong?.id }
+    }
+
+    private fun getNextSongForPlayback(): Song? {
+        if (currentPlayingList.isEmpty()) return null
+        if (playMode == PlayMode.REPEAT_ONE) return currentSong
+        val idx = getCurrentSongIndex()
+        if (idx == -1) return null
+        val nextIdx = (idx + 1) % currentPlayingList.size
+        return currentPlayingList.getOrNull(nextIdx)
+    }
+
+    private fun beginAutoCrossfadeIfNeeded() {
+        val player = exoPlayer ?: return
+        if (!crossfadeEnabled || isCrossfadeInProgress || hasScheduledCrossfadeForCurrentSong) return
+        if (!player.isPlaying) return
+
+        val currentDuration = player.duration
+        val currentPositionMs = player.currentPosition
+        if (currentDuration <= crossfadeDurationMs || currentDuration <= 0L) return
+
+        val nextSong = getNextSongForPlayback() ?: return
+        if (nextSong.musicUri.isNullOrBlank()) return
+
+        val remaining = currentDuration - currentPositionMs
+        if (remaining > crossfadeDurationMs) return
+
+        hasScheduledCrossfadeForCurrentSong = true
+        startAutoCrossfade(nextSong)
+    }
+
+    private fun startAutoCrossfade(nextSong: Song) {
+        val outgoingPlayer = exoPlayer ?: return
+        val musicPath = nextSong.musicUri ?: return
+
+        crossfadeJob?.cancel()
+        crossfadeJob = viewModelScope.launch {
+            try {
+                val incomingPlayer = createPlayer().also { transitionPlayer = it }
+                incomingPlayer.setMediaItem(buildMediaItem(musicPath))
+                incomingPlayer.prepare()
+                incomingPlayer.volume = 0f
+                incomingPlayer.play()
+
+                isCrossfadeInProgress = true
+                suppressNextEndedCallback = true
+                this@PlayerViewModel.isPlaying = true
+                updateSongState(nextSong)
+                duration = incomingPlayer.duration.takeIf { it > 0L } ?: duration
+                updatePlaybackState(true)
+
+                val steps = 20
+                val stepDelay = (crossfadeDurationMs / steps).coerceAtLeast(50L)
+                repeat(steps) { index ->
+                    val progress = (index + 1) / steps.toFloat()
+                    setPlayerVolume(outgoingPlayer, 1f - progress, 1f - progress)
+                    setPlayerVolume(incomingPlayer, progress, progress)
+                    delay(stepDelay)
+                }
+
+                outgoingPlayer.removeListener(playerListener)
+                outgoingPlayer.stop()
+                outgoingPlayer.release()
+
+                incomingPlayer.addListener(playerListener)
+                exoPlayer = incomingPlayer
+                transitionPlayer = null
+                isCrossfadeInProgress = false
+                hasScheduledCrossfadeForCurrentSong = false
+                suppressNextEndedCallback = false
+                currentPosition = incomingPlayer.currentPosition
+                duration = incomingPlayer.duration.takeIf { it > 0L } ?: duration
+                this@PlayerViewModel.isPlaying = incomingPlayer.isPlaying
+                updatePlaybackState(incomingPlayer.isPlaying)
+                startSurroundEffect()
+            } catch (e: Exception) {
+                Log.e("Crossfade", "自动交叉渐入渐出失败: ${e.message}", e)
+                resetCrossfadeState()
+            }
+        }
+    }
+
+    private fun updateSongState(song: Song) {
+        currentSong = song
+        hasScheduledCrossfadeForCurrentSong = false
+
+        if (!song.lrcPath.isNullOrEmpty()) {
+            loadLyrics(song.lrcPath)
+        } else {
+            lyricLines = emptyList()
+        }
+
+        updateMediaSession(song)
+        updateBlurBackground(song.coverUri)
+
+        viewModelScope.launch {
+            songDao.updateSong(song.toEntity(System.currentTimeMillis()))
+        }
+    }
+
+    private fun playNextInternal(allowAutoCrossfade: Boolean) {
+        if (currentPlayingList.isEmpty()) return
+
+        if (playMode == PlayMode.REPEAT_ONE && currentSong != null) {
+            playSong(currentSong!!, false)
+            return
+        }
+
+        val nextSong = getNextSongForPlayback() ?: return
+        if (allowAutoCrossfade && crossfadeEnabled) {
+            startAutoCrossfade(nextSong)
+            return
+        }
+        playSong(nextSong, false)
+    }
+
     fun playSong(song: Song, updateInternalList: Boolean = true) {
+        resetCrossfadeState()
         if (updateInternalList) {
             currentPlayingList.clear()
             currentPlayingList.addAll(libraryList)
@@ -766,47 +1041,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         exoPlayer?.stop()
-        currentSong = song
+        updateSongState(song)
 
         Log.d("PlaySong", "开始播放歌曲: ${song.title}, 歌词路径: ${song.lrcPath}")
-
-        // 加载歌词
-        if (!song.lrcPath.isNullOrEmpty()) {
-            loadLyrics(song.lrcPath)
-        } else {
-            Log.d("PlaySong", "歌曲没有歌词路径")
-            lyricLines = emptyList()
-        }
-
-        updateMediaSession(song)
-        updateBlurBackground(song.coverUri)
 
         try {
             val player = getOrCreatePlayer()
             val musicPath = song.musicUri ?: return
-            val uri = if (musicPath.startsWith("content://") || musicPath.startsWith("file://")) {
-                Uri.parse(musicPath)
-            } else {
-                Uri.fromFile(File(musicPath))
-            }
-            val mimeType = resolveMimeType(musicPath)
-            val mediaItem = MediaItem.Builder()
-                .setUri(uri)
-                .apply {
-                    if (!mimeType.isNullOrBlank()) {
-                        setMimeType(mimeType)
-                    }
-                }
-                .build()
+            val mediaItem = buildMediaItem(musicPath)
             player.setMediaItem(mediaItem)
             player.prepare()
             player.volume = 1.0f
             player.play()
-
-            // 更新数据库播放时间
-            viewModelScope.launch {
-                songDao.updateSong(song.toEntity(System.currentTimeMillis()))
-            }
         } catch (e: Exception) {
             Log.e("PlayError", "播放失败: ${e.message}, 歌曲路径=${song.musicUri}")
         }
@@ -825,6 +1071,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     // 跳转到指定歌曲（不删除前面的播放历史）
     fun jumpToSong(song: Song) {
+        resetCrossfadeState()
         if (currentPlayingList.isEmpty()) return
         val index = currentPlayingList.indexOfFirst { it.id == song.id }
         if (index != -1) {
@@ -862,29 +1109,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 it.play()
                 startSurroundEffect()
             }
-            isPlaying = it.isPlaying
-            updatePlaybackState(isPlaying)
+            syncPlaybackState()
         }
     }
 
     fun playNext() {
-        if (currentPlayingList.isEmpty()) return
-
-        // 单曲循环模式
-        if (playMode == PlayMode.REPEAT_ONE && currentSong != null) {
-            playSong(currentSong!!, false)
-            return
-        }
-
-        // 顺序播放模式
-        val idx = currentPlayingList.indexOfFirst { it.id == currentSong?.id }
-        if (idx != -1) {
-            val nextIdx = (idx + 1) % currentPlayingList.size
-            playSong(currentPlayingList[nextIdx], false)
-        }
+        resetCrossfadeState()
+        playNextInternal(allowAutoCrossfade = false)
     }
 
     fun playPrevious() {
+        resetCrossfadeState()
         if (currentPlayingList.isEmpty()) return
         val idx = currentPlayingList.indexOfFirst { it.id == currentSong?.id }
         if (idx != -1) {
@@ -894,6 +1129,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun seekTo(pos: Float) {
+        resetCrossfadeState()
         exoPlayer?.seekTo(pos.toLong())
         currentPosition = pos.toLong()
         // 确保歌词索引立即更新，拖动进度条时自动导航到对应歌词
@@ -905,8 +1141,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             while (true) {
                 if (isPlaying) {
                     currentPosition = exoPlayer?.currentPosition ?: 0L
-                    // 🚩 核心修复：每秒钟同步一次给系统，确保锁屏进度条在走
-                    updatePlaybackState(true)
+                    beginAutoCrossfadeIfNeeded()
+                    syncPlaybackState()
                 }
                 delay(1000) // 1秒同步一次即可，减少性能开销
             }
@@ -1339,7 +1575,10 @@ private fun stopSurroundEffect() {
 
     override fun onCleared() {
         super.onCleared()
+        resetCrossfadeState()
         stop3DSurroundEffect()
+        releaseEqualizer()
+        syncPlaybackState()
         exoPlayer?.release()
         mediaSession?.release()
     }

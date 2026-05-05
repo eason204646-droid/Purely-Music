@@ -1,4 +1,4 @@
-﻿//Copyright (c) [2026] [eason204646]
+//Copyright (c) [2026] [eason204646]
 //[purelymusic] is licensed under Mulan PSL v2.
 //You can use this software according to the terms and conditions of the Mulan
 //PSL v2.
@@ -168,7 +168,7 @@ fun PlayerDetailScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                     modifier = Modifier.size(85.dp)
                 ) {
                     Icon(
-                        imageVector = if (viewModel.isPlaying) Icons.Default.PauseCircleFilled else Icons.Default.PlayCircleFilled,
+                        imageVector = if (viewModel.isActuallyPlaying) Icons.Default.PauseCircleFilled else Icons.Default.PlayCircleFilled,
                         contentDescription = null,
                         tint = Color.White,
                         modifier = Modifier.fillMaxSize()

@@ -1,8 +1,8 @@
-﻿//Copyright (c) [2026] [eason204646]
+//Copyright (c) [2026] [eason204646]
 //[purelymusic] is licensed under Mulan PSL v2.
 //You can use this software according to the terms and conditions of the Mulan
 //PSL v2.
-//You may obtain a copy ，of Mulan PSL v2 at:
+//You may obtain a copy of Mulan PSL v2 at:
 //         http://license.coscl.org.cn/MulanPSL2
 //THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
 //KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
@@ -11,7 +11,7 @@
 //
 //Mulan Permissive Software License，Version 2
 //
-//Mulan Permissive Software License，Version 2
+//Mulan Permissive Software License，Version 2 (Mulan PSL v2)
 //
 //January 2020 http://license.coscl.org.cn/MulanPSL2
 package com.music.purelymusic.ui
@@ -55,9 +55,13 @@ import com.music.purelymusic.ui.utils.AppDimensions
 
 @OptIn(UnstableApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
+fun PlayerScreen(
+    viewModel: PlayerViewModel,
+    onBack: () -> Unit,
+    onNavigateToEqualizer: () -> Unit
+) {
     val currentSong = viewModel.currentSong
-    val isPlaying = viewModel.isPlaying
+    val isPlaying = viewModel.isActuallyPlaying
     var showLyrics by remember { mutableStateOf(false) }
 
     Box(
@@ -222,6 +226,20 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                         tint = Color.White.copy(alpha = 0.9f),
                         modifier = Modifier.size(AppDimensions.iconM())
                     )
+                }
+
+                if (viewModel.equalizerEnabled) {
+                    IconButton(
+                        onClick = onNavigateToEqualizer,
+                        modifier = Modifier.size(AppDimensions.iconButtonSizeS())
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Equalizer,
+                            contentDescription = if (viewModel.currentLanguage == "zh") "均衡器" else "Equalizer",
+                            tint = Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.size(AppDimensions.iconM())
+                        )
+                    }
                 }
             }
 
