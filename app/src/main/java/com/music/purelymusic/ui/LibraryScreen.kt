@@ -66,6 +66,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.runtime.Composable
 import androidx.media3.common.util.UnstableApi
 import com.music.purelymusic.ui.utils.AppDimensions
+import com.music.purelymusic.ui.utils.rememberWindowSizeClass
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalFoundationApi::class)
@@ -322,8 +323,14 @@ fun LibraryScreen(
                     .padding(bottom = AppDimensions.spacingM())
             )
 
+            // 🚩 v2.5: 自适应列数 — 手机固定2列，大屏自动更多
+            val gridColumns = when (rememberWindowSizeClass().widthSize) {
+                com.music.purelymusic.ui.utils.WindowSize.EXPANDED -> GridCells.Adaptive(200.dp)
+                com.music.purelymusic.ui.utils.WindowSize.MEDIUM -> GridCells.Adaptive(200.dp)
+                else -> GridCells.Fixed(2)
+            }
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(180.dp), // 🚩 v2.5: 自适应列数，大屏自动更多列
+                columns = gridColumns,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = AppDimensions.paddingScreen()),
                 horizontalArrangement = Arrangement.spacedBy(AppDimensions.libraryGridSpacing()),

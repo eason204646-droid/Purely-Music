@@ -1,0 +1,532 @@
+edited app/src/main/java/com/music/purelymusic/ui/PlayerScreen.kt (12037→20876 chars)
+@@ -132,219 +132,364 @@
+          // --- 内容层 ---
+-         Column(
+-             modifier = Modifier
+-                 .fillMaxSize()
+-                 .statusBarsPadding()
+-                 .navigationBarsPadding(),
+-             horizontalAlignment = Alignment.CenterHorizontally
+-         ) {
+-             // 顶部提示条
+-             Box(modifier = Modifier.fillMaxWidth().padding(top = AppDimensions.spacingXS()), contentAlignment = Alignment.Center) {
+-                 Box(modifier = Modifier.width(AppDimensions.iconM()).height(AppDimensions.spacingXS()).background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(AppDimensions.spacingXS())))
+-             }
+- 
+-             // 1. 歌词/封面显示区域 (保持较大权重)
+-             Box(
++         if (isLandscape) {
++             // 🚩 v2.5: 横屏大屏模式 — 左半部分播放控件，右半部分滚动歌词
++             Row(
+                  modifier = Modifier
+-                     .weight(3.0f)
+-                     .fillMaxWidth()
+-                     .padding(horizontal = AppDimensions.playerCoverPadding()),
+-                 contentAlignment = Alignment.Center
++                     .fillMaxSize()
++                     .statusBarsPadding()
++                     .navigationBarsPadding()
+              ) {
+-                 Crossfade(targetState = viewModel.showPlaylist, label = "ContentSwitch") { showPlaylist ->
+-                     if (showPlaylist) {
+-                         PlaylistView(viewModel = viewModel, modifier = Modifier.fillMaxSize())
+-                     } else {
+-                         Box(
+-                             modifier = Modifier.fillMaxSize(),
+-                             contentAlignment = Alignment.Center
++                 // 左侧：封面 + 信息 + 进度 + 控制
++                 Column(
++                     modifier = Modifier
++                         .weight(0.4f)
++                         .fillMaxHeight()
++                         .padding(start = AppDimensions.playerCoverPadding(), end = AppDimensions.spacingM()),
++                     horizontalAlignment = Alignment.CenterHorizontally,
++                     verticalArrangement = Arrangement.Center
++                 ) {
++                     Spacer(modifier = Modifier.weight(0.3f))
++ 
++                     // 封面
++                     Surface(
++                         modifier = Modifier
++                             .fillMaxWidth(0.8f)
++                             .aspectRatio(1f),
++                         shape = RoundedCornerShape(AppDimensions.cornerRadiusL()),
++                         shadowElevation = AppDimensions.elevationL()
++                     ) {
++                         AsyncImage(
++                             model = currentSong?.coverUri ?: R.drawable.default_cover,
++                             contentDescription = null,
++                             contentScale = ContentScale.Crop
++                         )
++                     }
++ 
++                     Spacer(modifier = Modifier.height(AppDimensions.spacingM()))
++ 
++                     // 歌曲信息 + 收藏
++                     Row(
++                         modifier = Modifier.fillMaxWidth(),
++                         verticalAlignment = Alignment.CenterVertically
++                     ) {
++                         Column(modifier = Modifier.weight(1f)) {
++                             Text(text = currentSong?.title ?: stringResource(R.string.unknown_track), color = Color.White, fontSize = AppDimensions.textXL().value.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
++                             Text(text = currentSong?.artist ?: stringResource(R.string.unknown_artist), color = Color.White.copy(alpha = 0.8f), fontSize = AppDimensions.textM().value.sp)
++                         }
++                         val currentFav = currentSong?.isFavorite ?: false
++                         IconButton(
++                             onClick = { currentSong?.let { viewModel.toggleFavorite(it) } },
++                             modifier = Modifier.size(AppDimensions.iconButtonSizeS())
+                          ) {
+-                             androidx.compose.animation.AnimatedVisibility(
+-                                 visible = !showLyrics,
+-                                 enter = fadeIn(
+-                                     animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic)
+-                                 ) + scaleIn(
+-                                     animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic),
+-                                     initialScale = 0.95f
+-                                 ),
+-                                 exit = fadeOut(
+-                                     animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic)
+-                                 ) + scaleOut(
+-                                     animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic),
+-                                     targetScale = 1.05f
+-                                 ),
+-                                 modifier = Modifier.fillMaxWidth(0.85f)
+-                             ) {
+-                                 Surface(
+-                                     modifier = Modifier.fillMaxWidth().aspectRatio(1f).clickable { showLyrics = true },
+-                                     shape = RoundedCornerShape(AppDimensions.cornerRadiusL()),
+-                                     shadowElevation = AppDimensions.elevationL()
+-                                 ) {
+-                                     AsyncImage(
+-                                         model = currentSong?.coverUri ?: R.drawable.default_cover,
+-                                         contentDescription = null,
+-                                         contentScale = ContentScale.Crop
+-                                     )
++                             Icon(
++                                 imageVector = if (currentFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
++                                 contentDescription = null,
++                                 tint = if (currentFav) Color(0xFFE53935) else Color.White.copy(alpha = 0.9f),
++                                 modifier = Modifier.size(AppDimensions.iconM())
++                             )
++                         }
++                     }
++ 
++                     Spacer(modifier = Modifier.height(AppDimensions.spacingM()))
++ 
++                     // 进度条
++                     Slider(
++                         value = viewModel.currentPosition.toFloat(),
++                         onValueChange = { viewModel.seekTo(it) },
++                         valueRange = 0f..(viewModel.duration.toFloat().coerceAtLeast(1f)),
++                         colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.3f)),
++                         modifier = Modifier.fillMaxWidth()
++                     )
++                     Row(modifier = Modifier.fillMaxWidth()) {
++                         Text(formatTime(viewModel.currentPosition), color = Color.White.copy(alpha = 0.6f), fontSize = AppDimensions.textS().value.sp)
++                         Spacer(modifier = Modifier.weight(1f))
++                         Text(formatTime(viewModel.duration), color = Color.White.copy(alpha = 0.6f), fontSize = AppDimensions.textS().value.sp)
++                     }
++ 
++                     Spacer(modifier = Modifier.height(AppDimensions.spacingM()))
++ 
++                     // 播放控制
++                     Row(
++                         modifier = Modifier.fillMaxWidth(),
++                         horizontalArrangement = Arrangement.SpaceEvenly,
++                         verticalAlignment = Alignment.CenterVertically
++                     ) {
++                         IconButton(
++                             onClick = {
++                                 viewModel.playMode = when (viewModel.playMode) {
++                                     PlayerViewModel.PlayMode.SEQUENTIAL -> PlayerViewModel.PlayMode.REPEAT_ONE
++                                     PlayerViewModel.PlayMode.REPEAT_ONE -> PlayerViewModel.PlayMode.SEQUENTIAL
+                                  }
+-                             }
++                             },
++                             modifier = Modifier.size(AppDimensions.iconButtonSizeS())
++                         ) {
++                             Icon(
++                                 imageVector = if (viewModel.playMode == PlayerViewModel.PlayMode.REPEAT_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
++                                 contentDescription = stringResource(R.string.play_mode),
++                                 tint = Color.White.copy(alpha = 0.9f),
++                                 modifier = Modifier.size(AppDimensions.iconL())
++                             )
++                         }
+  
+-                             androidx.compose.animation.AnimatedVisibility(
+-                                 visible = showLyrics,
+-                                 enter = fadeIn(
+-                                     animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic)
+-                                 ) + scaleIn(
+-                                     animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic),
+-                                     initialScale = 0.95f
+-                                 ),
+-                                 exit = fadeOut(
+-                                     animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic)
+-                                 ) + scaleOut(
+-                                     animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic),
+-                                     targetScale = 1.05f
+-                                 ),
+-                                 modifier = Modifier.fillMaxSize()
+-                             ) {
+-                                 LyricView(viewModel = viewModel, modifier = Modifier.fillMaxSize())
++                         IconButton(onClick = { viewModel.playPrevious() }, modifier = Modifier.size(AppDimensions.iconButtonSizeL())) {
++                             Icon(Icons.Default.SkipPrevious, null, tint = Color.White, modifier = Modifier.size(AppDimensions.playerControlIconSize()))
++                         }
++ 
++                         Surface(
++                             onClick = { viewModel.togglePlayPause() },
++                             shape = CircleShape,
++                             color = Color.White.copy(alpha = 0.15f),
++                             modifier = Modifier.size(AppDimensions.playerPlayButtonSize())
++                         ) {
++                             Box(contentAlignment = Alignment.Center) {
++                                 Icon(
++                                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
++                                     contentDescription = null,
++                                     tint = Color.White,
++                                     modifier = Modifier.size(AppDimensions.playerPlayIconSize())
++                                 )
+                              }
++                         }
++ 
++                         IconButton(onClick = { viewModel.playNext() }, modifier = Modifier.size(AppDimensions.iconButtonSizeL())) {
++                             Icon(Icons.Default.SkipNext, null, tint = Color.White, modifier = Modifier.size(AppDimensions.playerControlIconSize()))
++                         }
++ 
++                         IconButton(onClick = { viewModel.showPlaylist = !viewModel.showPlaylist }, modifier = Modifier.size(AppDimensions.iconButtonSizeS())) {
++                             Icon(Icons.Default.PlaylistPlay, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(AppDimensions.iconL()))
+                          }
+                      }
+-                 }
+-             }
+  
+-             // 2. 歌曲信息区域 + 模式切换按钮
+-             Row(
+-                 modifier = Modifier.fillMaxWidth().padding(horizontal = AppDimensions.playerCoverPadding(), vertical = AppDimensions.spacingS()),
+-                 verticalAlignment = Alignment.CenterVertically
+-             ) {
+-                 Column(modifier = Modifier.weight(1f)) {
+-                     Text(text = currentSong?.title ?: stringResource(R.string.unknown_track), color = Color.White, fontSize = AppDimensions.textXXL().value.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+-                     Text(text = currentSong?.artist ?: stringResource(R.string.unknown_artist), color = Color.White.copy(alpha = 0.8f), fontSize = AppDimensions.textM().value.sp)
++                     Spacer(modifier = Modifier.weight(0.3f))
+                  }
+  
+-                 // 🚩 v2.5: 收藏按钮
+-                 val currentFav = currentSong?.isFavorite ?: false
+-                 IconButton(
+-                     onClick = { currentSong?.let { viewModel.toggleFavorite(it) } },
+-                     modifier = Modifier.size(AppDimensions.iconButtonSizeS())
++                 // 右侧：歌词（始终显示）
++                 Box(
++                     modifier = Modifier
++                         .weight(0.6f)
++                         .fillMaxHeight()
++                         .padding(end = AppDimensions.playerCoverPadding())
+                  ) {
+-                     Icon(
+-                         imageVector = if (currentFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+-                         contentDescription = if (viewModel.currentLanguage == "zh") "收藏" else "Favorite",
+-                         tint = if (currentFav) Color(0xFFE53935) else Color.White.copy(alpha = 0.9f),
+-                         modifier = Modifier.size(AppDimensions.iconM())
+-                     )
++                     LyricView(viewModel = viewModel, modifier = Modifier.fillMaxSize())
++                 }
++             }
++         } else {
++             // 手机/竖屏 — 保持原有纵向布局
++             Column(
++                 modifier = Modifier
++                     .fillMaxSize()
++                     .statusBarsPadding()
++                     .navigationBarsPadding(),
++                 horizontalAlignment = Alignment.CenterHorizontally
++             ) {
++                 // 顶部提示条
++                 Box(modifier = Modifier.fillMaxWidth().padding(top = AppDimensions.spacingXS()), contentAlignment = Alignment.Center) {
++                     Box(modifier = Modifier.width(AppDimensions.iconM()).height(AppDimensions.spacingXS()).background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(AppDimensions.spacingXS())))
+                  }
+  
+-                 IconButton(
+-                     onClick = {
+-                         if (viewModel.showPlaylist) {
+-                             viewModel.showPlaylist = false
+-                             showLyrics = true
++                 // 1. 歌词/封面显示区域
++                 Box(
++                     modifier = Modifier
++                         .weight(3.0f)
++                         .fillMaxWidth()
++                         .padding(horizontal = AppDimensions.playerCoverPadding()),
++                     contentAlignment = Alignment.Center
++                 ) {
++                     Crossfade(targetState = viewModel.showPlaylist, label = "ContentSwitch") { showPlaylist ->
++                         if (showPlaylist) {
++                             PlaylistView(viewModel = viewModel, modifier = Modifier.fillMaxSize())
+                          } else {
+-                             showLyrics = !showLyrics
++                             Box(
++                                 modifier = Modifier.fillMaxSize(),
++                                 contentAlignment = Alignment.Center
++                             ) {
++                                 androidx.compose.animation.AnimatedVisibility(
++                                     visible = !showLyrics,
++                                     enter = fadeIn(
++                                         animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic)
++                                     ) + scaleIn(
++                                         animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic),
++                                         initialScale = 0.95f
++                                     ),
++                                     exit = fadeOut(
++                                         animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic)
++                                     ) + scaleOut(
++                                         animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic),
++                                         targetScale = 1.05f
++                                     ),
++                                     modifier = Modifier.fillMaxWidth(0.85f)
++                                 ) {
++                                     Surface(
++                                         modifier = Modifier.fillMaxWidth().aspectRatio(1f).clickable { showLyrics = true },
++                                         shape = RoundedCornerShape(AppDimensions.cornerRadiusL()),
++                                         shadowElevation = AppDimensions.elevationL()
++                                     ) {
++                                         AsyncImage(
++                                             model = currentSong?.coverUri ?: R.drawable.default_cover,
++                                             contentDescription = null,
++                                             contentScale = ContentScale.Crop
++                                         )
++                                     }
++                                 }
++ 
++                                 androidx.compose.animation.AnimatedVisibility(
++                                     visible = showLyrics,
++                                     enter = fadeIn(
++                                         animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic)
++                                     ) + scaleIn(
++                                         animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic),
++                                         initialScale = 0.95f
++                                     ),
++                                     exit = fadeOut(
++                                         animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic)
++                                     ) + scaleOut(
++                                         animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic),
++                                         targetScale = 1.05f
++                                     ),
++                                     modifier = Modifier.fillMaxSize()
++                                 ) {
++                                     LyricView(viewModel = viewModel, modifier = Modifier.fillMaxSize())
++                                 }
++                             }
+                          }
+-                     },
+-                     modifier = Modifier.size(AppDimensions.iconButtonSizeS())
+-                 ) {
+-                     Icon(
+-                         imageVector = if (showLyrics) Icons.Default.Album else Icons.Default.Notes,
+-                         contentDescription = stringResource(R.string.mode_switch),
+-                         tint = Color.White.copy(alpha = 0.9f),
+-                         modifier = Modifier.size(AppDimensions.iconM())
+-                     )
++                     }
+                  }
+  
+-                 if (viewModel.equalizerEnabled) {
++                 // 2. 歌曲信息区域 + 模式切换按钮
++                 Row(
++                     modifier = Modifier.fillMaxWidth().padding(horizontal = AppDimensions.playerCoverPadding(), vertical = AppDimensions.spacingS()),
++                     verticalAlignment = Alignment.CenterVertically
++                 ) {
++                     Column(modifier = Modifier.weight(1f)) {
++                         Text(text = currentSong?.title ?: stringResource(R.string.unknown_track), color = Color.White, fontSize = AppDimensions.textXXL().value.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
++                         Text(text = currentSong?.artist ?: stringResource(R.string.unknown_artist), color = Color.White.copy(alpha = 0.8f), fontSize = AppDimensions.textM().value.sp)
++                     }
++ 
++                     // 🚩 v2.5: 收藏按钮
++                     val currentFav = currentSong?.isFavorite ?: false
+                      IconButton(
+-                         onClick = onNavigateToEqualizer,
++                         onClick = { currentSong?.let { viewModel.toggleFavorite(it) } },
+                          modifier = Modifier.size(AppDimensions.iconButtonSizeS())
+                      ) {
+                          Icon(
+-                             imageVector = Icons.Default.Equalizer,
+-                             contentDescription = if (viewModel.currentLanguage == "zh") "均衡器" else "Equalizer",
+-                             tint = Color.White.copy(alpha = 0.9f),
++                             imageVector = if (currentFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
++                             contentDescription = if (viewModel.currentLanguage == "zh") "收藏" else "Favorite",
++                             tint = if (currentFav) Color(0xFFE53935) else Color.White.copy(alpha = 0.9f),
+                              modifier = Modifier.size(AppDimensions.iconM())
+                          )
+                      }
+-                 }
+-             }
+- 
+-             // 3. 进度条区域
+-             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = AppDimensions.playerCoverPadding())) {
+-                 Slider(
+-                     value = viewModel.currentPosition.toFloat(),
+-                     onValueChange = { viewModel.seekTo(it) },
+-                     valueRange = 0f..(viewModel.duration.toFloat().coerceAtLeast(1f)),
+-                     colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.3f))
+-                 )
+-                 Row(modifier = Modifier.fillMaxWidth()) {
+-                     Text(formatTime(viewModel.currentPosition), color = Color.White.copy(alpha = 0.6f), fontSize = AppDimensions.textS().value.sp)
+-                     Spacer(modifier = Modifier.weight(1f))
+-                     Text(formatTime(viewModel.duration), color = Color.White.copy(alpha = 0.6f), fontSize = AppDimensions.textS().value.sp)
+-                 }
+-             }
+  
+-             // 4. 底部控制区
+-             Box(
+-                 modifier = Modifier
+-                     .weight(1.5f)
+-                     .fillMaxWidth(),
+-                 contentAlignment = Alignment.Center
+-             ) {
+-                 Row(
+-                     modifier = Modifier.fillMaxWidth().padding(horizontal = AppDimensions.paddingScreen()),
+-                     horizontalArrangement = Arrangement.SpaceEvenly,
+-                     verticalAlignment = Alignment.CenterVertically
+-                 ) {
+                      IconButton(
+                          onClick = {
+-                             viewModel.playMode = when (viewModel.playMode) {
+-                                 PlayerViewModel.PlayMode.SEQUENTIAL -> PlayerViewModel.PlayMode.REPEAT_ONE
+-                                 PlayerViewModel.PlayMode.REPEAT_ONE -> PlayerViewModel.PlayMode.SEQUENTIAL
++                             if (viewModel.showPlaylist) {
++                                 viewModel.showPlaylist = false
++                                 showLyrics = true
++                             } else {
++                                 showLyrics = !showLyrics
+                              }
+                          },
+-                         modifier = Modifier.size(AppDimensions.iconButtonSizeM())
++                         modifier = Modifier.size(AppDimensions.iconButtonSizeS())
+                      ) {
+                          Icon(
+-                             imageVector = if (viewModel.playMode == PlayerViewModel.PlayMode.REPEAT_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
+-                             contentDescription = stringResource(R.string.play_mode),
++                             imageVector = if (showLyrics) Icons.Default.Album else Icons.Default.Notes,
++                             contentDescription = stringResource(R.string.mode_switch),
+                              tint = Color.White.copy(alpha = 0.9f),
+-                             modifier = Modifier.size(AppDimensions.iconL())
++                             modifier = Modifier.size(AppDimensions.iconM())
+                          )
+                      }
+  
+-                     IconButton(onClick = { viewModel.playPrevious() }, modifier = Modifier.size(AppDimensions.iconButtonSizeXL())) {
+-                         Icon(Icons.Default.SkipPrevious, null, tint = Color.White, modifier = Modifier.size(AppDimensions.playerControlIconSize()))
++                     if (viewModel.equalizerEnabled) {
++                         IconButton(
++                             onClick = onNavigateToEqualizer,
++                             modifier = Modifier.size(AppDimensions.iconButtonSizeS())
++                         ) {
++                             Icon(
++                                 imageVector = Icons.Default.Equalizer,
++                                 contentDescription = if (viewModel.currentLanguage == "zh") "均衡器" else "Equalizer",
++                                 tint = Color.White.copy(alpha = 0.9f),
++                                 modifier = Modifier.size(AppDimensions.iconM())
++                             )
++                         }
+                      }
++                 }
+  
+-                     Surface(
+-                         onClick = { viewModel.togglePlayPause() },
+-                         shape = CircleShape,
+-                         color = Color.White.copy(alpha = 0.15f),
+-                         modifier = Modifier.size(AppDimensions.playerPlayButtonSize())
++                 // 3. 进度条区域
++                 Column(modifier = Modifier.fillMaxWidth().padding(horizontal = AppDimensions.playerCoverPadding())) {
++                     Slider(
++                         value = viewModel.currentPosition.toFloat(),
++                         onValueChange = { viewModel.seekTo(it) },
++                         valueRange = 0f..(viewModel.duration.toFloat().coerceAtLeast(1f)),
++                         colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.3f))
++                     )
++                     Row(modifier = Modifier.fillMaxWidth()) {
++                         Text(formatTime(viewModel.currentPosition), color = Color.White.copy(alpha = 0.6f), fontSize = AppDimensions.textS().value.sp)
++                         Spacer(modifier = Modifier.weight(1f))
++                         Text(formatTime(viewModel.duration), color = Color.White.copy(alpha = 0.6f), fontSize = AppDimensions.textS().value.sp)
++                     }
++                 }
++ 
++                 // 4. 底部控制区
++                 Box(
++                     modifier = Modifier
++                         .weight(1.5f)
++                         .fillMaxWidth(),
++                     contentAlignment = Alignment.Center
++                 ) {
++                     Row(
++                         modifier = Modifier.fillMaxWidth().padding(horizontal = AppDimensions.paddingScreen()),
++                         horizontalArrangement = Arrangement.SpaceEvenly,
++                         verticalAlignment = Alignment.CenterVertically
+                      ) {
+-                         Box(contentAlignment = Alignment.Center) {
++                         IconButton(
++                             onClick = {
++                                 viewModel.playMode = when (viewModel.playMode) {
++                                     PlayerViewModel.PlayMode.SEQUENTIAL -> PlayerViewModel.PlayMode.REPEAT_ONE
++                                     PlayerViewModel.PlayMode.REPEAT_ONE -> PlayerViewModel.PlayMode.SEQUENTIAL
++                                 }
++                             },
++                             modifier = Modifier.size(AppDimensions.iconButtonSizeM())
++                         ) {
+                              Icon(
+-                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+-                                 contentDescription = null,
+-                                 tint = Color.White,
+-                                 modifier = Modifier.size(AppDimensions.playerPlayIconSize())
++                                 imageVector = if (viewModel.playMode == PlayerViewModel.PlayMode.REPEAT_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
++                                 contentDescription = stringResource(R.string.play_mode),
++                                 tint = Color.White.copy(alpha = 0.9f),
++                                 modifier = Modifier.size(AppDimensions.iconL())
+                              )
+                          }
+-                     }
+  
+-                     IconButton(onClick = { viewModel.playNext() }, modifier = Modifier.size(AppDimensions.iconButtonSizeXL())) {
+-                         Icon(Icons.Default.SkipNext, null, tint = Color.White, modifier = Modifier.size(AppDimensions.playerControlIconSize()))
+-                     }
++                         IconButton(onClick = { viewModel.playPrevious() }, modifier = Modifier.size(AppDimensions.iconButtonSizeXL())) {
++                             Icon(Icons.Default.SkipPrevious, null, tint = Color.White, modifier = Modifier.size(AppDimensions.playerControlIconSize()))
++                         }
+  
+-                     IconButton(onClick = { viewModel.showPlaylist = !viewModel.showPlaylist }, modifier = Modifier.size(AppDimensions.iconButtonSizeM())) {
+-                         Icon(Icons.Default.PlaylistPlay, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(AppDimensions.iconL()))
++                         Surface(
++                             onClick = { viewModel.togglePlayPause() },
++                             shape = CircleShape,
++                             color = Color.White.copy(alpha = 0.15f),
++                             modifier = Modifier.size(AppDimensions.playerPlayButtonSize())
++                         ) {
++                             Box(contentAlignment = Alignment.Center) {
++                                 Icon(
++                                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
++                                     contentDescription = null,
++                                     tint = Color.White,
++                                     modifier = Modifier.size(AppDimensions.playerPlayIconSize())
++                                 )
++                             }
++                         }
++ 
++                         IconButton(onClick = { viewModel.playNext() }, modifier = Modifier.size(AppDimensions.iconButtonSizeXL())) {
++                             Icon(Icons.Default.SkipNext, null, tint = Color.White, modifier = Modifier.size(AppDimensions.playerControlIconSize()))
++                         }
++ 
++                         IconButton(onClick = { viewModel.showPlaylist = !viewModel.showPlaylist }, modifier = Modifier.size(AppDimensions.iconButtonSizeM())) {
++                             Icon(Icons.Default.PlaylistPlay, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(AppDimensions.iconL()))
++                         }
+                      }
+                  }
+-             }
+  
+-             Spacer(modifier = Modifier.height(AppDimensions.spacingL()))
++                 Spacer(modifier = Modifier.height(AppDimensions.spacingL()))
++             }
+          }
+      }
+  }
+  
+  private fun formatTime
