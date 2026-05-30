@@ -209,6 +209,20 @@ fun PlayerScreen(
                     Text(text = currentSong?.artist ?: stringResource(R.string.unknown_artist), color = Color.White.copy(alpha = 0.8f), fontSize = AppDimensions.textM().value.sp)
                 }
 
+                // 🚩 v2.5: 收藏按钮
+                val currentFav = currentSong?.isFavorite ?: false
+                IconButton(
+                    onClick = { currentSong?.let { viewModel.toggleFavorite(it) } },
+                    modifier = Modifier.size(AppDimensions.iconButtonSizeS())
+                ) {
+                    Icon(
+                        imageVector = if (currentFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (viewModel.currentLanguage == "zh") "收藏" else "Favorite",
+                        tint = if (currentFav) Color(0xFFE53935) else Color.White.copy(alpha = 0.9f),
+                        modifier = Modifier.size(AppDimensions.iconM())
+                    )
+                }
+
                 IconButton(
                     onClick = {
                         if (viewModel.showPlaylist) {

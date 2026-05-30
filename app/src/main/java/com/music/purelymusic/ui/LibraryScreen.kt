@@ -39,6 +39,9 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Favorite // 🚩 v2.5
+import androidx.compose.material.icons.filled.Search // 🚩 v2.5
+import androidx.compose.material.icons.filled.Clear // 🚩 v2.5
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -184,6 +187,8 @@ fun LibraryScreen(
     }
 
     var showMenu by remember { mutableStateOf(false) }
+    // 🚩 v2.5: 收藏/全部 切换
+    var showFavoritesOnly by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background
@@ -277,6 +282,46 @@ fun LibraryScreen(
                 }
             }
 
+            // 🚩 v2.5: 搜索栏
+            // 切 Tab 时若已有搜索词则重新搜索（限域到当前 Tab）
+            if (viewModel.searchQuery.isNotBlank()) {
+                LaunchedEffect(showFavoritesOnly) {
+                    viewModel.performSearch(viewModel.searchQuery, onlyFavorites = showFavoritesOnly)
+                }
+            }
+            OutlinedTextField(
+                value = viewModel.searchQuery,
+                onValueChange = { viewModel.performSearch(it, onlyFavorites = showFavoritesOnly) },
+                placeholder = {
+                    Text(
+                        if (viewModel.currentLanguage == "zh") "搜索歌曲或歌手..." else "Search songs or artists...",
+                        color = Color.Gray
+                    )
+                },
+                leadingIcon = {
+                    Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray)
+                },
+                trailingIcon = {
+                    if (viewModel.searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.performSearch("") }) {
+                            Icon(Icons.Default.Clear, contentDescription = null, tint = Color.Gray)
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(AppDimensions.cornerRadiusL()),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFFE53935),
+                    unfocusedBorderColor = Color(0xFFE0E0E0),
+                    focusedTextColor = Color.Black,
+                    unfocusedTextColor = Color.Black,
+                    cursorColor = Color(0xFFE53935)
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = AppDimensions.spacingM())
+            )
+
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 modifier = Modifier.fillMaxSize(),
@@ -337,15 +382,89 @@ fun LibraryScreen(
                 }
 
                 item(span = { GridItemSpan(2) }) {
-                    Text(
-                        text = if (viewModel.currentLanguage == "zh") "歌曲" else "Songs",
-                        fontSize = AppDimensions.homeSectionTitleSize().value.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = AppDimensions.spacingXS())
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(AppDimensions.spacingM()),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (viewModel.currentLanguage == "zh") "歌曲" else "Songs",
+                            fontSize = AppDimensions.homeSectionTitleSize().value.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        // 🚩 v2.5: 全部/收藏 Tab 切换
+                        Surface(
+                            onClick = { showFavoritesOnly = false },
+                            shape = RoundedCornerShape(AppDimensions.cornerRadiusM()),
+                            color = if (!showFavoritesOnly) Color(0xFFE53935) else Color(0xFFF5F5F5)
+                        ) {
+                            Text(
+                                text = if (viewModel.currentLanguage == "zh") "全部" else "All",
+                                color = if (!showFavoritesOnly) Color.White else Color.Black,
+                                fontSize = AppDimensions.textS().value.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                            )
+                        }
+                        Surface(
+                            onClick = { showFavoritesOnly = true },
+                            shape = RoundedCornerShape(AppDimensions.cornerRadiusM()),
+                            color = if (showFavoritesOnly) Color(0xFFE53935) else Color(0xFFF5F5F5)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Favorite,
+                                    contentDescription = null,
+                                    tint = if (showFavoritesOnly) Color.White else Color.Black,
+                                    modifier = Modifier.size(AppDimensions.iconS())
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (viewModel.currentLanguage == "zh") "收藏" else "Fav",
+                                    color = if (showFavoritesOnly) Color.White else Color.Black,
+                                    fontSize = AppDimensions.textS().value.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
                 }
 
-                items(viewModel.libraryList) { song ->
+                // 🚩 v2.5: 根据搜索状态和 Tab 切换显示歌曲
+                val displayList = when {
+                    viewModel.searchQuery.isNotBlank() -> viewModel.searchResults
+                    showFavoritesOnly -> viewModel.favoriteSongs
+                    else -> viewModel.libraryList
+                }
+
+                if (displayList.isEmpty()) {
+                    item(span = { GridItemSpan(2) }) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 48.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = when {
+                                    viewModel.searchQuery.isNotBlank() && viewModel.searchResults.isEmpty() ->
+                                        if (viewModel.currentLanguage == "zh") "未找到匹配的歌曲" else "No matching songs"
+                                    showFavoritesOnly ->
+                                        if (viewModel.currentLanguage == "zh") "还没有收藏歌曲" else "No favorite songs yet"
+                                    else -> if (viewModel.currentLanguage == "zh") "暂无歌曲，点击 ＋ 导入" else "No songs yet. Tap ＋ to import"
+                                },
+                                color = Color.Gray,
+                                fontSize = AppDimensions.textM().value.sp
+                            )
+                        }
+                    }
+                }
+
+                items(displayList) { song ->
                     SongGridItem(song, viewModel, onNavigateToPlayer)
                 }
             }
@@ -942,9 +1061,26 @@ fun SongGridItem(song: Song, viewModel: PlayerViewModel, onNavigateToPlayer: () 
             offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)
         ) {
             DropdownMenuItem(
-                text = { Text(if (viewModel.currentLanguage == "zh") "收藏" else "Favorite", color = Color.Black) },
-                leadingIcon = { Icon(Icons.Default.FavoriteBorder, null, tint = Color.Black, modifier = Modifier.size(AppDimensions.iconS())) },
-                onClick = { expanded = false }
+                text = { Text(
+                    if (viewModel.currentLanguage == "zh") {
+                        if (song.isFavorite) "取消收藏" else "收藏"
+                    } else {
+                        if (song.isFavorite) "Unfavorite" else "Favorite"
+                    },
+                    color = Color.Black
+                ) },
+                leadingIcon = {
+                    Icon(
+                        if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        null,
+                        tint = if (song.isFavorite) Color(0xFFE53935) else Color.Black,
+                        modifier = Modifier.size(AppDimensions.iconS())
+                    )
+                },
+                onClick = {
+                    viewModel.toggleFavorite(song)
+                    expanded = false
+                }
             )
             DropdownMenuItem(
                 text = { Text(if (viewModel.currentLanguage == "zh") "编辑" else "Edit", color = Color.Black) },

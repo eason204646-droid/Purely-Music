@@ -600,6 +600,25 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (index == -1) 0 else index
     }
 
+    // 🚩 v2.5: 搜索状态
+    var searchQuery by mutableStateOf("")
+    var searchResults by mutableStateOf<List<Song>>(emptyList())
+        private set
+
+    // 🚩 v2.5: 收藏列表
+    var favoriteSongs by mutableStateOf<List<Song>>(emptyList())
+        private set
+
+    // 🚩 v2.5: 睡眠定时器
+    var sleepTimerMinutes by mutableIntStateOf(0) // 0 = 关闭
+        private set
+    var sleepTimerRemainingSeconds by mutableIntStateOf(0)
+        private set
+    var sleepTimerActive by mutableStateOf(false)
+        private set
+    private var sleepTimerJob: kotlinx.coroutines.Job? = null
+    private var searchJob: kotlinx.coroutines.Job? = null // 🚩 v2.5: 搜索防抖
+
     var recentSongs = mutableStateListOf<Song>()
     var playlists = mutableStateListOf<Playlist>()
     var albums = mutableStateListOf<Album>()
@@ -1429,6 +1448,8 @@ private fun stopSurroundEffect() {
                         albums.addAll(albumEntityList.map { it.toAlbum() })
                     }
                 }
+                // 🚩 v2.5: 刷新收藏列表
+                refreshFavorites()
                 if (currentPlayingList.isEmpty()) {
                     currentPlayingList.clear()
                     currentPlayingList.addAll(libraryList)
@@ -1523,6 +1544,91 @@ private fun stopSurroundEffect() {
         editCoverUri = null
         editLrcUri = null
     }
+
+    // 🚩 v2.5: 切换收藏状态
+    fun toggleFavorite(song: Song) {
+        viewModelScope.launch {
+            val newFav = !song.isFavorite
+            songDao.updateSongFavorite(song.id, if (newFav) 1 else 0)
+            // 更新内存中的 libraryList
+            libraryList = libraryList.map {
+                if (it.id == song.id) it.copy(isFavorite = newFav) else it
+            }
+            // 如果收藏的是当前歌曲，也更新 currentSong
+            if (currentSong?.id == song.id) {
+                currentSong = currentSong?.copy(isFavorite = newFav)
+            }
+            // 如果切换前是收藏列表，刷新收藏
+            refreshFavorites()
+        }
+    }
+
+    // 🚩 v2.5: 刷新收藏列表（suspend，避免嵌套协程）
+    private suspend fun refreshFavorites() {
+        val favEntities = songDao.getFavoriteSongs()
+        favoriteSongs = favEntities.map { it.toSong() }
+    }
+
+    // 🚩 v2.5: 搜索歌曲（带300ms防抖，支持仅搜收藏）
+    fun performSearch(query: String, onlyFavorites: Boolean = false) {
+        searchQuery = query
+        searchJob?.cancel()
+        if (query.isBlank()) {
+            searchResults = emptyList()
+            return
+        }
+        searchJob = viewModelScope.launch {
+            delay(300L)
+            if (!isActive) return@launch
+            val results = if (onlyFavorites) {
+                songDao.searchFavoriteSongs(query)
+            } else {
+                songDao.searchSongs(query)
+            }
+            searchResults = results.map { it.toSong() }
+        }
+    }
+
+    // 🚩 v2.5: 睡眠定时器
+    fun startSleepTimer(minutes: Int) {
+        cancelSleepTimer()
+        if (minutes <= 0) return
+        sleepTimerMinutes = minutes
+        sleepTimerRemainingSeconds = minutes * 60
+        sleepTimerActive = true
+        sleepTimerJob = viewModelScope.launch {
+            while (sleepTimerRemainingSeconds > 0) {
+                delay(1000L)
+                // 🚩 主动检查协程是否被取消，避免取消后仍执行暂停
+                if (!isActive) break
+                sleepTimerRemainingSeconds--
+                if (sleepTimerRemainingSeconds <= 0) {
+                    // 到时：暂停播放
+                    if (isActuallyPlaying) {
+                        togglePlayPause()
+                    }
+                    sleepTimerActive = false
+                    sleepTimerMinutes = 0
+                }
+            }
+        }
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        sleepTimerActive = false
+        sleepTimerMinutes = 0
+        sleepTimerRemainingSeconds = 0
+    }
+
+    val sleepTimerDisplay: String
+        get() {
+            if (!sleepTimerActive) return ""
+            val mins = sleepTimerRemainingSeconds / 60
+            val secs = sleepTimerRemainingSeconds % 60
+            return String.format(java.util.Locale.getDefault(), "%02d:%02d", mins, secs)
+        }
 
     // --- 系统通知栏同步 ---
     private fun updateMediaSession(song: Song) {

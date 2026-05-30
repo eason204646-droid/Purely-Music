@@ -182,4 +182,15 @@ object PreferencesManager {
     fun saveEqualizerEnabled(enabled: Boolean) {
         prefs?.edit()?.putBoolean(KEY_EQUALIZER_ENABLED, enabled)?.apply()
     }
+
+    // 🚩 v2.5: 睡眠定时器默认时长（分钟），0 = 关闭
+    private const val KEY_SLEEP_TIMER_DEFAULT = "sleep_timer_default_minutes"
+
+    fun getSleepTimerDefaultMinutes(): Int {
+        return prefs?.getInt(KEY_SLEEP_TIMER_DEFAULT, 30) ?: 30
+    }
+
+    fun saveSleepTimerDefaultMinutes(minutes: Int) {
+        prefs?.edit()?.putInt(KEY_SLEEP_TIMER_DEFAULT, minutes.coerceIn(0, 120))?.apply()
+    }
 }

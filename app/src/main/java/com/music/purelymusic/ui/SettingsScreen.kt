@@ -58,6 +58,7 @@ fun SettingsScreen(
     var showHelpDialog by remember { mutableStateOf(false) }
     var helpDialogTitle by remember { mutableStateOf("") }
     var helpDialogContent by remember { mutableStateOf("") }
+    var showSleepTimerDialog by remember { mutableStateOf(false) } // 🚩 v2.5
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -120,6 +121,19 @@ fun SettingsScreen(
                     subtitle = if (viewModel.currentLanguage == "zh") "开启后可在播放界面进入均衡器" else "Enable access to the equalizer from the player screen",
                     checked = viewModel.equalizerEnabled,
                     onCheckedChange = { viewModel.equalizerEnabled = it }
+                )
+
+                // 🚩 v2.5: 睡眠定时器
+                val sleepTimerActive = viewModel.sleepTimerActive
+                val sleepTimerDisplay = viewModel.sleepTimerDisplay
+                SettingsOption(
+                    title = if (viewModel.currentLanguage == "zh") "睡眠定时器" else "Sleep Timer",
+                    subtitle = when {
+                        sleepTimerActive -> if (viewModel.currentLanguage == "zh") "剩余 $sleepTimerDisplay" else "$sleepTimerDisplay remaining"
+                        else -> if (viewModel.currentLanguage == "zh") "点击设置定时停止播放" else "Set timer to stop playback"
+                    },
+                    showChevron = true,
+                    onClick = { showSleepTimerDialog = true }
                 )
             }
 
@@ -404,6 +418,88 @@ fun SettingsScreen(
                 TextButton(onClick = { showLyricStyleDialog = false }) {
                     Text(
                         if (viewModel.currentLanguage == "zh") "取消" else "Cancel",
+                        color = Color(0xFFE53935)
+                    )
+                }
+            },
+            containerColor = Color(0xFFF5F5F5)
+        )
+    }
+
+    // 🚩 v2.5: 睡眠定时器弹窗
+    if (showSleepTimerDialog) {
+        val sleepOptions = listOf(
+            0 to if (viewModel.currentLanguage == "zh") "关闭" else "Off",
+            15 to if (viewModel.currentLanguage == "zh") "15 分钟" else "15 min",
+            30 to if (viewModel.currentLanguage == "zh") "30 分钟" else "30 min",
+            45 to if (viewModel.currentLanguage == "zh") "45 分钟" else "45 min",
+            60 to if (viewModel.currentLanguage == "zh") "60 分钟" else "60 min"
+        )
+
+        AlertDialog(
+            onDismissRequest = { showSleepTimerDialog = false },
+            title = {
+                Text(
+                    if (viewModel.currentLanguage == "zh") "睡眠定时器" else "Sleep Timer",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    sleepOptions.forEach { (minutes, label) ->
+                        val isSelected = !viewModel.sleepTimerActive && viewModel.sleepTimerMinutes == minutes
+                        val isActiveOption = viewModel.sleepTimerActive && viewModel.sleepTimerMinutes == minutes
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (minutes == 0) {
+                                        viewModel.cancelSleepTimer()
+                                    } else {
+                                        viewModel.startSleepTimer(minutes)
+                                    }
+                                    showSleepTimerDialog = false
+                                },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected || isActiveOption) Color(0xFFFFCDD2) else Color.White
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        label,
+                                        color = Color.Black,
+                                        fontWeight = if (isSelected || isActiveOption) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                    if (isActiveOption && minutes > 0) {
+                                        Text(
+                                            if (viewModel.currentLanguage == "zh") "剩余 ${viewModel.sleepTimerDisplay}" else "${viewModel.sleepTimerDisplay} remaining",
+                                            color = Color(0xFFE53935),
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                                if (isSelected || isActiveOption) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = Color(0xFFE53935)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSleepTimerDialog = false }) {
+                    Text(
+                        if (viewModel.currentLanguage == "zh") "关闭" else "Close",
                         color = Color(0xFFE53935)
                     )
                 }

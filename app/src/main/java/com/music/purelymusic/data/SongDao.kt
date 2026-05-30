@@ -31,6 +31,23 @@ interface SongDao {
 
     @Query("SELECT * FROM songs ORDER BY lastPlayedTime DESC LIMIT 10")
     suspend fun getRecentSongs(): List<SongEntity>
+
+    // 🚩 v2.5: 搜索歌曲（按歌名或歌手模糊匹配）
+    @Query("SELECT * FROM songs WHERE title LIKE '%' || :query || '%' OR artist LIKE '%' || :query || '%' ORDER BY id DESC")
+    suspend fun searchSongs(query: String): List<SongEntity>
+
+    // 🚩 v2.5: 获取收藏歌曲
+    @Query("SELECT * FROM songs WHERE isFavorite = 1 ORDER BY id DESC")
+    suspend fun getFavoriteSongs(): List<SongEntity>
+
+    // 🚩 v2.5: 在收藏中搜索
+    @Query("SELECT * FROM songs WHERE isFavorite = 1 AND (title LIKE '%' || :query || '%' OR artist LIKE '%' || :query || '%') ORDER BY id DESC")
+    suspend fun searchFavoriteSongs(query: String): List<SongEntity>
+
+    // 🚩 v2.5: 更新收藏状态
+    @Query("UPDATE songs SET isFavorite = :isFavorite WHERE id = :id")
+    suspend fun updateSongFavorite(id: Long, isFavorite: Int)
+
     @Delete
     suspend fun deleteSong(song: SongEntity)
 }

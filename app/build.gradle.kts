@@ -32,8 +32,8 @@ android {
         applicationId = "com.music.purelymusic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 25
-        versionName = "2.4"
+        versionCode = 26
+        versionName = "2.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {

@@ -27,7 +27,8 @@ data class Song(
     val coverUri: String? = null,
     val lrcPath: String? = null,
     val duration: Long = 0L, // 🚩 加上这个字段，解决 "No parameter" 报错
-    val album: String? = null // 🚩 新增：专辑名称
+    val album: String? = null, // 🚩 新增：专辑名称
+    val isFavorite: Boolean = false // 🚩 v2.5 新增：收藏状态
 )
 
 /**
@@ -42,7 +43,8 @@ fun SongEntity.toSong(): Song {
         musicUri = this.musicUri,
         lrcPath = this.lrcPath,
         duration = this.duration,
-        album = this.album
+        album = this.album,
+        isFavorite = this.isFavorite == 1 // 🚩 v2.5: 数据库存 0/1 转为 Boolean
     )
 }
 
@@ -60,7 +62,7 @@ fun Song.toEntity(lastPlayedTime: Long = 0): SongEntity {
         lrcPath = this.lrcPath,
         playCount = 0, // 默认播放次数为 0
         createdTime = System.currentTimeMillis(), // 默认创建时间为当前时间
-        isFavorite = 0, // 默认未收藏
+        isFavorite = if (this.isFavorite) 1 else 0, // 🚩 v2.5: 保留收藏状态
         duration = this.duration, // 使用 Song 中的时长（已经是 Long 类型，有默认值）
         album = this.album // 使用 Song 中的专辑
     )
