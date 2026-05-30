@@ -1441,18 +1441,21 @@ private fun stopSurroundEffect() {
                     playlists.addAll(playlistEntities.map { it.toPlaylist() })
                 }
 
-                // 获取专辑列表
-                albumDao.getAllAlbums().collect { albumEntityList ->
-                    withContext(Dispatchers.Main) {
-                        albums.clear()
-                        albums.addAll(albumEntityList.map { it.toAlbum() })
-                    }
-                }
-                // 🚩 v2.5: 刷新收藏列表
+                // 🚩 v2.5: 收藏列表必须放在 collect 前（collect 永不返回）
                 refreshFavorites()
                 if (currentPlayingList.isEmpty()) {
                     currentPlayingList.clear()
                     currentPlayingList.addAll(libraryList)
+                }
+
+                // 获取专辑列表（用独立协程避免阻塞后续逻辑）
+                launch(Dispatchers.IO) {
+                    albumDao.getAllAlbums().collect { albumEntityList ->
+                        withContext(Dispatchers.Main) {
+                            albums.clear()
+                            albums.addAll(albumEntityList.map { it.toAlbum() })
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 android.util.Log.e("refreshData", "Failed to refresh data: ${e.message}")

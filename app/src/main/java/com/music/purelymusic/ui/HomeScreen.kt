@@ -61,6 +61,7 @@ import com.music.purelymusic.model.Song
 import com.music.purelymusic.viewmodel.PlayerViewModel
 import com.music.purelymusic.R
 import com.music.purelymusic.ui.utils.AppDimensions
+import com.music.purelymusic.ui.utils.rememberWindowSizeClass
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -74,13 +75,21 @@ fun HomeScreen(
     onNavigateToCreatePlaylist: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    // 🚩 v2.5: 大屏限制内容宽度
+    val windowClass = rememberWindowSizeClass()
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
-            .padding(horizontal = AppDimensions.paddingScreen())
+            .background(Color.White),
+        contentAlignment = if (windowClass.isExpanded) Alignment.TopCenter else Alignment.TopStart
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (windowClass.isExpanded) Modifier.widthIn(max = 720.dp) else Modifier)
+                .padding(horizontal = AppDimensions.paddingScreen())
+        ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -207,6 +216,7 @@ fun HomeScreen(
                 SongItem(song = song, onClick = { viewModel.playSong(song) })
             }
         }
+        } // 🚩 v2.5: 关闭外层 Box
 
         // 监听文件选择，尝试读取元数据
         LaunchedEffect(viewModel.tempMusicUri) {

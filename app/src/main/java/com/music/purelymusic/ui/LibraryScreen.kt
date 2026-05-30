@@ -323,7 +323,7 @@ fun LibraryScreen(
             )
 
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
+                columns = GridCells.Adaptive(180.dp), // 🚩 v2.5: 自适应列数，大屏自动更多列
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = AppDimensions.paddingScreen()),
                 horizontalArrangement = Arrangement.spacedBy(AppDimensions.libraryGridSpacing()),
