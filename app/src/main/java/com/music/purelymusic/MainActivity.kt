@@ -22,6 +22,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import coil.ImageLoader
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -61,13 +64,25 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 配置 Coil 以支持 HTTP 协议
-        coil.ImageLoader.Builder(this)
+        // 配置 Coil 图片加载器（带缓存）
+        val imageLoader = ImageLoader.Builder(this)
+            .memoryCache {
+                MemoryCache.Builder(this)
+                    .maxSizePercent(0.25)
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(cacheDir.resolve("coil_cache"))
+                    .maxSizeBytes(50 * 1024 * 1024)
+                    .build()
+            }
             .okHttpClient {
                 okhttp3.OkHttpClient.Builder()
                     .build()
             }
             .build()
+        coil.Coil.setImageLoader(imageLoader)
 
         setContent {
             AMPlayerTheme {
@@ -362,7 +377,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = if (currentRoute == "home" || currentRoute == "library") AppDimensions.spacingS() else AppDimensions.paddingSmall())
+                    .padding(bottom = if (currentRoute == "home" || currentRoute == "library" || currentRoute == "settings") AppDimensions.miniPlayerNavBarSpacing() else AppDimensions.paddingSmall())
             ) {
                 MiniPlayer(
                     viewModel = viewModel,

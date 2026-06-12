@@ -187,6 +187,15 @@ fun LibraryScreen(
         )
     }
 
+    if (viewModel.showAddSongDialog) {
+        AddToPlaylistDialog(
+            viewModel = viewModel,
+            onDismiss = {
+                viewModel.showAddSongDialog = false
+            }
+        )
+    }
+
     var showMenu by remember { mutableStateOf(false) }
     // 🚩 v2.5: 收藏/全部 切换
     var showFavoritesOnly by remember { mutableStateOf(false) }
@@ -929,6 +938,7 @@ fun EditSongDialog(
 fun PlaylistItem(playlist: Playlist, viewModel: PlayerViewModel, onClick: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     var isHovered by remember { mutableStateOf(false) }
+    var playlistToDelete by remember { mutableStateOf<Playlist?>(null) }
 
     Box {
         Column(
@@ -1018,8 +1028,24 @@ fun PlaylistItem(playlist: Playlist, viewModel: PlayerViewModel, onClick: () -> 
                 text = { Text(if (viewModel.currentLanguage == "zh") "删除歌单" else "Delete Playlist", color = Color.Red) },
                 leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red) },
                 onClick = {
-                    viewModel.deletePlaylist(playlist)
+                    playlistToDelete = playlist
                     expanded = false
+                }
+            )
+        }
+        if (playlistToDelete != null) {
+            AlertDialog(
+                onDismissRequest = { playlistToDelete = null },
+                title = { Text(if (viewModel.currentLanguage == "zh") "确认删除" else "Confirm Delete") },
+                text = { Text(if (viewModel.currentLanguage == "zh") "确定要删除歌单「${playlistToDelete?.name}」吗？" else "Delete playlist «${playlistToDelete?.name}»?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        playlistToDelete?.let { viewModel.deletePlaylist(it) }
+                        playlistToDelete = null
+                    }) { Text(if (viewModel.currentLanguage == "zh") "删除" else "Delete", color = Color(0xFFE53935)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { playlistToDelete = null }) { Text(if (viewModel.currentLanguage == "zh") "取消" else "Cancel") }
                 }
             )
         }
@@ -1031,6 +1057,7 @@ fun PlaylistItem(playlist: Playlist, viewModel: PlayerViewModel, onClick: () -> 
 @Composable
 fun SongGridItem(song: Song, viewModel: PlayerViewModel, onNavigateToPlayer: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
+    var songToDelete by remember { mutableStateOf<Song?>(null) }
     Box {
         Column(
             modifier = Modifier
@@ -1098,11 +1125,36 @@ fun SongGridItem(song: Song, viewModel: PlayerViewModel, onNavigateToPlayer: () 
                 }
             )
             DropdownMenuItem(
+                text = { Text(if (viewModel.currentLanguage == "zh") "添加到歌单" else "Add to Playlist", color = Color.Black) },
+                leadingIcon = { Icon(Icons.Default.PlaylistAdd, null, tint = Color.Black, modifier = Modifier.size(AppDimensions.iconS())) },
+                onClick = {
+                    viewModel.selectedSongsForAdd = setOf(song.id)
+                    viewModel.showAddSongDialog = true
+                    expanded = false
+                }
+            )
+            DropdownMenuItem(
                 text = { Text(if (viewModel.currentLanguage == "zh") "删除" else "Delete", color = Color.Red) },
                 leadingIcon = { Icon(Icons.Default.Delete, null, tint = Color.Red, modifier = Modifier.size(AppDimensions.iconS())) },
                 onClick = {
-                    viewModel.deleteSong(song)
+                    songToDelete = song
                     expanded = false
+                }
+            )
+        }
+        if (songToDelete != null) {
+            AlertDialog(
+                onDismissRequest = { songToDelete = null },
+                title = { Text(if (viewModel.currentLanguage == "zh") "确认删除" else "Confirm Delete") },
+                text = { Text(if (viewModel.currentLanguage == "zh") "确定要删除「${songToDelete?.title}」吗？此操作不可撤销。" else "Delete «${songToDelete?.title}»? This cannot be undone.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        songToDelete?.let { viewModel.deleteSong(it) }
+                        songToDelete = null
+                    }) { Text(if (viewModel.currentLanguage == "zh") "删除" else "Delete", color = Color(0xFFE53935)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { songToDelete = null }) { Text(if (viewModel.currentLanguage == "zh") "取消" else "Cancel") }
                 }
             )
         }
@@ -1112,6 +1164,7 @@ fun SongGridItem(song: Song, viewModel: PlayerViewModel, onNavigateToPlayer: () 
 @Composable
 fun AlbumItem(album: com.music.purelymusic.model.Album, viewModel: PlayerViewModel, onClick: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
+    var albumToDelete by remember { mutableStateOf<com.music.purelymusic.model.Album?>(null) }
 
     // 计算该专辑的歌曲数量
     val albumSongCount = remember(album.name, viewModel.libraryList) {
@@ -1203,8 +1256,24 @@ fun AlbumItem(album: com.music.purelymusic.model.Album, viewModel: PlayerViewMod
                 text = { Text("删除") },
                 leadingIcon = { Icon(Icons.Default.Delete, null, modifier = Modifier.size(AppDimensions.iconS())) },
                 onClick = {
-                    viewModel.deleteAlbum(album)
+                    albumToDelete = album
                     expanded = false
+                }
+            )
+        }
+        if (albumToDelete != null) {
+            AlertDialog(
+                onDismissRequest = { albumToDelete = null },
+                title = { Text(if (viewModel.currentLanguage == "zh") "确认删除" else "Confirm Delete") },
+                text = { Text(if (viewModel.currentLanguage == "zh") "确定要删除专辑「${albumToDelete?.name}」吗？" else "Delete album «${albumToDelete?.name}»?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        albumToDelete?.let { viewModel.deleteAlbum(it) }
+                        albumToDelete = null
+                    }) { Text(if (viewModel.currentLanguage == "zh") "删除" else "Delete", color = Color(0xFFE53935)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { albumToDelete = null }) { Text(if (viewModel.currentLanguage == "zh") "取消" else "Cancel") }
                 }
             )
         }

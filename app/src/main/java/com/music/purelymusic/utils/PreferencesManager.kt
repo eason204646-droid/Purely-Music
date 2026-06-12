@@ -183,6 +183,21 @@ object PreferencesManager {
         prefs?.edit()?.putBoolean(KEY_EQUALIZER_ENABLED, enabled)?.apply()
     }
 
+    // 均衡器频段增益持久化
+    private const val KEY_EQUALIZER_BANDS = "equalizer_bands"
+
+    fun saveEqualizerBands(bands: List<Short>) {
+        val json = bands.joinToString(",") { it.toString() }
+        prefs?.edit()?.putString(KEY_EQUALIZER_BANDS, json)?.apply()
+    }
+
+    fun getEqualizerBands(): List<Short>? {
+        val json = prefs?.getString(KEY_EQUALIZER_BANDS, null) ?: return null
+        return try {
+            json.split(",").map { it.trim().toShort() }
+        } catch (e: Exception) { null }
+    }
+
     // 🚩 v2.5: 睡眠定时器默认时长（分钟），0 = 关闭
     private const val KEY_SLEEP_TIMER_DEFAULT = "sleep_timer_default_minutes"
 

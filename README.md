@@ -96,8 +96,8 @@ Purely Music 是一款开源 Android 本地音乐播放器，使用 Kotlin、Jet
 - **applicationId**：`com.music.purelymusic`
 - **minSdk**：26
 - **targetSdk / compileSdk**：36
-- **versionName**：`2.5`
-- **versionCode**：26
+- **versionName**：`2.6`
+- **versionCode**：27
 
 ## 构建
 

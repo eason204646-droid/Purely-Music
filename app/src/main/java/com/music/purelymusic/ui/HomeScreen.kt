@@ -202,18 +202,50 @@ fun HomeScreen(
                 }
             }
 
-            item {
-                Text(
-                    text = if (viewModel.currentLanguage == "zh") "所有歌曲" else "All Songs",
-                    fontSize = AppDimensions.homeSectionTitleSize().value.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black,
-                    modifier = Modifier.padding(top = AppDimensions.paddingScreen(), bottom = AppDimensions.paddingCard())
-                )
-            }
+            if (viewModel.libraryList.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.MusicNote,
+                                contentDescription = null,
+                                tint = Color(0xFFE0E0E0),
+                                modifier = Modifier.size(64.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = if (viewModel.currentLanguage == "zh") "还没有导入歌曲" else "No songs yet",
+                                color = Color.Gray,
+                                fontSize = AppDimensions.textM().value.sp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = if (viewModel.currentLanguage == "zh") "点击右上角 + 开始导入" else "Tap + to import music",
+                                color = Color.Gray.copy(alpha = 0.6f),
+                                fontSize = AppDimensions.textS().value.sp
+                            )
+                        }
+                    }
+                }
+            } else {
+                item {
+                    Text(
+                        text = if (viewModel.currentLanguage == "zh") "所有歌曲" else "All Songs",
+                        fontSize = AppDimensions.homeSectionTitleSize().value.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                        modifier = Modifier.padding(top = AppDimensions.paddingScreen(), bottom = AppDimensions.paddingCard())
+                    )
+                }
 
-            items(viewModel.libraryList) { song ->
-                SongItem(song = song, onClick = { viewModel.playSong(song) })
+                items(viewModel.libraryList) { song ->
+                    SongItem(song = song, onClick = { viewModel.playSong(song) })
+                }
             }
         }
         } // 🚩 v2.5: 关闭外层 Box

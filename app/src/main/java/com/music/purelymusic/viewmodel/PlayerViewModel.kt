@@ -17,6 +17,8 @@
 package com.music.purelymusic.viewmodel
 import android.annotation.SuppressLint
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.graphics.BitmapFactory
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -29,6 +31,8 @@ import android.os.Build
 import android.provider.OpenableColumns
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -471,6 +475,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         override fun onPlayerError(error: PlaybackException) {
             Log.e("PlayError", "ExoPlayer错误: ${error.errorCodeName}, ${error.message}")
             this@PlayerViewModel.isPlaying = false
+            updateNotification(currentSong, false)
         }
     }
 
@@ -528,8 +533,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     val range = getBandFreqRange(band.toShort())
                     (range[0] / 1000) to (range[1] / 1000)
                 }
+                val savedBands = com.music.purelymusic.utils.PreferencesManager.getEqualizerBands()
                 equalizerBandLevels = List(numberOfBands.toInt()) { band ->
-                    getBandLevel(band.toShort())
+                    val saved = savedBands?.getOrNull(band)
+                    if (saved != null) {
+                        runCatching { setBandLevel(band.toShort(), saved) }
+                        saved
+                    } else {
+                        getBandLevel(band.toShort())
+                    }
                 }
             }
         }.onFailure {
@@ -544,9 +556,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         runCatching {
             effect.setBandLevel(bandIndex.toShort(), clamped)
         }.onSuccess {
-            equalizerBandLevels = equalizerBandLevels.toMutableList().apply {
+            val newLevels = equalizerBandLevels.toMutableList().apply {
                 this[bandIndex] = clamped
             }
+            equalizerBandLevels = newLevels
+            com.music.purelymusic.utils.PreferencesManager.saveEqualizerBands(newLevels)
         }
     }
 
@@ -558,7 +572,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 effect.setBandLevel(bandIndex.toShort(), zeroLevel)
             }
         }
-        equalizerBandLevels = List(equalizerBandLevels.size) { zeroLevel }
+        val resetLevels = List(equalizerBandLevels.size) { zeroLevel }
+        equalizerBandLevels = resetLevels
+        com.music.purelymusic.utils.PreferencesManager.saveEqualizerBands(resetLevels)
     }
 
     private fun releaseEqualizer() {
@@ -579,6 +595,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         isPlaying = playingNow
         isActuallyPlaying = playingNow
         updatePlaybackState(playingNow)
+        updateNotification(currentSong, playingNow)
     }
 
     // Android 12+ Spatializer 支持
@@ -629,7 +646,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     // 播放模式
     enum class PlayMode {
         SEQUENTIAL,  // 顺序播放
-        REPEAT_ONE   // 单曲循环
+        REPEAT_ONE,  // 单曲循环
+        SHUFFLE      // 随机播放
     }
 
     var playMode by mutableStateOf(PlayMode.SEQUENTIAL)
@@ -724,6 +742,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             com.music.purelymusic.utils.PreferencesManager.saveLanguage(value)
         }
 
+    // 语言敏感的文本（替代 stringResource，响应语言切换）
+    val textUnknownTrack: String get() = if (_currentLanguage == "zh") "未知曲目" else "Unknown Track"
+    val textUnknownArtist: String get() = if (_currentLanguage == "zh") "未知艺术家" else "Unknown Artist"
+    val textPlayMode: String get() = if (_currentLanguage == "zh") "播放模式" else "Play Mode"
+    val textModeSwitch: String get() = if (_currentLanguage == "zh") "切换模式" else "Switch Mode"
+    val textClose: String get() = if (_currentLanguage == "zh") "关闭" else "Close"
+    val textQueueEmpty: String get() = if (_currentLanguage == "zh") "播放列表为空" else "Queue is empty"
+    val textNowPlaying: String get() = if (_currentLanguage == "zh") "正在播放" else "Now Playing"
+    val textDelete: String get() = if (_currentLanguage == "zh") "删除" else "Delete"
+
     // 歌词设置状态（带持久化）
     private var _lyricGlowEnabled by mutableStateOf(true)
     var lyricGlowEnabled: Boolean
@@ -801,9 +829,57 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .create(TranslateApiService::class.java)
     }
 
+    // 通知栏
+    private val notificationManager by lazy { context.getSystemService(NotificationManager::class.java) }
+    private val notificationChannelId = "purelymusic_playback"
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                notificationChannelId,
+                "播放控制",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "控制音乐播放"
+                setShowBadge(false)
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun updateNotification(song: Song?, playing: Boolean) {
+        if (song == null) {
+            NotificationManagerCompat.from(context).cancel(1)
+            return
+        }
+        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        val pendingIntent = android.app.PendingIntent.getActivity(
+            context, 0, intent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(context, notificationChannelId)
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle(song.title)
+            .setContentText(song.artist)
+            .setContentIntent(pendingIntent)
+            .setOngoing(playing)
+            .setShowWhen(false)
+            .build()
+        if (playing) {
+            try {
+                NotificationManagerCompat.from(context).notify(1, notification)
+            } catch (e: SecurityException) {
+                // 没有通知权限，忽略
+            }
+        } else {
+            NotificationManagerCompat.from(context).cancel(1)
+        }
+    }
+
     init {
         // 初始化 PreferencesManager
         com.music.purelymusic.utils.PreferencesManager.init(context)
+        createNotificationChannel()
         
         // 加载保存的设置
         _currentLanguage = com.music.purelymusic.utils.PreferencesManager.getLanguage()
@@ -937,6 +1013,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun getNextSongForPlayback(): Song? {
         if (currentPlayingList.isEmpty()) return null
         if (playMode == PlayMode.REPEAT_ONE) return currentSong
+        if (playMode == PlayMode.SHUFFLE) {
+            val currentIdx = getCurrentSongIndex()
+            if (currentIdx == -1) return currentPlayingList.random()
+            val candidates = currentPlayingList.filterIndexed { i, _ -> i != currentIdx }
+            return if (candidates.isEmpty()) currentSong else candidates.random()
+        }
         val idx = getCurrentSongIndex()
         if (idx == -1) return null
         val nextIdx = (idx + 1) % currentPlayingList.size
@@ -1075,6 +1157,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         } catch (e: Exception) {
             Log.e("PlayError", "播放失败: ${e.message}, 歌曲路径=${song.musicUri}")
         }
+        updateNotification(song, true)
     }
     fun removeSongFromPlayingList(song: Song) {
         if (currentPlayingList.isEmpty()) return

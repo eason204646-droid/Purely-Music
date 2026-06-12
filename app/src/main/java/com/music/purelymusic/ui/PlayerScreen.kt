@@ -36,7 +36,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -172,8 +171,8 @@ fun PlayerScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(text = currentSong?.title ?: stringResource(R.string.unknown_track), color = Color.White, fontSize = AppDimensions.textXL().value.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(text = currentSong?.artist ?: stringResource(R.string.unknown_artist), color = Color.White.copy(alpha = 0.8f), fontSize = AppDimensions.textM().value.sp)
+                            Text(text = currentSong?.title ?: viewModel.textUnknownTrack, color = Color.White, fontSize = AppDimensions.textXL().value.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(text = currentSong?.artist ?: viewModel.textUnknownArtist, color = Color.White.copy(alpha = 0.8f), fontSize = AppDimensions.textM().value.sp)
                         }
                         val currentFav = currentSong?.isFavorite ?: false
                         IconButton(
@@ -217,14 +216,19 @@ fun PlayerScreen(
                             onClick = {
                                 viewModel.playMode = when (viewModel.playMode) {
                                     PlayerViewModel.PlayMode.SEQUENTIAL -> PlayerViewModel.PlayMode.REPEAT_ONE
-                                    PlayerViewModel.PlayMode.REPEAT_ONE -> PlayerViewModel.PlayMode.SEQUENTIAL
+                                    PlayerViewModel.PlayMode.REPEAT_ONE -> PlayerViewModel.PlayMode.SHUFFLE
+                                    PlayerViewModel.PlayMode.SHUFFLE -> PlayerViewModel.PlayMode.SEQUENTIAL
                                 }
                             },
                             modifier = Modifier.size(AppDimensions.iconButtonSizeS())
                         ) {
                             Icon(
-                                imageVector = if (viewModel.playMode == PlayerViewModel.PlayMode.REPEAT_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                                contentDescription = stringResource(R.string.play_mode),
+                                imageVector = when (viewModel.playMode) {
+                                    PlayerViewModel.PlayMode.REPEAT_ONE -> Icons.Default.RepeatOne
+                                    PlayerViewModel.PlayMode.SHUFFLE -> Icons.Default.Shuffle
+                                    PlayerViewModel.PlayMode.SEQUENTIAL -> Icons.Default.Repeat
+                                },
+                                contentDescription = viewModel.textPlayMode,
                                 tint = Color.White.copy(alpha = 0.9f),
                                 modifier = Modifier.size(AppDimensions.iconL())
                             )
@@ -281,9 +285,38 @@ fun PlayerScreen(
                     .navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // 顶部提示条
+                // 顶部提示条 + 睡眠定时器指示
                 Box(modifier = Modifier.fillMaxWidth().padding(top = AppDimensions.spacingXS()), contentAlignment = Alignment.Center) {
-                    Box(modifier = Modifier.width(AppDimensions.iconM()).height(AppDimensions.spacingXS()).background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(AppDimensions.spacingXS())))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(modifier = Modifier.width(AppDimensions.iconM()).height(AppDimensions.spacingXS()).background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(AppDimensions.spacingXS())))
+                        if (viewModel.sleepTimerActive && viewModel.sleepTimerDisplay.isNotEmpty()) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    .clickable { }
+                            ) {
+                                Icon(
+                                    Icons.Default.Timer,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = viewModel.sleepTimerDisplay,
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
                 }
 
                 // 1. 歌词/封面显示区域
@@ -360,8 +393,8 @@ fun PlayerScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = currentSong?.title ?: stringResource(R.string.unknown_track), color = Color.White, fontSize = AppDimensions.textXXL().value.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(text = currentSong?.artist ?: stringResource(R.string.unknown_artist), color = Color.White.copy(alpha = 0.8f), fontSize = AppDimensions.textM().value.sp)
+                        Text(text = currentSong?.title ?: viewModel.textUnknownTrack, color = Color.White, fontSize = AppDimensions.textXXL().value.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(text = currentSong?.artist ?: viewModel.textUnknownArtist, color = Color.White.copy(alpha = 0.8f), fontSize = AppDimensions.textM().value.sp)
                     }
 
                     // 🚩 v2.5: 收藏按钮
@@ -391,7 +424,7 @@ fun PlayerScreen(
                     ) {
                         Icon(
                             imageVector = if (showLyrics) Icons.Default.Album else Icons.Default.Notes,
-                            contentDescription = stringResource(R.string.mode_switch),
+                            contentDescription = viewModel.textModeSwitch,
                             tint = Color.White.copy(alpha = 0.9f),
                             modifier = Modifier.size(AppDimensions.iconM())
                         )
@@ -443,14 +476,19 @@ fun PlayerScreen(
                             onClick = {
                                 viewModel.playMode = when (viewModel.playMode) {
                                     PlayerViewModel.PlayMode.SEQUENTIAL -> PlayerViewModel.PlayMode.REPEAT_ONE
-                                    PlayerViewModel.PlayMode.REPEAT_ONE -> PlayerViewModel.PlayMode.SEQUENTIAL
+                                    PlayerViewModel.PlayMode.REPEAT_ONE -> PlayerViewModel.PlayMode.SHUFFLE
+                                    PlayerViewModel.PlayMode.SHUFFLE -> PlayerViewModel.PlayMode.SEQUENTIAL
                                 }
                             },
                             modifier = Modifier.size(AppDimensions.iconButtonSizeM())
                         ) {
                             Icon(
-                                imageVector = if (viewModel.playMode == PlayerViewModel.PlayMode.REPEAT_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                                contentDescription = stringResource(R.string.play_mode),
+                                imageVector = when (viewModel.playMode) {
+                                    PlayerViewModel.PlayMode.REPEAT_ONE -> Icons.Default.RepeatOne
+                                    PlayerViewModel.PlayMode.SHUFFLE -> Icons.Default.Shuffle
+                                    PlayerViewModel.PlayMode.SEQUENTIAL -> Icons.Default.Repeat
+                                },
+                                contentDescription = viewModel.textPlayMode,
                                 tint = Color.White.copy(alpha = 0.9f),
                                 modifier = Modifier.size(AppDimensions.iconL())
                             )
@@ -521,7 +559,7 @@ fun PlaylistView(viewModel: PlayerViewModel, modifier: Modifier = Modifier) {
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = stringResource(R.string.close),
+                    contentDescription = viewModel.textClose,
                     tint = Color.White.copy(alpha = 0.9f),
                     modifier = Modifier.size(AppDimensions.iconM())
                 )
@@ -542,7 +580,7 @@ fun PlaylistView(viewModel: PlayerViewModel, modifier: Modifier = Modifier) {
 
                             Text(
 
-                                text = stringResource(R.string.player_empty),
+                                text = viewModel.textQueueEmpty,
 
                                 color = Color.White.copy(alpha = 0.6f),
 
@@ -561,7 +599,8 @@ fun PlaylistView(viewModel: PlayerViewModel, modifier: Modifier = Modifier) {
                         song = song,
                         isPlaying = currentSong?.id == song.id,
                         onClick = { viewModel.jumpToSong(song) },
-                        onLongClick = { viewModel.removeSongFromPlayingList(song) }
+                        onLongClick = { viewModel.removeSongFromPlayingList(song) },
+                        viewModel = viewModel
                     )
                 }
             }
@@ -574,7 +613,8 @@ fun PlaylistItem(
     song: com.music.purelymusic.model.Song,
     isPlaying: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    viewModel: PlayerViewModel
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -619,7 +659,7 @@ fun PlaylistItem(
             if (isPlaying) {
                 Icon(
                     imageVector = Icons.Default.VolumeUp,
-                    contentDescription = stringResource(R.string.now_playing),
+                    contentDescription = viewModel.textNowPlaying,
                     tint = Color.White.copy(alpha = 0.9f),
                     modifier = Modifier.size(AppDimensions.iconS())
                 )
@@ -637,7 +677,7 @@ fun PlaylistItem(
             modifier = Modifier.background(Color.Black.copy(alpha = 0.9f))
         ) {
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.delete), color = Color.White) },
+                text = { Text(viewModel.textDelete, color = Color.White) },
                 leadingIcon = {
                     Icon(
                         Icons.Default.Delete,

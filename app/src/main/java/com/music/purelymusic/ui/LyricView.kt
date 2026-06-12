@@ -19,7 +19,6 @@ package com.music.purelymusic.ui
 import android.os.Build
 import android.util.Log
 import androidx.annotation.OptIn
-import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -42,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
@@ -57,7 +57,6 @@ import com.music.purelymusic.model.LrcLine
 import com.music.purelymusic.viewmodel.PlayerViewModel
 import kotlinx.coroutines.delay
 
-@RequiresApi(Build.VERSION_CODES.S_V2)
 @OptIn(UnstableApi::class)
 @Composable
 fun LyricView(
@@ -288,10 +287,8 @@ fun LyricView(
                             delayMillis = if (isCurrent) {
                                 0
                             } else if (isUserScrolling) {
-                                // 用户滚动时立即清除模糊，但保持平滑
                                 0
                             } else {
-                                // 根据距离计算延迟,形成波浪效果
                                 val absDistance = kotlin.math.abs(distanceFromCurrent)
                                 (absDistance * 40).coerceAtMost(250)
                             }
@@ -331,13 +328,13 @@ fun LyricView(
                                     blurRadius = shadowBlur
                                 ) else null
                             ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .alpha(textAlpha)
-                                .blur(radius = blurAmount.dp)
-                        )
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .alpha(textAlpha)
+                                    .then(if (Build.VERSION.SDK_INT >= 31) Modifier.blur(radius = blurAmount.dp) else Modifier)
+                            )
 
-                        // 翻译文本（如果启用翻译且有翻译内容）
+                            // 翻译文本（如果启用翻译且有翻译内容）
                         if (showTranslation && !line.translation.isNullOrEmpty()) {
                             val displayTranslation = if (lyricFilterEnabled) {
                                 com.music.purelymusic.utils.ProfanityFilter.filter(line.translation)
@@ -356,7 +353,7 @@ fun LyricView(
                                     .fillMaxWidth()
                                     .padding(top = 4.dp)
                                     .alpha(textAlpha)
-                                    .blur(radius = blurAmount.dp)
+                                    .then(if (Build.VERSION.SDK_INT >= 31) Modifier.blur(radius = blurAmount.dp) else Modifier)
                             )
                         }
                     }

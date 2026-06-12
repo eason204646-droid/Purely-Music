@@ -29,7 +29,7 @@ interface SongDao {
     @Update
     suspend fun updateSong(song: SongEntity)
 
-    @Query("SELECT * FROM songs ORDER BY lastPlayedTime DESC LIMIT 10")
+    @Query("SELECT * FROM songs ORDER BY lastPlayedTime DESC LIMIT 50")
     suspend fun getRecentSongs(): List<SongEntity>
 
     // 🚩 v2.5: 搜索歌曲（按歌名或歌手模糊匹配）
