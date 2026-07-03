@@ -145,7 +145,7 @@ object AppDimensions {
     @Composable
     fun miniPlayerPaddingV() = responsiveSize(6.dp, 8.dp, 10.dp)
     @Composable
-    fun miniPlayerNavBarSpacing() = responsiveSize(88.dp, 96.dp, 104.dp)
+    fun miniPlayerNavBarSpacing() = responsiveSize(8.dp, 12.dp, 16.dp)
 
     // ==================== 导航栏尺寸 ====================
     @Composable

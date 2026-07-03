@@ -24,6 +24,14 @@ January 2020 http://license.coscl.org.cn/MulanPSL2
             <certificates src="system" />
         </trust-anchors>
     </domain-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">music.126.net</domain>
+        <domain includeSubdomains="true">y.qq.com</domain>
+        <domain includeSubdomains="true">migu.net</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />

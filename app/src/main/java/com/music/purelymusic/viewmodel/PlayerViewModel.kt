@@ -2391,8 +2391,14 @@ private fun stopSurroundEffect() {
     private fun downloadCover(pictureUrl: String?): String? {
         if (pictureUrl.isNullOrEmpty()) return null
 
+        val secureUrl = if (pictureUrl.startsWith("http://")) {
+            "https://${pictureUrl.substring(7)}"
+        } else {
+            pictureUrl
+        }
+
         return try {
-            val coverConnection = java.net.URL(pictureUrl).openConnection() as java.net.HttpURLConnection
+            val coverConnection = java.net.URL(secureUrl).openConnection() as java.net.HttpURLConnection
             coverConnection.requestMethod = "GET"
             coverConnection.connect()
 
@@ -2400,11 +2406,9 @@ private fun stopSurroundEffect() {
                 val inputStream = coverConnection.inputStream
                 val fileName = "cover_${System.currentTimeMillis()}.jpg"
                 val file = java.io.File(context.filesDir, fileName)
-                val outputStream = java.io.FileOutputStream(file)
-                inputStream.copyTo(outputStream)
-                inputStream.close()
-                outputStream.close()
-                Log.d("FetchAll", "封面已下载: ${file.absolutePath}")
+                FileOutputStream(file).use { output ->
+                    inputStream.use { it.copyTo(output) }
+                }
                 file.absolutePath
             } else {
                 Log.e("FetchAll", "下载封面失败，响应码: ${coverConnection.responseCode}")
@@ -2487,23 +2491,11 @@ private fun stopSurroundEffect() {
      * 保存歌词文件
      */
     private fun saveLyricsFile(lrcContent: String): String? {
-        if (lrcContent.isBlank()) {
-            Log.d("FetchAll", "歌词内容为空")
-            return null
-        }
+        if (lrcContent.isBlank()) return null
 
         val fileName = "lrc_${System.currentTimeMillis()}.lrc"
         val file = java.io.File(context.filesDir, fileName)
         file.writeText(lrcContent, Charsets.UTF_8)
-        Log.d("FetchAll", "歌词已保存: ${file.absolutePath}, 文件大小: ${file.length()} 字节")
-
-        // 测试解析
-        val testParse = com.music.purelymusic.utils.LrcParser.parse(lrcContent)
-        Log.d("FetchAll", "歌词解析测试结果: 共${testParse.size}行")
-        if (testParse.isNotEmpty()) {
-            Log.d("FetchAll", "第一行: 时间=${testParse[0].time}ms, 内容=${testParse[0].content}")
-        }
-
         return file.absolutePath
     }
 
