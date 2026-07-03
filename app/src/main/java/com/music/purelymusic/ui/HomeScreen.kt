@@ -60,6 +60,7 @@ import coil.compose.AsyncImage
 import com.music.purelymusic.model.Song
 import com.music.purelymusic.viewmodel.PlayerViewModel
 import com.music.purelymusic.R
+import com.music.purelymusic.ui.theme.*
 import com.music.purelymusic.ui.utils.AppDimensions
 import com.music.purelymusic.ui.utils.rememberWindowSizeClass
 
@@ -111,7 +112,7 @@ fun HomeScreen(
                     Icon(
                         Icons.Default.Add,
                         contentDescription = if (viewModel.currentLanguage == "zh") "添加" else "Add",
-                        tint = Color(0xFFE53935),
+                        tint = RedPrimary,
                         modifier = Modifier.size(AppDimensions.iconM())
                     )
                 }
@@ -120,7 +121,7 @@ fun HomeScreen(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
                     modifier = Modifier
-                        .background(Color(0xFFF5F5F5), RoundedCornerShape(12.dp))
+                        .background(Gray50, RoundedCornerShape(12.dp))
                         .clip(RoundedCornerShape(12.dp)),
                     offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)
                 ) {
@@ -132,7 +133,7 @@ fun HomeScreen(
                             )
                         },
                         leadingIcon = {
-                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.Black)
+                            Icon(Icons.Default.MusicNote, contentDescription = "Import music", tint = Color.Black)
                         },
                         onClick = {
                             showMenu = false
@@ -147,7 +148,7 @@ fun HomeScreen(
                             )
                         },
                         leadingIcon = {
-                            Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Color.Black)
+                            Icon(Icons.Default.LibraryMusic, contentDescription = "Batch import", tint = Color.Black)
                         },
                         onClick = {
                             showMenu = false
@@ -162,7 +163,7 @@ fun HomeScreen(
                             )
                         },
                         leadingIcon = {
-                            Icon(Icons.Default.PlaylistAdd, contentDescription = null, tint = Color.Black)
+                            Icon(Icons.Default.PlaylistAdd, contentDescription = "Create playlist", tint = Color.Black)
                         },
                         onClick = {
                             showMenu = false
@@ -214,7 +215,7 @@ fun HomeScreen(
                             Icon(
                                 Icons.Default.MusicNote,
                                 contentDescription = null,
-                                tint = Color(0xFFE0E0E0),
+                                tint = Gray100,
                                 modifier = Modifier.size(64.dp)
                             )
                             Spacer(modifier = Modifier.height(16.dp))
@@ -250,35 +251,24 @@ fun HomeScreen(
         }
         } // 🚩 v2.5: 关闭外层 Box
 
-        // 监听文件选择，尝试读取元数据
         LaunchedEffect(viewModel.tempMusicUri) {
             val uri = viewModel.tempMusicUri
-            if (uri != null) {
-                // 只有在开启自动获取元数据时才自动读取
-                if (viewModel.autoFetchMetadata) {
-                    // 尝试读取音频文件的元数据
-                    val (title, artist) = viewModel.readAudioMetadata(uri)
-                    
-                    // 如果元数据完整（有歌名和歌手），自动获取信息并保存
-                    if (!title.isNullOrBlank() && !artist.isNullOrBlank()) {
-                        try {
-                            val (coverPath, lrcPath) = viewModel.fetchAllFromNetwork(title, artist)
-                            if (coverPath != null) {
-                                viewModel.tempCoverUri = android.net.Uri.parse(coverPath)
-                            }
-                            if (lrcPath != null) {
-                                viewModel.tempLrcUri = android.net.Uri.parse("file://$lrcPath")
-                            }
-                            // 保存歌曲
-                            viewModel.saveSong(title, artist)
-                        } catch (e: Exception) {
-                            // 自动获取失败，清除 tempMusicUri，不显示对话框
-                            viewModel.tempMusicUri = null
+            if (uri != null && viewModel.autoFetchMetadata) {
+                val (title, artist) = viewModel.readAudioMetadata(uri)
+                if (!title.isNullOrBlank() && !artist.isNullOrBlank()) {
+                    try {
+                        val (coverPath, lrcPath) = viewModel.fetchAllFromNetwork(title, artist)
+                        if (coverPath != null) {
+                            viewModel.tempCoverUri = android.net.Uri.parse(coverPath)
                         }
+                        if (lrcPath != null) {
+                            viewModel.tempLrcUri = android.net.Uri.parse("file://$lrcPath")
+                        }
+                        viewModel.saveSong(title, artist)
+                    } catch (e: Exception) {
+                        viewModel.tempMusicUri = null
                     }
-                    // 如果元数据不完整，保持 tempMusicUri 不变，弹窗会显示
                 }
-                // 如果关闭了自动获取元数据，保持 tempMusicUri 不变，弹窗会显示让用户手动输入
             }
         }
 
@@ -416,15 +406,15 @@ fun SongItem(
                 ) {
                     Icon(
                         imageVector = Icons.Default.DragHandle,
-                        contentDescription = "鎷栨嫿鎺掑簭",
+                        contentDescription = "Drag to reorder",
                         tint = if (isDragging) Color.Gray else Color.Gray.copy(alpha = 0.5f),
                         modifier = Modifier.size(24.dp)
                     )
                 }
             }
         }
-        androidx.compose.material3.Divider(
-            color = Color(0xFFF5F5F5),
+        HorizontalDivider(
+            color = Gray50,
             thickness = 1.dp
         )
     }
@@ -457,7 +447,7 @@ fun MiniPlayer(viewModel: PlayerViewModel, onClick: () -> Unit) {
             IconButton(onClick = { viewModel.togglePlayPause() }, modifier = Modifier.size(AppDimensions.iconButtonSizeM())) {
                 Icon(
                     imageVector = if (viewModel.isActuallyPlaying) Icons.Default.PauseCircleFilled else Icons.Default.PlayCircleFilled,
-                    contentDescription = null,
+                    contentDescription = if (viewModel.isActuallyPlaying) "Pause" else "Play",
                     tint = Color.Black,
                     modifier = Modifier.size(AppDimensions.iconXL())
                 )
@@ -535,7 +525,7 @@ fun HomeImportMusicDialog(
                 viewModel.saveSongError = null
             }
         },
-        containerColor = Color(0xFFF5F5F5),
+        containerColor = Gray50,
         title = { Text(if (viewModel.currentLanguage == "zh") "补充歌曲信息" else "Add Song Info", color = Color.Black) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(AppDimensions.spacingS())) {
@@ -549,9 +539,9 @@ fun HomeImportMusicDialog(
                         unfocusedTextColor = Color.Black,
                         focusedContainerColor = Color.White,
                         unfocusedContainerColor = Color.White,
-                        focusedIndicatorColor = Color(0xFFE53935),
+                        focusedIndicatorColor = RedPrimary,
                         unfocusedIndicatorColor = Color.Gray,
-                        focusedLabelColor = Color(0xFFE53935),
+                        focusedLabelColor = RedPrimary,
                         unfocusedLabelColor = Color.Gray
                     )
                 )
@@ -565,9 +555,9 @@ fun HomeImportMusicDialog(
                         unfocusedTextColor = Color.Black,
                         focusedContainerColor = Color.White,
                         unfocusedContainerColor = Color.White,
-                        focusedIndicatorColor = Color(0xFFE53935),
+                        focusedIndicatorColor = RedPrimary,
                         unfocusedIndicatorColor = Color.Gray,
-                        focusedLabelColor = Color(0xFFE53935),
+                        focusedLabelColor = RedPrimary,
                         unfocusedLabelColor = Color.Gray
                     )
                 )
@@ -763,7 +753,7 @@ fun HomeImportMusicDialog(
                         showManualImport = true  // 展开手动导入区域
                     }
                 ) {
-                    Text(if (viewModel.currentLanguage == "zh") "手动导入" else "Manual Import", color = Color(0xFFE53935))
+                    Text(if (viewModel.currentLanguage == "zh") "手动导入" else "Manual Import", color = RedPrimary)
                 }
             },
             dismissButton = {
@@ -775,10 +765,10 @@ fun HomeImportMusicDialog(
                         saveSong()
                     }
                 ) {
-                    Text(if (viewModel.currentLanguage == "zh") "重试" else "Retry", color = Color(0xFFE53935))
+                    Text(if (viewModel.currentLanguage == "zh") "重试" else "Retry", color = RedPrimary)
                 }
             },
-            containerColor = Color(0xFFF5F5F5)
+            containerColor = Gray50
         )
     }
 }
@@ -811,8 +801,8 @@ fun BatchImportProgressDialog(
                     progress = { if (total > 0) progress.toFloat() / total.toFloat() else 0f },
                     modifier = Modifier.size(64.dp),
                     strokeWidth = 6.dp,
-                    color = Color(0xFFE53935),
-                    trackColor = Color(0xFFE0E0E0)
+                    color = RedPrimary,
+                    trackColor = Gray100
                 )
                 
                 Text(

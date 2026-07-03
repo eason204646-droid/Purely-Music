@@ -18,5 +18,5 @@ plugins {
     id("com.android.application") version libs.versions.agp.get() apply false
     id("org.jetbrains.kotlin.android") version libs.versions.kotlin.get() apply false
     id("org.jetbrains.kotlin.plugin.compose") version libs.versions.kotlin.get() apply false
-    id("com.google.devtools.ksp") version "2.0.21-1.0.27" apply false
+    id("com.google.devtools.ksp") version libs.versions.ksp.get() apply false
 }

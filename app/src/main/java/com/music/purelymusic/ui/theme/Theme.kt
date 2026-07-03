@@ -24,19 +24,25 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80,
-    background = Color(0xFF1C1C1E) // 深色背景
+    primary = AppleRed,
+    secondary = Red40,
+    tertiary = Red60,
+    background = DarkSurface,
+    surface = DarkSurface,
+    surfaceVariant = DarkSurfaceDim,
+    onBackground = Color.White,
+    onSurface = Color.White,
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = AppleRed,
-    secondary = PurpleGrey40,
-    tertiary = Pink40,
-    background = Color.White
-
-    /* 其他默认颜色可以根据需要覆盖 */
+    primary = RedPrimary,
+    secondary = Red40,
+    tertiary = Red60,
+    background = Color.White,
+    surface = Color.White,
+    surfaceVariant = Gray50,
+    onBackground = Color.Black,
+    onSurface = Color.Black,
 )
 
 @Composable

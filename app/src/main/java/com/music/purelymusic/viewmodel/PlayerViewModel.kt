@@ -21,8 +21,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.graphics.BitmapFactory
 import android.media.AudioFormat
+import android.media.AudioFocusRequest
 import android.media.AudioManager
-import android.media.AudioTrack
 import android.media.MediaMetadataRetriever
 import android.media.Spatializer
 import android.media.audiofx.Equalizer
@@ -381,8 +381,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun copyFile(uri: Uri, fileName: String): String? {
         return try {
-            val input = context.contentResolver.openInputStream(uri)
-            // If fileName has no extension, auto-append
             val finalFileName = if (!fileName.contains(".")) {
                 val ext = getFileExtension(uri)
                 fileName + ext
@@ -390,10 +388,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 fileName
             }
             val file = File(context.filesDir, finalFileName)
-            val output = FileOutputStream(file)
-            input?.copyTo(output)
-            input?.close()
-            output.close()
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(file).use { output ->
+                    input.copyTo(output)
+                }
+            }
             file.absolutePath
         } catch (e: Exception) { null }
     }
@@ -407,9 +406,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 name = name,
                 coverUri = finalCoverPath,
                 songIds = selectedSongsForPlaylist.map { it.id.toLong() },
-                description = null, // 榛樿娌℃湁鎻忚堪
-                createdAt = System.currentTimeMillis(), // 鍒涘缓鏃堕棿
-                updatedAt = System.currentTimeMillis() // 鏇存柊鏃堕棿
+                description = null,
+                createdAt = System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis()
             )
             playlistDao.insertPlaylist(newPlaylist.toEntity())
             playlists.add(0, newPlaylist)
@@ -420,6 +419,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
 
     private val context = application.applicationContext
+    private val audioManager = context.getSystemService(AudioManager::class.java)
     private val songDao = AppDatabase.getDatabase(application).songDao()
     private val playlistDao = AppDatabase.getDatabase(application).playlistDao()
     private val albumDao = AppDatabase.getDatabase(application).albumDao()
@@ -431,6 +431,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var suppressNextEndedCallback = false
     private val crossfadeDurationMs: Long
         get() = crossfadeDurationSeconds * 1000L
+    private var audioFocusGranted = false
+    private var audioBecomingNoisyReceiver: AudioBecomingNoisyReceiver? = null
 
     var isActuallyPlaying by mutableStateOf(false)
         private set
@@ -617,16 +619,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (index == -1) 0 else index
     }
 
-    // 🚩 v2.5: 搜索状态
+    // 搜索状态
     var searchQuery by mutableStateOf("")
     var searchResults by mutableStateOf<List<Song>>(emptyList())
         private set
 
-    // 🚩 v2.5: 收藏列表
+    //: 收藏列表
     var favoriteSongs by mutableStateOf<List<Song>>(emptyList())
         private set
 
-    // 🚩 v2.5: 睡眠定时器
+    //: 睡眠定时器
     var sleepTimerMinutes by mutableIntStateOf(0) // 0 = 关闭
         private set
     var sleepTimerRemainingSeconds by mutableIntStateOf(0)
@@ -634,7 +636,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     var sleepTimerActive by mutableStateOf(false)
         private set
     private var sleepTimerJob: kotlinx.coroutines.Job? = null
-    private var searchJob: kotlinx.coroutines.Job? = null // 🚩 v2.5: 搜索防抖
+    private var searchJob: kotlinx.coroutines.Job? = null //: 搜索防抖
 
     var recentSongs = mutableStateListOf<Song>()
     var playlists = mutableStateListOf<Playlist>()
@@ -833,6 +835,81 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val notificationManager by lazy { context.getSystemService(NotificationManager::class.java) }
     private val notificationChannelId = "purelymusic_playback"
 
+    // --- 音频焦点处理 ---
+    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                audioFocusGranted = false
+                if (isPlaying) togglePlayPause()
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                audioFocusGranted = false
+                exoPlayer?.pause()
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                exoPlayer?.volume = 0.3f
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                audioFocusGranted = true
+                exoPlayer?.volume = 1.0f
+            }
+        }
+    }
+
+    private var audioFocusRequest: AudioFocusRequest? = null
+
+    private fun requestAudioFocus(): Boolean {
+        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+            .setAudioAttributes(
+                android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+            )
+            .setOnAudioFocusChangeListener(audioFocusChangeListener)
+            .build()
+        audioFocusRequest = request
+        val result = audioManager.requestAudioFocus(request)
+        audioFocusGranted = (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+        return audioFocusGranted
+    }
+
+    private fun abandonAudioFocus() {
+        audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+        audioFocusGranted = false
+    }
+
+    // --- 耳机拔出自动暂停 ---
+    private class AudioBecomingNoisyReceiver(
+        private val onNoisy: () -> Unit
+    ) : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+            if (intent?.action == android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                onNoisy()
+            }
+        }
+    }
+
+    private fun registerAudioBecomingNoisyReceiver() {
+        if (audioBecomingNoisyReceiver != null) return
+        val receiver = AudioBecomingNoisyReceiver {
+            if (isPlaying) {
+                exoPlayer?.pause()
+                syncPlaybackState()
+            }
+        }
+        audioBecomingNoisyReceiver = receiver
+        val intentFilter = android.content.IntentFilter(android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        context.registerReceiver(receiver, intentFilter)
+    }
+
+    private fun unregisterAudioBecomingNoisyReceiver() {
+        audioBecomingNoisyReceiver?.let {
+            runCatching { context.unregisterReceiver(it) }
+        }
+        audioBecomingNoisyReceiver = null
+    }
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -857,6 +934,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             context, 0, intent,
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
         )
+        val prevIntent = android.app.PendingIntent.getActivity(
+            context, 1, intent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+        val nextIntent = android.app.PendingIntent.getActivity(
+            context, 2, intent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
         val notification = NotificationCompat.Builder(context, notificationChannelId)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(song.title)
@@ -864,6 +949,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .setContentIntent(pendingIntent)
             .setOngoing(playing)
             .setShowWhen(false)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .addAction(android.R.drawable.ic_media_previous, "", prevIntent)
+            .addAction(
+                if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
+                "",
+                pendingIntent
+            )
+            .addAction(android.R.drawable.ic_media_next, "", nextIntent)
             .build()
         if (playing) {
             try {
@@ -1141,10 +1234,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
+        requestAudioFocus()
+        registerAudioBecomingNoisyReceiver()
+
         exoPlayer?.stop()
         updateSongState(song)
-
-        Log.d("PlaySong", "开始播放歌曲: ${song.title}, 歌词路径: ${song.lrcPath}")
 
         try {
             val player = getOrCreatePlayer()
@@ -1240,13 +1334,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun startTimer() {
         viewModelScope.launch {
-            while (true) {
+            while (isActive) {
                 if (isPlaying) {
                     currentPosition = exoPlayer?.currentPosition ?: 0L
                     beginAutoCrossfadeIfNeeded()
                     syncPlaybackState()
                 }
-                delay(1000) // 1秒同步一次即可，减少性能开销
+                delay(1000)
             }
         }
     }
@@ -1274,7 +1368,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         surroundJob = viewModelScope.launch {
-            while (isPlaying) {
+            while (isActive && isPlaying) {
                 if (isSurroundEnabled) {
                     when (surroundMode) {
                         SurroundMode.IMMERSIVE -> applyImmersiveSurround()
@@ -1524,7 +1618,7 @@ private fun stopSurroundEffect() {
                     playlists.addAll(playlistEntities.map { it.toPlaylist() })
                 }
 
-                // 🚩 v2.5: 收藏列表必须放在 collect 前（collect 永不返回）
+                //: 收藏列表必须放在 collect 前（collect 永不返回）
                 refreshFavorites()
                 if (currentPlayingList.isEmpty()) {
                     currentPlayingList.clear()
@@ -1631,7 +1725,7 @@ private fun stopSurroundEffect() {
         editLrcUri = null
     }
 
-    // 🚩 v2.5: 切换收藏状态
+    //: 切换收藏状态
     fun toggleFavorite(song: Song) {
         viewModelScope.launch {
             val newFav = !song.isFavorite
@@ -1649,13 +1743,13 @@ private fun stopSurroundEffect() {
         }
     }
 
-    // 🚩 v2.5: 刷新收藏列表（suspend，避免嵌套协程）
+    //: 刷新收藏列表（suspend，避免嵌套协程）
     private suspend fun refreshFavorites() {
         val favEntities = songDao.getFavoriteSongs()
         favoriteSongs = favEntities.map { it.toSong() }
     }
 
-    // 🚩 v2.5: 搜索歌曲（带300ms防抖，支持仅搜收藏）
+    //: 搜索歌曲（带300ms防抖，支持仅搜收藏）
     fun performSearch(query: String, onlyFavorites: Boolean = false) {
         searchQuery = query
         searchJob?.cancel()
@@ -1675,7 +1769,7 @@ private fun stopSurroundEffect() {
         }
     }
 
-    // 🚩 v2.5: 睡眠定时器
+    //: 睡眠定时器
     fun startSleepTimer(minutes: Int) {
         cancelSleepTimer()
         if (minutes <= 0) return
@@ -1770,6 +1864,8 @@ private fun stopSurroundEffect() {
         resetCrossfadeState()
         stop3DSurroundEffect()
         releaseEqualizer()
+        abandonAudioFocus()
+        unregisterAudioBecomingNoisyReceiver()
         syncPlaybackState()
         exoPlayer?.release()
         mediaSession?.release()
@@ -1781,27 +1877,23 @@ private fun stopSurroundEffect() {
      * 从音频文件中读取元数据（歌名和歌手名）
      * @return Pair(歌名, 歌手名)，如果读取失败则返回 Pair(null, null)
      */
-    fun readAudioMetadata(uri: Uri): Pair<String?, String?> {
-        return try {
-            val retriever = MediaMetadataRetriever()
-            retriever.setDataSource(context, uri)
+    suspend fun readAudioMetadata(uri: Uri): Pair<String?, String?> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val retriever = MediaMetadataRetriever()
+                retriever.setDataSource(context, uri)
 
-            // 尝试读取歌名（使用多个键位尝试）
-            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+                val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+                val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                    ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
+                    ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_AUTHOR)
+                    ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_COMPOSER)
 
-            // 尝试读取歌手名（使用多个键位尝试）
-            val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
-                ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
-                ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_AUTHOR)
-                ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_COMPOSER)
-
-            retriever.release()
-
-            Log.d("AudioMetadata", "读取元数据成功: title=$title, artist=$artist")
-            Pair(title, artist)
-        } catch (e: Exception) {
-            Log.e("AudioMetadata", "读取元数据失败: ${e.message}", e)
-            Pair(null, null)
+                retriever.release()
+                Pair(title, artist)
+            } catch (e: Exception) {
+                Pair(null, null)
+            }
         }
     }
 

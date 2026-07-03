@@ -932,8 +932,8 @@ fun EditSongDialog(
     )
 }
 
-@androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalFoundationApi::class)
+@androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun PlaylistItem(playlist: Playlist, viewModel: PlayerViewModel, onClick: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
@@ -1161,6 +1161,7 @@ fun SongGridItem(song: Song, viewModel: PlayerViewModel, onNavigateToPlayer: () 
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AlbumItem(album: com.music.purelymusic.model.Album, viewModel: PlayerViewModel, onClick: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }

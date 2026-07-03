@@ -21,6 +21,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import coil.ImageLoader
 import coil.disk.DiskCache
@@ -56,13 +57,14 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.music.purelymusic.ui.*
-import com.music.purelymusic.ui.theme.AMPlayerTheme
+import com.music.purelymusic.ui.theme.*
 import com.music.purelymusic.viewmodel.PlayerViewModel
 import com.music.purelymusic.ui.utils.AppDimensions
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
 
         // 配置 Coil 图片加载器（带缓存）
         val imageLoader = ImageLoader.Builder(this)
@@ -148,11 +150,11 @@ fun MainScreen(viewModel: PlayerViewModel) {
                             tonalElevation = 0.dp
                         ) {
                             val itemColors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = Color(0xFFE53935),
-                                selectedTextColor = Color(0xFFE53935),
+                                selectedIconColor = RedPrimary,
+                                selectedTextColor = RedPrimary,
                                 indicatorColor = Color.Transparent,
-                                unselectedIconColor = Color(0xFFBDBDBD),
-                                unselectedTextColor = Color(0xFFBDBDBD)
+                                unselectedIconColor = Gray200,
+                                unselectedTextColor = Gray200
                             )
 
                             val navItems: List<Pair<String, String>> = listOf(
@@ -194,7 +196,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
                                                 .offset(x = offsetX)
                                                 .padding(vertical = 12.dp, horizontal = 16.dp)
                                                 .background(
-                                                    color = Color(0xFFE0E0E0),
+                                                    color = Gray100,
                                                     shape = RoundedCornerShape(20.dp)
                                                 )
                                         )
@@ -231,7 +233,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
                                                     Text(
                                                         item.first,
                                                         fontSize = 14.sp,
-                                                        color = if (isSelected) Color(0xFFE53935) else Color(0xFFBDBDBD),
+                                                        color = if (isSelected) RedPrimary else Gray200,
                                                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                                                     )
                                                 }

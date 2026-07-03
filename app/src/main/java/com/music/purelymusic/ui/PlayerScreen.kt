@@ -22,6 +22,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -608,6 +609,7 @@ fun PlaylistView(viewModel: PlayerViewModel, modifier: Modifier = Modifier) {
     }
 }
 
+@kotlin.OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PlaylistItem(
     song: com.music.purelymusic.model.Song,
