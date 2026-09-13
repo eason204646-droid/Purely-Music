@@ -128,7 +128,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
     }
 
     Scaffold(
-        containerColor = Color.White,
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (currentRoute == "home" || currentRoute == "library" || currentRoute == "settings") {
                 Box(
@@ -141,7 +141,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
                             .fillMaxWidth()
                             .height(64.dp),
                         shape = RoundedCornerShape(32.dp),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.surface,
                         shadowElevation = 8.dp,
                         tonalElevation = 0.dp
                     ) {
@@ -153,8 +153,8 @@ fun MainScreen(viewModel: PlayerViewModel) {
                                 selectedIconColor = RedPrimary,
                                 selectedTextColor = RedPrimary,
                                 indicatorColor = Color.Transparent,
-                                unselectedIconColor = Gray200,
-                                unselectedTextColor = Gray200
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
                             val navItems: List<Pair<String, String>> = listOf(
@@ -170,7 +170,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
                             ) {
                                 // 背景指示器
                                 val density = LocalDensity.current
-                                var containerWidth by remember { mutableStateOf(0f) }
+                                var containerWidth by remember { mutableFloatStateOf(0f) }
                                 
                                 Box(
                                     modifier = Modifier
@@ -196,7 +196,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
                                                 .offset(x = offsetX)
                                                 .padding(vertical = 12.dp, horizontal = 16.dp)
                                                 .background(
-                                                    color = Gray100,
+                                                    color = MaterialTheme.colorScheme.surfaceVariant,
                                                     shape = RoundedCornerShape(20.dp)
                                                 )
                                         )
@@ -233,7 +233,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
                                                     Text(
                                                         item.first,
                                                         fontSize = 14.sp,
-                                                        color = if (isSelected) RedPrimary else Gray200,
+                                                        color = if (isSelected) RedPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                                                     )
                                                 }

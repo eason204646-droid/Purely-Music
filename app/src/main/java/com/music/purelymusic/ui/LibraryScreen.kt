@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.async
@@ -179,6 +180,19 @@ fun LibraryScreen(
         )
     }
 
+    viewModel.batchImportSummary?.let { summary ->
+        AlertDialog(
+            onDismissRequest = { viewModel.clearBatchImportSummary() },
+            title = { Text(if (viewModel.currentLanguage == "zh") "批量导入完成" else "Batch import complete") },
+            text = { Text(summary) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearBatchImportSummary() }) {
+                    Text(if (viewModel.currentLanguage == "zh") "确定" else "OK")
+                }
+            }
+        )
+    }
+
     if (viewModel.editingSong != null) {
         EditSongDialog(
             viewModel = viewModel,
@@ -197,6 +211,8 @@ fun LibraryScreen(
     }
 
     var showMenu by remember { mutableStateOf(false) }
+    var showSortMenu by remember { mutableStateOf(false) }
+    var sortMode by remember { mutableStateOf("recent") }
     // 🚩 v2.5: 收藏/全部 切换
     var showFavoritesOnly by remember { mutableStateOf(false) }
 
@@ -281,7 +297,7 @@ fun LibraryScreen(
                                 ) 
                             },
                             leadingIcon = {
-                                Icon(Icons.Default.PlaylistAdd, contentDescription = null, tint = Color.Black)
+                                Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null, tint = Color.Black)
                             },
                             onClick = {
                                 showMenu = false
@@ -409,6 +425,31 @@ fun LibraryScreen(
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.weight(1f)
                         )
+                        Box {
+                            TextButton(onClick = { showSortMenu = true }) {
+                                Text(
+                                    when (sortMode) {
+                                        "title" -> if (viewModel.currentLanguage == "zh") "歌名" else "Title"
+                                        "duration" -> if (viewModel.currentLanguage == "zh") "时长" else "Duration"
+                                        else -> if (viewModel.currentLanguage == "zh") "最近添加" else "Recent"
+                                    },
+                                    color = Color(0xFFE53935),
+                                    fontSize = AppDimensions.textS().value.sp
+                                )
+                            }
+                            DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
+                                listOf(
+                                    "recent" to if (viewModel.currentLanguage == "zh") "最近添加" else "Recent",
+                                    "title" to if (viewModel.currentLanguage == "zh") "歌名" else "Title",
+                                    "duration" to if (viewModel.currentLanguage == "zh") "时长" else "Duration"
+                                ).forEach { (key, label) ->
+                                    DropdownMenuItem(text = { Text(label) }, onClick = {
+                                        sortMode = key
+                                        showSortMenu = false
+                                    })
+                                }
+                            }
+                        }
                         // 🚩 v2.5: 全部/收藏 Tab 切换
                         Surface(
                             onClick = { showFavoritesOnly = false },
@@ -455,6 +496,12 @@ fun LibraryScreen(
                     viewModel.searchQuery.isNotBlank() -> viewModel.searchResults
                     showFavoritesOnly -> viewModel.favoriteSongs
                     else -> viewModel.libraryList
+                }.let { songs ->
+                    when (sortMode) {
+                        "title" -> songs.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+                        "duration" -> songs.sortedByDescending { it.duration }
+                        else -> songs.sortedByDescending { it.createdTime }
+                    }
                 }
 
                 if (displayList.isEmpty()) {
@@ -1126,7 +1173,7 @@ fun SongGridItem(song: Song, viewModel: PlayerViewModel, onNavigateToPlayer: () 
             )
             DropdownMenuItem(
                 text = { Text(if (viewModel.currentLanguage == "zh") "添加到歌单" else "Add to Playlist", color = Color.Black) },
-                leadingIcon = { Icon(Icons.Default.PlaylistAdd, null, tint = Color.Black, modifier = Modifier.size(AppDimensions.iconS())) },
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, null, tint = Color.Black, modifier = Modifier.size(AppDimensions.iconS())) },
                 onClick = {
                     viewModel.selectedSongsForAdd = setOf(song.id)
                     viewModel.showAddSongDialog = true

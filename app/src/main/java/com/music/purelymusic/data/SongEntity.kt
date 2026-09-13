@@ -18,9 +18,13 @@ package com.music.purelymusic.data
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "songs")
+@Entity(
+    tableName = "songs",
+    indices = [Index("lastPlayedTime"), Index("isFavorite"), Index("createdTime"), Index("albumId")]
+)
 data class SongEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
@@ -33,5 +37,6 @@ data class SongEntity(
     @ColumnInfo(defaultValue = "0") val createdTime: Long = 0,
     @ColumnInfo(defaultValue = "0") val isFavorite: Int = 0,
     @ColumnInfo(defaultValue = "0") val duration: Long = 0,
-    @ColumnInfo(defaultValue = "null") val album: String? = null
+    @ColumnInfo(defaultValue = "null") val album: String? = null,
+    @ColumnInfo(defaultValue = "null") val albumId: String? = null
 )

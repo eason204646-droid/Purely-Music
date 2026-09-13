@@ -20,11 +20,28 @@ import androidx.room.*
 
 @Dao
 interface PlaylistDao {
-    @Query("SELECT * FROM playlists")
-    suspend fun getAllPlaylists(): List<PlaylistEntity> // 🚩 检查名字和 suspend 关键字
+    @Transaction
+    @Query("SELECT * FROM playlists ORDER BY updatedAt DESC")
+    suspend fun getAllPlaylists(): List<PlaylistWithSongs>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertPlaylist(playlist: PlaylistEntity)
+    suspend fun insertPlaylistEntity(playlist: PlaylistEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSongRefs(refs: List<PlaylistSongCrossRef>)
+
+    @Query("DELETE FROM playlist_song_cross_ref WHERE playlistId = :playlistId")
+    suspend fun deleteSongRefs(playlistId: String)
+
+    @Query("SELECT COUNT(*) FROM playlists WHERE coverUri = :path")
+    suspend fun countCoverReferences(path: String): Int
+
+    @Transaction
+    suspend fun upsertPlaylist(playlist: PlaylistEntity, refs: List<PlaylistSongCrossRef>) {
+        insertPlaylistEntity(playlist)
+        deleteSongRefs(playlist.id)
+        if (refs.isNotEmpty()) insertSongRefs(refs)
+    }
 
     @Delete
     suspend fun deletePlaylist(playlist: PlaylistEntity)

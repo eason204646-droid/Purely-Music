@@ -17,15 +17,20 @@
 package com.music.purelymusic.data
 
 import android.content.Context
-import androidx.arch.core.executor.ArchTaskExecutor
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 // 🚩 1. 必须在 entities 中加入 PlaylistEntity::class
-@Database(entities = [SongEntity::class, PlaylistEntity::class, AlbumEntity::class], version = 9, exportSchema = false)
+@Database(
+    entities = [SongEntity::class, PlaylistEntity::class, PlaylistSongCrossRef::class, AlbumEntity::class],
+    version = 10,
+    exportSchema = true
+)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun songDao(): SongDao
@@ -100,6 +105,71 @@ abstract class AppDatabase : RoomDatabase() {
             database.execSQL("CREATE TABLE albums (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, artist TEXT NOT NULL, coverUri TEXT, createdAt INTEGER NOT NULL DEFAULT 0)")
         }
 
+        private val MIGRATION_9_10 = Migration(9, 10) { database: SupportSQLiteDatabase ->
+            val playlistSongs = mutableListOf<Triple<String, Long, Int>>()
+            val idListType = object : TypeToken<List<Long>>() {}.type
+            database.query("SELECT id, songIdsJson FROM playlists").use { cursor ->
+                while (cursor.moveToNext()) {
+                    val playlistId = cursor.getString(0)
+                    val ids = runCatching {
+                        Gson().fromJson<List<Long>>(cursor.getString(1), idListType)
+                    }.getOrDefault(emptyList())
+                    ids.forEachIndexed { index, songId ->
+                        playlistSongs += Triple(playlistId, songId, index)
+                    }
+                }
+            }
+
+            database.execSQL("ALTER TABLE songs ADD COLUMN albumId TEXT")
+            database.execSQL(
+                "UPDATE songs SET albumId = (SELECT albums.id FROM albums WHERE albums.name = songs.album LIMIT 1) WHERE album IS NOT NULL"
+            )
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_songs_createdTime ON songs(createdTime)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_songs_albumId ON songs(albumId)")
+
+            database.execSQL(
+                """
+                CREATE TABLE playlists_new (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    name TEXT NOT NULL,
+                    coverUri TEXT,
+                    description TEXT,
+                    createdAt INTEGER NOT NULL DEFAULT 0,
+                    updatedAt INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                "INSERT INTO playlists_new (id, name, coverUri, description, createdAt, updatedAt) " +
+                    "SELECT id, name, coverUri, description, createdAt, updatedAt FROM playlists"
+            )
+            database.execSQL("DROP TABLE playlists")
+            database.execSQL("ALTER TABLE playlists_new RENAME TO playlists")
+
+            database.execSQL(
+                """
+                CREATE TABLE playlist_song_cross_ref (
+                    playlistId TEXT NOT NULL,
+                    songId INTEGER NOT NULL,
+                    position INTEGER NOT NULL,
+                    PRIMARY KEY (playlistId, songId),
+                    FOREIGN KEY (playlistId) REFERENCES playlists(id) ON UPDATE NO ACTION ON DELETE CASCADE,
+                    FOREIGN KEY (songId) REFERENCES songs(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                "CREATE INDEX index_playlist_song_cross_ref_songId ON playlist_song_cross_ref(songId)"
+            )
+            playlistSongs.forEach { (playlistId, songId, position) ->
+                database.execSQL(
+                    "INSERT OR IGNORE INTO playlist_song_cross_ref (playlistId, songId, position) " +
+                        "SELECT ?, id, ? FROM songs WHERE id = ?",
+                    arrayOf(playlistId, position, songId)
+                )
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -108,15 +178,11 @@ abstract class AppDatabase : RoomDatabase() {
                     "am_player_db"
                 )
                     // 🚩 使用 addMigrations 添加迁移策略，确保数据不会丢失
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                     // 🚩 设置 WAL 模式以提高性能并确保数据持久化
                     .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                     // 🚩 允许主线程查询（仅用于调试，生产环境应该移除）
                     //.allowMainThreadQueries()
-                    // 🚩 添加查询回调以便调试
-                    .setQueryCallback({ sqlQuery, bindArgs ->
-                        android.util.Log.d("RoomQuery", "SQL: $sqlQuery, Args: $bindArgs")
-                    }, ArchTaskExecutor.getIOThreadExecutor())
                     .build()
                 INSTANCE = instance
                 instance

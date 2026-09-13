@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
 
 /**
  * 调试工具：显示当前屏幕的详细信息
@@ -51,7 +52,7 @@ fun ScreenInfoDebug() {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text("屏幕信息调试", color = Color.White, fontSize = 18.sp)
-            Text("屏幕密度: ${String.format("%.2f", density)}", color = Color.White)
+            Text("屏幕密度: ${String.format(Locale.ROOT, "%.2f", density)}", color = Color.White)
             Text("屏幕宽度: ${screenWidthDp}dp", color = Color.White)
             Text("屏幕高度: ${screenHeightDp}dp", color = Color.White)
             Text("窗口分类: ${windowSize.widthSize}", color = Color.White)

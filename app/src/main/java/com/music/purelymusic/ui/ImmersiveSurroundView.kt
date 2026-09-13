@@ -39,7 +39,6 @@ import kotlinx.coroutines.delay
 import kotlin.math.*
 
 @androidx.annotation.OptIn(UnstableApi::class)
-@OptIn(UnstableApi::class)
 @Composable
 fun ImmersiveSurroundView(
     viewModel: PlayerViewModel,
@@ -206,7 +205,7 @@ fun ImmersiveSurroundView(
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                Divider(
+                HorizontalDivider(
                     color = themeLightBlue.copy(alpha = 0.3f),
                     thickness = 1.dp,
                     modifier = Modifier.padding(bottom = 16.dp)

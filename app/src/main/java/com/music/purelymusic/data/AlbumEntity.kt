@@ -16,6 +16,7 @@
 //January 2020 http://license.coscl.org.cn/MulanPSL2
 package com.music.purelymusic.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.music.purelymusic.model.Album
@@ -26,7 +27,7 @@ data class AlbumEntity(
     val name: String,
     val artist: String,
     val coverUri: String?,
-    val createdAt: Long = 0
+    @ColumnInfo(defaultValue = "0") val createdAt: Long = 0
 )
 
 // 转换工具：Album <-> Entity

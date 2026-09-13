@@ -18,12 +18,13 @@ January 2020 http://license.coscl.org.cn/MulanPSL2
 -->
 <resources>
     <string name="app_name">purelymusic</string>
-    <string name="player_empty">Player is empty</string>
-    <string name="unknown_track">Unknown track</string>
-    <string name="unknown_artist">Unknown artist</string>
-    <string name="close">Close</string>
-    <string name="delete">Delete</string>
-    <string name="now_playing">Now playing</string>
-    <string name="mode_switch">Mode switch</string>
-    <string name="play_mode">Play mode</string>
+    <string name="player_empty">播放列表为空</string>
+    <string name="unknown_track">未知曲目</string>
+    <string name="unknown_artist">未知艺术家</string>
+    <string name="close">关闭</string>
+    <string name="delete">删除</string>
+    <string name="now_playing">正在播放</string>
+    <string name="mode_switch">切换模式</string>
+    <string name="play_mode">播放模式</string>
+    <string name="queue_empty">播放列表为空</string>
 </resources>

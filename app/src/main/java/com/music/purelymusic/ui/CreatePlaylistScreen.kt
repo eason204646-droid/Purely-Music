@@ -24,7 +24,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.*
@@ -61,7 +61,7 @@ fun CreatePlaylistScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             IconButton(onClick = { if (isNamingStage) isNamingStage = false else onBack() }) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
             }
             Text(
                 text = if (isNamingStage) "歌单信息" else "选择歌曲 (${viewModel.selectedSongsForPlaylist.size})",

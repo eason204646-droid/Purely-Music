@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeDown
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -192,7 +194,7 @@ fun PlayerDetailScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                     .padding(bottom = 40.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.VolumeDown, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Filled.VolumeDown, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
                 Slider(
                     value = 0.5f,
                     onValueChange = { /* 音量调节 */ },
@@ -203,7 +205,7 @@ fun PlayerDetailScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                         inactiveTrackColor = Color.White.copy(alpha = 0.2f)
                     )
                 )
-                Icon(Icons.Default.VolumeUp, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Filled.VolumeUp, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
             }
         }
     }

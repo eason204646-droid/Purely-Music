@@ -18,12 +18,6 @@ Mulan Permissive Software License，Version 2 (Mulan PSL v2)
 January 2020 http://license.coscl.org.cn/MulanPSL2
 -->
 <network-security-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">api.yaohud.cn</domain>
-        <trust-anchors>
-            <certificates src="system" />
-        </trust-anchors>
-    </domain-config>
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">music.126.net</domain>
         <domain includeSubdomains="true">y.qq.com</domain>

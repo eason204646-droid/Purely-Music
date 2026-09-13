@@ -22,5 +22,9 @@ January 2020 http://license.coscl.org.cn/MulanPSL2
    Disabled cloud backup - only using database migration for app updates
 -->
 <full-backup-content>
-    <!-- 不启用云备份，只通过数据库迁移保留应用更新时的数据 -->
+    <exclude domain="root" path="." />
+    <exclude domain="file" path="." />
+    <exclude domain="database" path="." />
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="external" path="." />
 </full-backup-content>

@@ -54,6 +54,3 @@
     java.lang.Object writeReplace();
     java.lang.Object readResolve();
 }
-
-# BuildConfig
--keep class com.music.purelymusic.BuildConfig { *; }

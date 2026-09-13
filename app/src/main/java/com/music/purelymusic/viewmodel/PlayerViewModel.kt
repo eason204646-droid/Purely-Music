@@ -15,13 +15,11 @@
 //
 //January 2020 http://license.coscl.org.cn/MulanPSL2
 package com.music.purelymusic.viewmodel
-import android.annotation.SuppressLint
 import android.app.Application
-import android.app.NotificationChannel
-import android.app.NotificationManager
+import android.content.res.Configuration
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.media.AudioFormat
-import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaMetadataRetriever
 import android.media.Spatializer
@@ -30,41 +28,44 @@ import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
 import android.util.Log
-import androidx.annotation.RequiresApi
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.core.content.ContextCompat
+import androidx.room.withTransaction
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.common.AudioAttributes as ExoAudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.session.legacy.MediaMetadataCompat
-import androidx.media3.session.legacy.MediaSessionCompat
 import com.music.purelymusic.BuildConfig
-import androidx.media3.session.legacy.PlaybackStateCompat
+import com.music.purelymusic.R
 import com.music.purelymusic.data.AppDatabase
+import com.music.purelymusic.data.AppFileStore
+import com.music.purelymusic.data.MetadataRepository
 import com.music.purelymusic.data.toEntity
 import com.music.purelymusic.data.toPlaylist
+import com.music.purelymusic.data.toSongRefs
 import com.music.purelymusic.data.toAlbum
 import com.music.purelymusic.model.*
 import com.music.purelymusic.utils.LrcParser
+import com.music.purelymusic.utils.LyricTranslationParser
 import com.music.purelymusic.ui.utils.BlurUtil
+import com.music.purelymusic.playback.PlaybackRuntime
+import com.music.purelymusic.playback.PlaybackService
 import retrofit2.Retrofit
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
-import java.io.FileOutputStream
 import java.nio.charset.Charset
 import kotlin.math.sin
+import java.util.Locale
 
-@SuppressLint("RestrictedApi")
-@UnstableApi
+@androidx.annotation.OptIn(UnstableApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
     private fun playSongFromList(song: Song) {
         playSong(song, updateInternalList = false)
@@ -79,15 +80,44 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         playSongFromList(currentPlayingList[0])
     }
 
+    private suspend fun findOrCreateAlbumId(
+        albumName: String?,
+        albumArtist: String?,
+        fallbackArtist: String,
+        coverPath: String?
+    ): String? = albumUpdateMutex.withLock {
+        if (albumName.isNullOrBlank()) return@withLock null
+        val artist = albumArtist?.takeIf { it.isNotBlank() } ?: fallbackArtist
+        albumDao.getAlbumByNameAndArtist(albumName, artist)?.let { return@withLock it.id }
+
+        val album = Album(
+            id = java.util.UUID.randomUUID().toString(),
+            name = albumName,
+            artist = artist,
+            coverUri = coverPath
+        )
+        albumDao.insertAlbum(album.toEntity())
+        album.id
+    }
+
     fun deletePlaylist(playlist: Playlist) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             // 1. 从数据库中删除 (使用你修好的 toEntity 函数)
             playlistDao.deletePlaylist(playlist.toEntity())
+            deleteFileIfUnreferenced(playlist.coverUri)
 
             // 2. 从当前内存列表中移除，这样 UI 才会立刻刷新
             // 假设你的 playlists 是一个 MutableStateList 或者 MutableList
-            playlists.remove(playlist)
+            withContext(Dispatchers.Main) { playlists.remove(playlist) }
         }
+    }
+
+    private suspend fun deleteFileIfUnreferenced(path: String?) {
+        if (path.isNullOrBlank()) return
+        val references = songDao.countPathReferences(path) +
+            playlistDao.countCoverReferences(path) +
+            albumDao.countCoverReferences(path)
+        if (references == 0) fileStore.deleteOwnedFile(path)
     }
     fun saveSong(title: String, artist: String) {
         val mUri = tempMusicUri
@@ -97,10 +127,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
+            val createdPaths = mutableListOf<String>()
             try {
                 android.util.Log.d("purelymusic", "开始复制文件")
                 // 拷贝文件到私有目录，防止系统清理或权限丢失（不指定扩展名，让 copyFile 自动检测）
                 val pMusic = copyFile(mUri, "mus_${System.currentTimeMillis()}")
+                pMusic?.let(createdPaths::add)
                 
                 // 处理封面：如果是本地文件路径，直接使用；如果是 URI，需要复制
                 val pCover: String? = tempCoverUri?.let { uri ->
@@ -113,6 +145,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         copyFile(uri, "cov_${System.currentTimeMillis()}.jpg")
                     }
                 }
+                if (tempCoverUri?.toString()?.startsWith("/") == false) pCover?.let(createdPaths::add)
                 
                 val pLrc = tempLrcUri?.let { uri ->
                     val uriString = uri.toString()
@@ -127,6 +160,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         copyFile(uri, "lrc_${System.currentTimeMillis()}.lrc")
                     }
                 }
+                val originalLrc = tempLrcUri?.toString()
+                if (originalLrc != null && !originalLrc.startsWith("/") && !originalLrc.startsWith("file://")) {
+                    pLrc?.let(createdPaths::add)
+                }
 
                 android.util.Log.d("purelymusic", "文件复制结果: pMusic=$pMusic, pCover=$pCover, pLrc=$pLrc")
 
@@ -135,39 +172,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     val albumName = tempAlbumName
                     val albumArtist = tempAlbumArtist
 
-                    if (!albumName.isNullOrEmpty()) {
-                        // 检查专辑是否已存在
-                        val existingAlbum = albumDao.getAlbumByName(albumName)
-                        if (existingAlbum == null) {
-                            // 创建新专辑
-                            val albumId = java.util.UUID.randomUUID().toString()
-                            val newAlbum = Album(
-                                id = albumId,
-                                name = albumName,
-                                artist = albumArtist ?: artist,
-                                coverUri = pCover
-                            )
-                            android.util.Log.d("purelymusic", "准备创建新专辑: ${newAlbum.name}")
-                            val albumEntity = newAlbum.toEntity()
-                            albumDao.insertAlbum(albumEntity)
-                            android.util.Log.d("purelymusic", "新专辑已创建: ${newAlbum.name}")
-                        } else {
-                            android.util.Log.d("purelymusic", "专辑已存在: ${albumName}")
-                        }
+                    database.withTransaction {
+                        val albumId = findOrCreateAlbumId(albumName, albumArtist, artist, pCover)
+                        val newSong = Song(
+                            id = 0,
+                            title = title,
+                            artist = artist,
+                            coverUri = pCover,
+                            musicUri = pMusic,
+                            lrcPath = pLrc,
+                            album = albumName,
+                            albumId = albumId
+                        )
+                        songDao.insertSong(newSong.toEntity())
                     }
-
-                    val newSong = Song(
-                        id = 0, // Room 会自动生成
-                        title = title,
-                        artist = artist,
-                        coverUri = pCover,
-                        musicUri = pMusic,
-                        lrcPath = pLrc,
-                        album = albumName
-                    )
-                    android.util.Log.d("purelymusic", "准备插入数据库: $newSong")
-                    // 存入数据库
-                    songDao.insertSong(newSong.toEntity())
                     android.util.Log.d("purelymusic", "数据库插入成功")
 
                     // 验证数据是否真的保存了
@@ -190,6 +208,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         refreshData()
                     }
                 } else {
+                    createdPaths.forEach(fileStore::deleteOwnedFile)
                     val errorMsg = "复制音乐文件失败"
                     android.util.Log.e("purelymusic", errorMsg)
                     withContext(Dispatchers.Main) {
@@ -197,9 +216,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     }
                 }
             } catch (e: Exception) {
+                createdPaths.forEach(fileStore::deleteOwnedFile)
                 val errorMsg = "保存歌曲失败: ${e.message}"
                 android.util.Log.e("purelymusic", errorMsg, e)
-                e.printStackTrace()
                 withContext(Dispatchers.Main) {
                     saveSongError = errorMsg
                 }
@@ -211,54 +230,43 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         saveSongError = null
     }
     fun updatePlaylistSongs(playlistId: String, newSongIds: List<Long>) {
-        viewModelScope.launch {
-            // 1. 既然参数已经是 String，直接比较即可，toString() 是为了防止 it.id 可能是其他类型
-            val index = playlists.indexOfFirst { it.id.toString() == playlistId }
-
-            if (index != -1) {
-                // 2. 更新内存中的列表对象
-                val updatedPlaylist = playlists[index].copy(songIds = newSongIds)
-                playlists[index] = updatedPlaylist
-
-                // 3. 写入数据库
-                // 🚩 注意：请确保你的 PlaylistEntity 里的 id 字段也是 String 类型
-                // 如果 Entity 里的 id 是 Long，这里依然会因为 UUID 无法存入而报错
-                try {
-                    playlistDao.insertPlaylist(updatedPlaylist.toEntity())
-                } catch (e: Exception) {
-                    android.util.Log.e("purelymusic", "数据库更新失败: ${e.message}")
-                }
-            }
-        }
+        mutatePlaylist(playlistId) { it.copy(songIds = newSongIds) }
     }
 
     // 从歌单中删除歌曲
     fun removeSongFromPlaylist(playlistId: String, songId: Long) {
-        viewModelScope.launch {
-            val index = playlists.indexOfFirst { it.id.toString() == playlistId }
-            if (index != -1) {
-                val updatedSongIds = playlists[index].songIds.filter { it != songId }
-                val updatedPlaylist = playlists[index].copy(songIds = updatedSongIds)
-                playlists[index] = updatedPlaylist
-                playlistDao.insertPlaylist(updatedPlaylist.toEntity())
-            }
+        mutatePlaylist(playlistId) { playlist ->
+            playlist.copy(songIds = playlist.songIds.filter { it != songId })
         }
     }
 
     // 添加歌曲到歌单
     fun addSongsToPlaylist(playlistId: String, songIds: List<Long>) {
+        mutatePlaylist(playlistId) { playlist ->
+            playlist.copy(songIds = (playlist.songIds + songIds).distinct())
+        }
+    }
+
+    private val playlistUpdateMutex = Mutex()
+    private val albumUpdateMutex = Mutex()
+
+    private fun mutatePlaylist(playlistId: String, transform: (Playlist) -> Playlist) {
         viewModelScope.launch {
-            val index = playlists.indexOfFirst { it.id.toString() == playlistId }
-            if (index != -1) {
-                val currentSongIds = playlists[index].songIds.toMutableList()
-                songIds.forEach { songId ->
-                    if (!currentSongIds.contains(songId)) {
-                        currentSongIds.add(songId)
+            playlistUpdateMutex.withLock {
+                val index = playlists.indexOfFirst { it.id == playlistId }
+                if (index < 0) return@withLock
+                val updated = transform(playlists[index]).copy(updatedAt = System.currentTimeMillis())
+                try {
+                    playlistDao.upsertPlaylist(updated.toEntity(), updated.toSongRefs())
+                    playlists[index] = updated
+                } catch (error: Exception) {
+                    Log.e("Playlist", "更新歌单失败", error)
+                    if (currentLanguage == "zh") {
+                        saveSongError = "更新歌单失败，请重试"
+                    } else {
+                        saveSongError = "Could not update playlist. Please retry."
                     }
                 }
-                val updatedPlaylist = playlists[index].copy(songIds = currentSongIds)
-                playlists[index] = updatedPlaylist
-                playlistDao.insertPlaylist(updatedPlaylist.toEntity())
             }
         }
     }
@@ -379,23 +387,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         return null
     }
 
-    private fun copyFile(uri: Uri, fileName: String): String? {
-        return try {
-            val finalFileName = if (!fileName.contains(".")) {
-                val ext = getFileExtension(uri)
-                fileName + ext
-            } else {
-                fileName
-            }
-            val file = File(context.filesDir, finalFileName)
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(file).use { output ->
-                    input.copyTo(output)
-                }
-            }
-            file.absolutePath
-        } catch (e: Exception) { null }
-    }
+    private suspend fun copyFile(uri: Uri, fileName: String): String? =
+        fileStore.copyFromUri(uri, fileName)
 
     fun savePlaylist(name: String) {
         viewModelScope.launch {
@@ -410,7 +403,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 createdAt = System.currentTimeMillis(),
                 updatedAt = System.currentTimeMillis()
             )
-            playlistDao.insertPlaylist(newPlaylist.toEntity())
+            playlistDao.upsertPlaylist(newPlaylist.toEntity(), newPlaylist.toSongRefs())
             playlists.add(0, newPlaylist)
             selectedSongsForPlaylist.clear()
             tempPlaylistCoverUri = null
@@ -418,12 +411,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
 
-    private val context = application.applicationContext
+    private val context get() = getApplication<Application>().applicationContext
     private val audioManager = context.getSystemService(AudioManager::class.java)
-    private val songDao = AppDatabase.getDatabase(application).songDao()
-    private val playlistDao = AppDatabase.getDatabase(application).playlistDao()
-    private val albumDao = AppDatabase.getDatabase(application).albumDao()
-    private var exoPlayer: ExoPlayer? = null
+    private val database = AppDatabase.getDatabase(application)
+    private val songDao = database.songDao()
+    private val playlistDao = database.playlistDao()
+    private val albumDao = database.albumDao()
+    private val fileStore = AppFileStore(application)
+    private val metadataRepository = MetadataRepository(BuildConfig.MUSIC_API_KEY, fileStore)
+    private val playbackRuntime = PlaybackRuntime.get(context)
+    private var exoPlayer: ExoPlayer? = playbackRuntime.player
     private var transitionPlayer: ExoPlayer? = null
     private var crossfadeJob: Job? = null
     private var isCrossfadeInProgress = false
@@ -431,13 +428,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var suppressNextEndedCallback = false
     private val crossfadeDurationMs: Long
         get() = crossfadeDurationSeconds * 1000L
-    private var audioFocusGranted = false
-    private var audioBecomingNoisyReceiver: AudioBecomingNoisyReceiver? = null
-
     var isActuallyPlaying by mutableStateOf(false)
         private set
-    @SuppressLint("RestrictedApi")
-    private var mediaSession: MediaSessionCompat? = null
+
+    private val runtimePlayerChangeListener: (ExoPlayer) -> Unit = { player ->
+        exoPlayer?.removeListener(playerListener)
+        exoPlayer = player
+        player.addListener(playerListener)
+        syncPlaybackState()
+    }
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlayingNow: Boolean) {
             syncPlaybackState()
@@ -447,7 +446,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             syncPlaybackState()
             if (playbackState == Player.STATE_READY) {
                 this@PlayerViewModel.duration = exoPlayer?.duration ?: 0L
-                currentSong?.let { updateMediaSession(it) }
                 attachEqualizerToCurrentSession()
             } else if (playbackState == Player.STATE_ENDED) {
                 if (suppressNextEndedCallback) {
@@ -474,10 +472,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
 
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            val songId = mediaItem?.mediaId?.toLongOrNull() ?: return
+            val song = currentPlayingList.firstOrNull { it.id == songId }
+                ?: libraryList.firstOrNull { it.id == songId }
+                ?: return
+            if (currentSong?.id != song.id) {
+                updateSongState(song)
+            }
+        }
+
         override fun onPlayerError(error: PlaybackException) {
             Log.e("PlayError", "ExoPlayer错误: ${error.errorCodeName}, ${error.message}")
             this@PlayerViewModel.isPlaying = false
-            updateNotification(currentSong, false)
         }
     }
 
@@ -485,24 +492,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val existing = exoPlayer
         if (existing != null) return existing
 
-        val player = createPlayer()
-        player.addListener(playerListener)
-        exoPlayer = player
-        return player
+        return playbackRuntime.player.also {
+            it.addListener(playerListener)
+            exoPlayer = it
+        }
     }
 
     private fun createPlayer(): ExoPlayer {
-        val renderersFactory = DefaultRenderersFactory(context)
-            .setEnableDecoderFallback(true)
-            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
-        return ExoPlayer.Builder(context, renderersFactory).build().apply {
-            val audioAttributes = ExoAudioAttributes.Builder()
-                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                .setUsage(C.USAGE_MEDIA)
-                .build()
-            setAudioAttributes(audioAttributes, true)
-            volume = 1.0f
-        }
+        return playbackRuntime.createPlayer()
     }
 
     private fun setPlayerVolume(player: ExoPlayer?, left: Float, right: Float) {
@@ -520,6 +517,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private set
 
     private fun attachEqualizerToCurrentSession() {
+        if (!equalizerEnabled) {
+            releaseEqualizer()
+            return
+        }
         val sessionId = exoPlayer?.audioSessionId ?: return
         if (sessionId == 0 || equalizerSessionId == sessionId) return
 
@@ -596,8 +597,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val playingNow = exoPlayer?.isPlaying == true || transitionPlayer?.isPlaying == true || isCrossfadeInProgress
         isPlaying = playingNow
         isActuallyPlaying = playingNow
-        updatePlaybackState(playingNow)
-        updateNotification(currentSong, playingNow)
     }
 
     // Android 12+ Spatializer 支持
@@ -652,7 +651,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         SHUFFLE      // 随机播放
     }
 
-    var playMode by mutableStateOf(PlayMode.SEQUENTIAL)
+    private var _playMode by mutableStateOf(PlayMode.SEQUENTIAL)
+    var playMode: PlayMode
+        get() = _playMode
+        set(value) {
+            _playMode = value
+            exoPlayer?.let(::configurePlayMode)
+        }
 
     // 环绕音状态
     enum class SurroundMode {
@@ -665,8 +670,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     var isSurroundEnabled by mutableStateOf(false)          // 环绕音是否启用
 
     // 3D环绕音参数
-    var surroundRadius by mutableStateOf(400f)         // 圆周半径
-    var surroundSpeed by mutableStateOf(2.0f)          // 运动速度
+    var surroundRadius by mutableFloatStateOf(400f)    // 圆周半径
+    var surroundSpeed by mutableFloatStateOf(2.0f)     // 运动速度
 
     // 导入临时状态
     var tempPlaylistCoverUri by mutableStateOf<Uri?>(null)
@@ -697,11 +702,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     // 批量导入状态
     var isBatchImporting by mutableStateOf(false)
         private set
-    var batchImportProgress by mutableStateOf(0)
+    var batchImportProgress by mutableIntStateOf(0)
         private set
-    var batchImportTotal by mutableStateOf(0)
+    var batchImportTotal by mutableIntStateOf(0)
         private set
     var batchImportCurrentSong by mutableStateOf<String?>(null)
+        private set
+    var batchImportImported by mutableIntStateOf(0)
+        private set
+    var batchImportSkipped by mutableIntStateOf(0)
+        private set
+    var batchImportFailed by mutableIntStateOf(0)
+        private set
+    var batchImportSummary by mutableStateOf<String?>(null)
         private set
     
     // 批量导入暂停状态（需要用户输入歌曲信息）
@@ -745,14 +758,21 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
 
     // 语言敏感的文本（替代 stringResource，响应语言切换）
-    val textUnknownTrack: String get() = if (_currentLanguage == "zh") "未知曲目" else "Unknown Track"
-    val textUnknownArtist: String get() = if (_currentLanguage == "zh") "未知艺术家" else "Unknown Artist"
-    val textPlayMode: String get() = if (_currentLanguage == "zh") "播放模式" else "Play Mode"
-    val textModeSwitch: String get() = if (_currentLanguage == "zh") "切换模式" else "Switch Mode"
-    val textClose: String get() = if (_currentLanguage == "zh") "关闭" else "Close"
-    val textQueueEmpty: String get() = if (_currentLanguage == "zh") "播放列表为空" else "Queue is empty"
-    val textNowPlaying: String get() = if (_currentLanguage == "zh") "正在播放" else "Now Playing"
-    val textDelete: String get() = if (_currentLanguage == "zh") "删除" else "Delete"
+    private fun localizedString(resourceId: Int): String {
+        val configuration = Configuration(context.resources.configuration).apply {
+            setLocale(Locale.forLanguageTag(_currentLanguage))
+        }
+        return context.createConfigurationContext(configuration).getString(resourceId)
+    }
+
+    val textUnknownTrack: String get() = localizedString(R.string.unknown_track)
+    val textUnknownArtist: String get() = localizedString(R.string.unknown_artist)
+    val textPlayMode: String get() = localizedString(R.string.play_mode)
+    val textModeSwitch: String get() = localizedString(R.string.mode_switch)
+    val textClose: String get() = localizedString(R.string.close)
+    val textQueueEmpty: String get() = localizedString(R.string.queue_empty)
+    val textNowPlaying: String get() = localizedString(R.string.now_playing)
+    val textDelete: String get() = localizedString(R.string.delete)
 
     // 歌词设置状态（带持久化）
     private var _lyricGlowEnabled by mutableStateOf(true)
@@ -820,6 +840,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         set(value) {
             _equalizerEnabled = value
             com.music.purelymusic.utils.PreferencesManager.saveEqualizerEnabled(value)
+            if (value) attachEqualizerToCurrentSession() else releaseEqualizer()
         }
 
     // 翻译API服务
@@ -831,148 +852,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .create(TranslateApiService::class.java)
     }
 
-    // 通知栏
-    private val notificationManager by lazy { context.getSystemService(NotificationManager::class.java) }
-    private val notificationChannelId = "purelymusic_playback"
-
-    // --- 音频焦点处理 ---
-    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
-        when (focusChange) {
-            AudioManager.AUDIOFOCUS_LOSS -> {
-                audioFocusGranted = false
-                if (isPlaying) togglePlayPause()
-            }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                audioFocusGranted = false
-                exoPlayer?.pause()
-            }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                exoPlayer?.volume = 0.3f
-            }
-            AudioManager.AUDIOFOCUS_GAIN -> {
-                audioFocusGranted = true
-                exoPlayer?.volume = 1.0f
-            }
-        }
-    }
-
-    private var audioFocusRequest: AudioFocusRequest? = null
-
-    private fun requestAudioFocus(): Boolean {
-        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-            .setAudioAttributes(
-                android.media.AudioAttributes.Builder()
-                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build()
-            )
-            .setOnAudioFocusChangeListener(audioFocusChangeListener)
-            .build()
-        audioFocusRequest = request
-        val result = audioManager.requestAudioFocus(request)
-        audioFocusGranted = (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
-        return audioFocusGranted
-    }
-
-    private fun abandonAudioFocus() {
-        audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
-        audioFocusGranted = false
-    }
-
-    // --- 耳机拔出自动暂停 ---
-    private class AudioBecomingNoisyReceiver(
-        private val onNoisy: () -> Unit
-    ) : android.content.BroadcastReceiver() {
-        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
-            if (intent?.action == android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
-                onNoisy()
-            }
-        }
-    }
-
-    private fun registerAudioBecomingNoisyReceiver() {
-        if (audioBecomingNoisyReceiver != null) return
-        val receiver = AudioBecomingNoisyReceiver {
-            if (isPlaying) {
-                exoPlayer?.pause()
-                syncPlaybackState()
-            }
-        }
-        audioBecomingNoisyReceiver = receiver
-        val intentFilter = android.content.IntentFilter(android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY)
-        context.registerReceiver(receiver, intentFilter)
-    }
-
-    private fun unregisterAudioBecomingNoisyReceiver() {
-        audioBecomingNoisyReceiver?.let {
-            runCatching { context.unregisterReceiver(it) }
-        }
-        audioBecomingNoisyReceiver = null
-    }
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                notificationChannelId,
-                "播放控制",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "控制音乐播放"
-                setShowBadge(false)
-            }
-            notificationManager.createNotificationChannel(channel)
-        }
-    }
-
-    private fun updateNotification(song: Song?, playing: Boolean) {
-        if (song == null) {
-            NotificationManagerCompat.from(context).cancel(1)
-            return
-        }
-        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-        val pendingIntent = android.app.PendingIntent.getActivity(
-            context, 0, intent,
-            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-        )
-        val prevIntent = android.app.PendingIntent.getActivity(
-            context, 1, intent,
-            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-        )
-        val nextIntent = android.app.PendingIntent.getActivity(
-            context, 2, intent,
-            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-        )
-        val notification = NotificationCompat.Builder(context, notificationChannelId)
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle(song.title)
-            .setContentText(song.artist)
-            .setContentIntent(pendingIntent)
-            .setOngoing(playing)
-            .setShowWhen(false)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .addAction(android.R.drawable.ic_media_previous, "", prevIntent)
-            .addAction(
-                if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-                "",
-                pendingIntent
-            )
-            .addAction(android.R.drawable.ic_media_next, "", nextIntent)
-            .build()
-        if (playing) {
-            try {
-                NotificationManagerCompat.from(context).notify(1, notification)
-            } catch (e: SecurityException) {
-                // 没有通知权限，忽略
-            }
-        } else {
-            NotificationManagerCompat.from(context).cancel(1)
-        }
-    }
-
     init {
         // 初始化 PreferencesManager
         com.music.purelymusic.utils.PreferencesManager.init(context)
-        createNotificationChannel()
         
         // 加载保存的设置
         _currentLanguage = com.music.purelymusic.utils.PreferencesManager.getLanguage()
@@ -985,21 +867,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         _crossfadeDurationSeconds = com.music.purelymusic.utils.PreferencesManager.getCrossfadeDurationSeconds()
         _equalizerEnabled = com.music.purelymusic.utils.PreferencesManager.getEqualizerEnabled()
 
-        // 初始化 MediaSession
-        mediaSession = MediaSessionCompat(context, "purelymusic").apply {
-            isActive = true
-            // 🚩 核心修复：添加回调监听系统指令
-            setCallback(object : MediaSessionCompat.Callback() {
-                override fun onPlay() { togglePlayPause() }
-                override fun onPause() { togglePlayPause() }
-                override fun onSkipToNext() { playNext() }
-                override fun onSkipToPrevious() { playPrevious() }
-                override fun onSeekTo(pos: Long) { seekTo(pos.toFloat()) } // 支持系统进度条拖动
-            })
-        }
+        exoPlayer?.addListener(playerListener)
+        playbackRuntime.addPlayerChangeListener(runtimePlayerChangeListener)
 
         // 初始化 Spatializer (Android 12+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S_V2) {
             try {
                 val audioManager = context.getSystemService(Application.AUDIO_SERVICE) as AudioManager
                 spatializer = audioManager.spatializer
@@ -1011,8 +883,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
 
+        observeAlbums()
         refreshData()
         startTimer()
+    }
+
+    private fun observeAlbums() {
+        viewModelScope.launch {
+            albumDao.getAllAlbums().collect { albumEntityList ->
+                albums.clear()
+                albums.addAll(albumEntityList.map { it.toAlbum() })
+            }
+        }
     }
 
     // --- 歌词加载与解析 ---
@@ -1058,7 +940,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     val isChinese = com.music.purelymusic.utils.LanguageDetector.isLyricsChinese(lyricTexts)
                     canTranslate = !isChinese
                     Log.d("LyricLoad", "语言检测结果: isChinese=$isChinese, canTranslate=$canTranslate")
-                    Log.d("LyricLoad", "歌词内容示例: ${lyricTexts.take(3)}")
                     // 重置翻译状态
                     showTranslation = false
                     translateError = null
@@ -1071,21 +952,59 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     // --- 播放控制逻辑 ---
-    private fun buildMediaItem(musicPath: String): MediaItem {
+    private fun buildMediaItem(musicPath: String, song: Song? = currentSong): MediaItem {
         val uri = if (musicPath.startsWith("content://") || musicPath.startsWith("file://")) {
             Uri.parse(musicPath)
         } else {
             Uri.fromFile(File(musicPath))
         }
         val mimeType = resolveMimeType(musicPath)
+        val metadata = MediaMetadata.Builder()
+            .setTitle(song?.title)
+            .setArtist(song?.artist)
+            .setAlbumTitle(song?.album)
+            .apply {
+                song?.coverUri
+                    ?.takeIf { File(it).exists() }
+                    ?.let { setArtworkUri(Uri.fromFile(File(it))) }
+            }
+            .build()
         return MediaItem.Builder()
+            .setMediaId(song?.id?.toString() ?: musicPath)
             .setUri(uri)
+            .setMediaMetadata(metadata)
             .apply {
                 if (!mimeType.isNullOrBlank()) {
                     setMimeType(mimeType)
                 }
             }
             .build()
+    }
+
+    private fun buildQueueMediaItems(): List<MediaItem> = currentPlayingList.mapNotNull { queuedSong ->
+        queuedSong.musicUri?.let { buildMediaItem(it, queuedSong) }
+    }
+
+    private fun configurePlayMode(player: ExoPlayer) {
+        player.repeatMode = when (playMode) {
+            PlayMode.REPEAT_ONE -> Player.REPEAT_MODE_ONE
+            PlayMode.SEQUENTIAL, PlayMode.SHUFFLE -> Player.REPEAT_MODE_ALL
+        }
+        player.shuffleModeEnabled = playMode == PlayMode.SHUFFLE
+    }
+
+    private fun syncPlayerQueueKeepingPosition() {
+        val player = exoPlayer ?: return
+        val items = buildQueueMediaItems()
+        if (items.isEmpty()) return
+        val currentId = currentSong?.id?.toString()
+        val index = items.indexOfFirst { it.mediaId == currentId }.coerceAtLeast(0)
+        val position = player.currentPosition.coerceAtLeast(0L)
+        val shouldPlay = player.playWhenReady
+        player.setMediaItems(items, index, position)
+        configurePlayMode(player)
+        player.prepare()
+        player.playWhenReady = shouldPlay
     }
 
     private fun resetCrossfadeState() {
@@ -1145,7 +1064,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         crossfadeJob = viewModelScope.launch {
             try {
                 val incomingPlayer = createPlayer().also { transitionPlayer = it }
-                incomingPlayer.setMediaItem(buildMediaItem(musicPath))
+                val queueItems = buildQueueMediaItems()
+                val nextIndex = queueItems.indexOfFirst { it.mediaId == nextSong.id.toString() }
+                if (queueItems.isNotEmpty() && nextIndex >= 0) {
+                    incomingPlayer.setMediaItems(queueItems, nextIndex, 0L)
+                } else {
+                    incomingPlayer.setMediaItem(buildMediaItem(musicPath, nextSong))
+                }
+                configurePlayMode(incomingPlayer)
                 incomingPlayer.prepare()
                 incomingPlayer.volume = 0f
                 incomingPlayer.play()
@@ -1155,7 +1081,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 this@PlayerViewModel.isPlaying = true
                 updateSongState(nextSong)
                 duration = incomingPlayer.duration.takeIf { it > 0L } ?: duration
-                updatePlaybackState(true)
 
                 val steps = 20
                 val stepDelay = (crossfadeDurationMs / steps).coerceAtLeast(50L)
@@ -1170,8 +1095,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 outgoingPlayer.stop()
                 outgoingPlayer.release()
 
-                incomingPlayer.addListener(playerListener)
-                exoPlayer = incomingPlayer
+                playbackRuntime.replacePlayer(incomingPlayer)
                 transitionPlayer = null
                 isCrossfadeInProgress = false
                 hasScheduledCrossfadeForCurrentSong = false
@@ -1179,7 +1103,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 currentPosition = incomingPlayer.currentPosition
                 duration = incomingPlayer.duration.takeIf { it > 0L } ?: duration
                 this@PlayerViewModel.isPlaying = incomingPlayer.isPlaying
-                updatePlaybackState(incomingPlayer.isPlaying)
                 startSurroundEffect()
             } catch (e: Exception) {
                 Log.e("Crossfade", "自动交叉渐入渐出失败: ${e.message}", e)
@@ -1189,7 +1112,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun updateSongState(song: Song) {
-        currentSong = song
+        val playedAt = System.currentTimeMillis()
+        currentSong = song.copy(
+            lastPlayedTime = playedAt,
+            playCount = song.playCount + 1
+        )
         hasScheduledCrossfadeForCurrentSong = false
 
         if (!song.lrcPath.isNullOrEmpty()) {
@@ -1198,11 +1125,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             lyricLines = emptyList()
         }
 
-        updateMediaSession(song)
         updateBlurBackground(song.coverUri)
 
         viewModelScope.launch {
-            songDao.updateSong(song.toEntity(System.currentTimeMillis()))
+            songDao.recordPlayback(song.id, playedAt)
+            val recent = songDao.getRecentSongs().map { it.toSong() }
+            recentSongs.clear()
+            recentSongs.addAll(recent)
         }
     }
 
@@ -1234,24 +1163,27 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
-        requestAudioFocus()
-        registerAudioBecomingNoisyReceiver()
-
         exoPlayer?.stop()
         updateSongState(song)
 
         try {
-            val player = getOrCreatePlayer()
             val musicPath = song.musicUri ?: return
-            val mediaItem = buildMediaItem(musicPath)
-            player.setMediaItem(mediaItem)
+            ContextCompat.startForegroundService(context, Intent(context, PlaybackService::class.java))
+            val player = getOrCreatePlayer()
+            val queueItems = buildQueueMediaItems()
+            val selectedIndex = queueItems.indexOfFirst { it.mediaId == song.id.toString() }
+            if (queueItems.isNotEmpty() && selectedIndex >= 0) {
+                player.setMediaItems(queueItems, selectedIndex, 0L)
+            } else {
+                player.setMediaItem(buildMediaItem(musicPath, song))
+            }
+            configurePlayMode(player)
             player.prepare()
             player.volume = 1.0f
             player.play()
         } catch (e: Exception) {
             Log.e("PlayError", "播放失败: ${e.message}, 歌曲路径=${song.musicUri}")
         }
-        updateNotification(song, true)
     }
     fun removeSongFromPlayingList(song: Song) {
         if (currentPlayingList.isEmpty()) return
@@ -1261,8 +1193,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             // 如果删除的是当前播放的歌曲，播放下一首
             if (currentSong?.id == song.id && currentPlayingList.isNotEmpty()) {
                 playSong(currentPlayingList[0], false)
+            } else {
+                syncPlayerQueueKeepingPosition()
             }
         }
+    }
+
+    fun clearPlayingList() {
+        val playing = currentSong
+        currentPlayingList.clear()
+        if (playing != null) currentPlayingList.add(playing)
+        syncPlayerQueueKeepingPosition()
     }
 
     // 跳转到指定歌曲（不删除前面的播放历史）
@@ -1290,8 +1231,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun deleteAlbum(album: Album) {
-        viewModelScope.launch {
-            albumDao.deleteAlbum(album.toEntity())
+        viewModelScope.launch(Dispatchers.IO) {
+            database.withTransaction {
+                songDao.clearAlbum(album.id)
+                albumDao.deleteAlbum(album.toEntity())
+            }
+            deleteFileIfUnreferenced(album.coverUri)
             refreshData()
         }
     }
@@ -1358,7 +1303,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         stopSurroundEffect()
 
         // 在 Android 12+ 上检查 Spatializer 状态 (仅对沉浸立体音有效)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && isSpatializerAvailable && surroundMode == SurroundMode.IMMERSIVE) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S_V2 && isSpatializerAvailable && surroundMode == SurroundMode.IMMERSIVE) {
             try {
                 val isSpatializerEnabled = spatializer?.isEnabled ?: false
                 Log.d("SurroundEffect", "Spatializer available and enabled: $isSpatializerEnabled")
@@ -1608,6 +1553,27 @@ private fun stopSurroundEffect() {
                 android.util.Log.d("refreshData", "Successfully converted songs: ${convertedSongs.size}")
                 libraryList = convertedSongs
 
+                val activePlayer = exoPlayer
+                val activeQueue = activePlayer?.let { player ->
+                    (0 until player.mediaItemCount).mapNotNull { index ->
+                        val songId = player.getMediaItemAt(index).mediaId.toLongOrNull()
+                        convertedSongs.firstOrNull { it.id == songId }
+                    }
+                }.orEmpty()
+                if (activeQueue.isNotEmpty() && activePlayer != null) {
+                    currentPlayingList.clear()
+                    currentPlayingList.addAll(activeQueue)
+                    val activeId = activePlayer.currentMediaItem?.mediaId?.toLongOrNull()
+                    convertedSongs.firstOrNull { it.id == activeId }?.let { activeSong ->
+                        currentSong = activeSong
+                        activeSong.lrcPath?.let(::loadLyrics)
+                        updateBlurBackground(activeSong.coverUri)
+                        currentPosition = activePlayer.currentPosition
+                        duration = activePlayer.duration.coerceAtLeast(0L)
+                        syncPlaybackState()
+                    }
+                }
+
                 val recentFromDb = songDao.getRecentSongs().map { it.toSong() }
                 val playlistEntities = playlistDao.getAllPlaylists()
 
@@ -1621,33 +1587,28 @@ private fun stopSurroundEffect() {
                 //: 收藏列表必须放在 collect 前（collect 永不返回）
                 refreshFavorites()
                 if (currentPlayingList.isEmpty()) {
-                    currentPlayingList.clear()
                     currentPlayingList.addAll(libraryList)
                 }
 
-                // 获取专辑列表（用独立协程避免阻塞后续逻辑）
-                launch(Dispatchers.IO) {
-                    albumDao.getAllAlbums().collect { albumEntityList ->
-                        withContext(Dispatchers.Main) {
-                            albums.clear()
-                            albums.addAll(albumEntityList.map { it.toAlbum() })
-                        }
-                    }
-                }
             } catch (e: Exception) {
-                android.util.Log.e("refreshData", "Failed to refresh data: ${e.message}")
-                e.printStackTrace()
+                android.util.Log.e("refreshData", "Failed to refresh data", e)
             }
         }
     }
 
     fun deleteSong(song: Song) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             songDao.deleteSong(song.toEntity())
+            listOf(song.musicUri, song.coverUri, song.lrcPath)
+                .distinct()
+                .forEach { deleteFileIfUnreferenced(it) }
             refreshData()
             if (currentSong?.id == song.id) {
-                exoPlayer?.stop()
-                isPlaying = false
+                withContext(Dispatchers.Main) {
+                    exoPlayer?.stop()
+                    currentSong = null
+                    isPlaying = false
+                }
             }
         }
     }
@@ -1699,12 +1660,14 @@ private fun stopSurroundEffect() {
             )
 
             songDao.updateSong(updatedSong.toEntity())
+            if (newCoverPath != song.coverUri) deleteFileIfUnreferenced(song.coverUri)
+            if (newLrcPath != song.lrcPath) deleteFileIfUnreferenced(song.lrcPath)
             refreshData()
 
             // 如果正在播放这首歌，更新当前歌曲信息
             if (currentSong?.id == song.id) {
                 currentSong = updatedSong
-                updateMediaSession(updatedSong)
+                updateCurrentMediaItemMetadata(updatedSong)
             }
 
             // 清理编辑状态
@@ -1810,39 +1773,13 @@ private fun stopSurroundEffect() {
             return String.format(java.util.Locale.getDefault(), "%02d:%02d", mins, secs)
         }
 
-    // --- 系统通知栏同步 ---
-    private fun updateMediaSession(song: Song) {
-        val metadataBuilder = MediaMetadataCompat.Builder()
-            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, song.title)
-            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, song.artist)
-            // 🚩 核心修复：必须设置时长，系统进度条才能正确显示和响应拖动
-            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
-
-        song.coverUri?.let { path ->
-            if (File(path).exists()) {
-                val bitmap = BitmapFactory.decodeFile(path)
-                metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap)
-            }
+    private fun updateCurrentMediaItemMetadata(song: Song) {
+        val player = exoPlayer ?: return
+        val musicPath = song.musicUri ?: return
+        val index = player.currentMediaItemIndex
+        if (index >= 0 && index < player.mediaItemCount) {
+            player.replaceMediaItem(index, buildMediaItem(musicPath, song))
         }
-        mediaSession?.setMetadata(metadataBuilder.build())
-    }
-
-    private fun updatePlaybackState(playing: Boolean) {
-        val state = if (playing) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
-        val stateBuilder = PlaybackStateCompat.Builder()
-            // 🚩 核心修复：传入 currentPosition 和 playbackSpeed，系统进度条才会显示正确位置
-            .setState(state, currentPosition, 1.0f)
-            // 🚩 核心修复：设置缓冲位置，确保进度条可以拖动
-            .setBufferedPosition(duration)
-            .setActions(
-                PlaybackStateCompat.ACTION_PLAY_PAUSE or
-                        PlaybackStateCompat.ACTION_PLAY or
-                        PlaybackStateCompat.ACTION_PAUSE or
-                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
-                        PlaybackStateCompat.ACTION_SEEK_TO // 🚩 核心修复：启用进度条拖动权限
-            )
-        mediaSession?.setPlaybackState(stateBuilder.build())
     }
 
     private fun updateBlurBackground(path: String?) {
@@ -1851,8 +1788,7 @@ private fun stopSurroundEffect() {
                 BitmapFactory.decodeFile(path)
             } else {
                 // 加载默认封面
-                val resourceId = context.resources.getIdentifier("default_cover", "drawable", context.packageName)
-                BitmapFactory.decodeResource(context.resources, resourceId)
+                BitmapFactory.decodeResource(context.resources, R.drawable.default_cover)
             }
             val blurred = bitmap?.let { BlurUtil.doBlur(it, 25, 20) }
             withContext(Dispatchers.Main) { blurredBackground = blurred }
@@ -1864,11 +1800,8 @@ private fun stopSurroundEffect() {
         resetCrossfadeState()
         stop3DSurroundEffect()
         releaseEqualizer()
-        abandonAudioFocus()
-        unregisterAudioBecomingNoisyReceiver()
-        syncPlaybackState()
-        exoPlayer?.release()
-        mediaSession?.release()
+        exoPlayer?.removeListener(playerListener)
+        playbackRuntime.removePlayerChangeListener(runtimePlayerChangeListener)
     }
 
     
@@ -1914,6 +1847,10 @@ private fun stopSurroundEffect() {
         batchImportTotal = uris.size
         batchImportProgress = 0
         batchImportCurrentSong = null
+        batchImportImported = 0
+        batchImportSkipped = 0
+        batchImportFailed = 0
+        batchImportSummary = null
         batchImportPaused = false
 
         // 开始处理队列
@@ -1963,16 +1900,28 @@ private fun stopSurroundEffect() {
                     // 显示当前正在处理的歌曲
                     batchImportCurrentSong = title
 
+                    if (songDao.findByTitleAndArtist(title, artist) != null) {
+                        batchImportSkipped++
+                        continue
+                    }
+
                     // 复制音乐文件到私有目录
                     val pMusic = copyFile(item.uri, "mus_${System.currentTimeMillis()}_${item.index}")
 
                     if (pMusic != null) {
-                        processBatchImportSong(title, artist, pMusic, item.index)
+                        if (songDao.findByMusicUri(pMusic) != null) {
+                            batchImportSkipped++
+                        } else {
+                            processBatchImportSong(title, artist, pMusic, item.index)
+                            batchImportImported++
+                        }
                     } else {
                         Log.e("BatchImport", "复制音乐文件失败: ${item.uri}")
+                        batchImportFailed++
                     }
                 } catch (e: Exception) {
                     Log.e("BatchImport", "导入歌曲失败: ${e.message}", e)
+                    batchImportFailed++
                 }
             }
 
@@ -1982,6 +1931,7 @@ private fun stopSurroundEffect() {
                 isBatchImporting = false
                 batchImportCurrentSong = null
                 batchImportPaused = false
+                batchImportSummary = "导入完成：成功 $batchImportImported 首，跳过 $batchImportSkipped 首，失败 $batchImportFailed 首"
             }
         }
     }
@@ -2013,34 +1963,26 @@ private fun stopSurroundEffect() {
             }
         }
 
-        // 处理专辑逻辑
-        if (!albumName.isNullOrEmpty()) {
-            val existingAlbum = albumDao.getAlbumByName(albumName)
-            if (existingAlbum == null) {
-                val albumId = java.util.UUID.randomUUID().toString()
-                val newAlbum = Album(
-                    id = albumId,
-                    name = albumName,
-                    artist = albumArtist ?: artist,
-                    coverUri = pCover
+        try {
+            database.withTransaction {
+                val albumId = findOrCreateAlbumId(albumName, albumArtist, artist, pCover)
+                val newSong = Song(
+                    id = 0,
+                    title = title,
+                    artist = artist,
+                    coverUri = pCover,
+                    musicUri = musicPath,
+                    lrcPath = pLrc,
+                    album = albumName,
+                    albumId = albumId
                 )
-                albumDao.insertAlbum(newAlbum.toEntity())
+                songDao.insertSong(newSong.toEntity())
             }
+            Log.d("BatchImport", "成功导入歌曲: $title")
+        } catch (error: Exception) {
+            listOf(musicPath, pCover, pLrc).forEach(fileStore::deleteOwnedFile)
+            throw error
         }
-
-        // 创建歌曲对象并保存
-        val newSong = Song(
-            id = 0,
-            title = title,
-            artist = artist,
-            coverUri = pCover,
-            musicUri = musicPath,
-            lrcPath = pLrc,
-            album = albumName
-        )
-
-        songDao.insertSong(newSong.toEntity())
-        Log.d("BatchImport", "成功导入歌曲: ${newSong.title}")
     }
 
     /**
@@ -2053,6 +1995,17 @@ private fun stopSurroundEffect() {
         val index = batchImportTotal - batchImportQueue.size - 1
 
         viewModelScope.launch {
+            if (songDao.findByTitleAndArtist(title, artist) != null) {
+                batchImportSkipped++
+                batchImportPaused = false
+                batchImportPendingUri = null
+                batchImportPendingFileName = null
+                batchImportPendingMusicPath = null
+                if (batchImportQueue.isNotEmpty()) batchImportQueue.removeAt(0)
+                processBatchImportQueue()
+                return@launch
+            }
+
             var pMusic = musicPath
             
             // 如果没有音乐文件路径，需要先复制文件
@@ -2077,34 +2030,30 @@ private fun stopSurroundEffect() {
                     Log.e("BatchImport", "获取歌曲 $title 的封面和歌词失败: ${e.message}")
                 }
 
-                // 处理专辑逻辑
-                if (!albumName.isNullOrEmpty()) {
-                    val existingAlbum = albumDao.getAlbumByName(albumName)
-                    if (existingAlbum == null) {
-                        val albumId = java.util.UUID.randomUUID().toString()
-                        val newAlbum = Album(
-                            id = albumId,
-                            name = albumName,
-                            artist = albumArtist ?: artist,
-                            coverUri = pCover
+                try {
+                    database.withTransaction {
+                        val albumId = findOrCreateAlbumId(albumName, albumArtist, artist, pCover)
+                        val newSong = Song(
+                            id = 0,
+                            title = title,
+                            artist = artist,
+                            coverUri = pCover,
+                            musicUri = pMusic,
+                            lrcPath = pLrc,
+                            album = albumName,
+                            albumId = albumId
                         )
-                        albumDao.insertAlbum(newAlbum.toEntity())
+                        songDao.insertSong(newSong.toEntity())
                     }
+                    batchImportImported++
+                    Log.d("BatchImport", "成功导入歌曲: $title")
+                } catch (error: Exception) {
+                    listOf(pMusic, pCover, pLrc).forEach(fileStore::deleteOwnedFile)
+                    batchImportFailed++
+                    Log.e("BatchImport", "保存歌曲失败", error)
                 }
-
-                // 创建歌曲对象并保存
-                val newSong = Song(
-                    id = 0,
-                    title = title,
-                    artist = artist,
-                    coverUri = pCover,
-                    musicUri = pMusic,
-                    lrcPath = pLrc,
-                    album = albumName
-                )
-
-                songDao.insertSong(newSong.toEntity())
-                Log.d("BatchImport", "成功导入歌曲: ${newSong.title}")
+            } else {
+                batchImportFailed++
             }
 
             // 重置暂停状态
@@ -2154,349 +2103,28 @@ private fun stopSurroundEffect() {
         batchImportPendingMusicPath = null
     }
 
+    fun clearBatchImportSummary() {
+        batchImportSummary = null
+    }
+
     // --- 自动获取所有信息（封面+歌词）---
     suspend fun fetchAllFromNetwork(title: String, artist: String): Pair<String?, String?> {
-        return withContext(Dispatchers.IO) {
-            try {
-                withContext(Dispatchers.Main) {
-                    isFetchingAll = true
-                    fetchAllError = null
-                }
-
-                val keywords = "$title $artist"
-                Log.d("FetchAll", "开始获取所有信息: keywords=$keywords, source=${_autoFetchSource}")
-
-                // 根据设置选择数据源
-                if (_autoFetchSource == "mixed") {
-                    // 混合模式：QQ获取封面 + 咪咕获取歌词
-                    fetchFromMixedSource(keywords)
-                } else {
-                    // 网易云模式（默认）
-                    fetchFromNetease(keywords)
-                }
-            } catch (e: Exception) {
-                val errorMsg = "获取所有信息失败: ${e.javaClass.simpleName} - ${e.message}"
-                Log.e("FetchAll", errorMsg, e)
-                withContext(Dispatchers.Main) {
-                    fetchAllError = errorMsg
-                }
-                Pair(null, null)
-            } finally {
-                withContext(Dispatchers.Main) {
-                    isFetchingAll = false
-                }
-            }
-        }
-    }
-
-    /**
-     * 从网易云获取封面和歌词（原有逻辑）
-     */
-    private suspend fun fetchFromNetease(keywords: String): Pair<String?, String?> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val apiUrl = "https://api.yaohud.cn/api/music/wy?key=${BuildConfig.MUSIC_API_KEY}&msg=${java.net.URLEncoder.encode(keywords, "UTF-8")}&n=1"
-                Log.d("FetchAll", "网易云请求URL: $apiUrl")
-
-                val connection = java.net.URL(apiUrl).openConnection() as java.net.HttpURLConnection
-                connection.requestMethod = "GET"
-                connection.connectTimeout = 10000
-                connection.readTimeout = 10000
-
-                val responseCode = connection.responseCode
-                Log.d("FetchAll", "HTTP响应码: $responseCode")
-
-                if (responseCode == 200) {
-                    val rawResponse = connection.inputStream.bufferedReader().use { it.readText() }
-                    Log.d("FetchAll", "原始响应: $rawResponse")
-
-                    val gson = com.google.gson.Gson()
-                    val response = gson.fromJson(rawResponse, com.music.purelymusic.model.WyApiResponse::class.java)
-
-                    if (response.code == 200) {
-                        val data = response.data
-                        Log.d("FetchAll", "解析成功: album=${data.album}, picture=${data.picture}, lrc=${data.lrc}")
-
-                        // 保存专辑信息
-                        withContext(Dispatchers.Main) {
-                            tempAlbumName = data.album
-                            tempAlbumArtist = data.songname
-                        }
-
-                        // 处理封面
-                        val coverPath = downloadCover(data.picture)
-
-                        // 处理歌词
-                        val lrcPath = downloadAndSaveLyricsFromUrl(data.lrc)
-
-                        Pair(coverPath, lrcPath)
-                    } else {
-                        val errorMsg = "API错误: ${response.msg}"
-                        Log.e("FetchAll", errorMsg)
-                        withContext(Dispatchers.Main) {
-                            fetchAllError = errorMsg
-                        }
-                        Pair(null, null)
-                    }
-                } else {
-                    val errorMsg = "HTTP错误: $responseCode"
-                    Log.e("FetchAll", errorMsg)
-                    withContext(Dispatchers.Main) {
-                        fetchAllError = errorMsg
-                    }
-                    Pair(null, null)
-                }
-            } catch (e: Exception) {
-                val errorMsg = "网易云获取失败: ${e.message}"
-                Log.e("FetchAll", errorMsg, e)
-                withContext(Dispatchers.Main) {
-                    fetchAllError = errorMsg
-                }
-                Pair(null, null)
-            }
-        }
-    }
-
-    /**
-     * 混合模式：从QQ获取封面，从咪咕获取歌词
-     */
-    private suspend fun fetchFromMixedSource(keywords: String): Pair<String?, String?> {
-        return withContext(Dispatchers.IO) {
-            var coverPath: String? = null
-            var lrcPath: String? = null
-
-            // 并行请求QQ和咪咕API
-            try {
-                // 1. 从QQ API获取封面
-                coverPath = fetchCoverFromQQ(keywords)
-            } catch (e: Exception) {
-                Log.e("FetchAll", "QQ获取封面失败", e)
-            }
-
-            try {
-                // 2. 从咪咕API获取歌词
-                lrcPath = fetchLyricsFromMigu(keywords)
-            } catch (e: Exception) {
-                Log.e("FetchAll", "咪咕获取歌词失败", e)
-            }
-
-            if (coverPath == null && lrcPath == null) {
-                withContext(Dispatchers.Main) {
-                    fetchAllError = "混合模式获取失败：封面和歌词均未获取到"
-                }
-            }
-
-            Pair(coverPath, lrcPath)
-        }
-    }
-
-    /**
-     * 从QQ音乐API获取封面
-     */
-    private suspend fun fetchCoverFromQQ(keywords: String): String? {
-        return withContext(Dispatchers.IO) {
-            try {
-                val apiUrl = "https://api.yaohud.cn/api/music/qq?key=${BuildConfig.MUSIC_API_KEY}&msg=${java.net.URLEncoder.encode(keywords, "UTF-8")}&n=1"
-                Log.d("FetchAll", "QQ API请求URL: $apiUrl")
-
-                val connection = java.net.URL(apiUrl).openConnection() as java.net.HttpURLConnection
-                connection.requestMethod = "GET"
-                connection.connectTimeout = 10000
-                connection.readTimeout = 10000
-
-                val responseCode = connection.responseCode
-                Log.d("FetchAll", "QQ API响应码: $responseCode")
-
-                if (responseCode == 200) {
-                    val rawResponse = connection.inputStream.bufferedReader().use { it.readText() }
-                    Log.d("FetchAll", "QQ API响应: $rawResponse")
-
-                    val gson = com.google.gson.Gson()
-                    val response = gson.fromJson(rawResponse, com.music.purelymusic.model.QqApiResponse::class.java)
-
-                    if (response.code == 200 && !response.data.picture.isNullOrEmpty()) {
-                        val pictureUrl = response.data.picture
-                        Log.d("FetchAll", "QQ封面URL: $pictureUrl")
-
-                        // 保存专辑信息
-                        withContext(Dispatchers.Main) {
-                            tempAlbumArtist = response.data.songname
-                        }
-
-                        // 下载封面
-                        downloadCover(pictureUrl)
-                    } else {
-                        Log.e("FetchAll", "QQ API返回错误或无封面: code=${response.code}")
-                        null
-                    }
-                } else {
-                    Log.e("FetchAll", "QQ API HTTP错误: $responseCode")
-                    null
-                }
-            } catch (e: Exception) {
-                Log.e("FetchAll", "QQ API请求失败", e)
-                null
-            }
-        }
-    }
-
-    /**
-     * 从咪咕API获取歌词
-     */
-    private suspend fun fetchLyricsFromMigu(keywords: String): String? {
-        return withContext(Dispatchers.IO) {
-            try {
-                val apiUrl = "https://api.yaohud.cn/api/music/migu?key=${BuildConfig.MUSIC_API_KEY}&msg=${java.net.URLEncoder.encode(keywords, "UTF-8")}&n=1"
-                Log.d("FetchAll", "咪咕API请求URL: $apiUrl")
-
-                val connection = java.net.URL(apiUrl).openConnection() as java.net.HttpURLConnection
-                connection.requestMethod = "GET"
-                connection.connectTimeout = 10000
-                connection.readTimeout = 10000
-
-                val responseCode = connection.responseCode
-                Log.d("FetchAll", "咪咕API响应码: $responseCode")
-
-                if (responseCode == 200) {
-                    val rawResponse = connection.inputStream.bufferedReader().use { it.readText() }
-                    Log.d("FetchAll", "咪咕API响应: $rawResponse")
-
-                    val gson = com.google.gson.Gson()
-                    val response = gson.fromJson(rawResponse, com.music.purelymusic.model.MiguDetailResponse::class.java)
-
-                    if (response.code == 200 && !response.data.lrc_url.isNullOrEmpty()) {
-                        val lrcUrl = response.data.lrc_url
-                        Log.d("FetchAll", "咪咕歌词URL: $lrcUrl")
-
-                        // 下载歌词内容
-                        downloadAndSaveLyricsFromDirectUrl(lrcUrl)
-                    } else {
-                        Log.e("FetchAll", "咪咕API返回错误或无歌词: code=${response.code}")
-                        null
-                    }
-                } else {
-                    Log.e("FetchAll", "咪咕API HTTP错误: $responseCode")
-                    null
-                }
-            } catch (e: Exception) {
-                Log.e("FetchAll", "咪咕API请求失败", e)
-                null
-            }
-        }
-    }
-
-    /**
-     * 下载封面图片
-     */
-    private fun downloadCover(pictureUrl: String?): String? {
-        if (pictureUrl.isNullOrEmpty()) return null
-
-        val secureUrl = if (pictureUrl.startsWith("http://")) {
-            "https://${pictureUrl.substring(7)}"
-        } else {
-            pictureUrl
-        }
-
+        isFetchingAll = true
+        fetchAllError = null
         return try {
-            val coverConnection = java.net.URL(secureUrl).openConnection() as java.net.HttpURLConnection
-            coverConnection.requestMethod = "GET"
-            coverConnection.connect()
-
-            if (coverConnection.responseCode == 200) {
-                val inputStream = coverConnection.inputStream
-                val fileName = "cover_${System.currentTimeMillis()}.jpg"
-                val file = java.io.File(context.filesDir, fileName)
-                FileOutputStream(file).use { output ->
-                    inputStream.use { it.copyTo(output) }
-                }
-                file.absolutePath
-            } else {
-                Log.e("FetchAll", "下载封面失败，响应码: ${coverConnection.responseCode}")
-                null
-            }
-        } catch (e: Exception) {
-            Log.e("FetchAll", "下载封面失败", e)
-            null
+            val result = metadataRepository.fetch(title, artist, _autoFetchSource)
+            tempAlbumName = result.albumName
+            tempAlbumArtist = result.albumArtist
+            fetchAllError = result.error
+            result.coverPath to result.lyricPath
+        } catch (error: Exception) {
+            val message = "获取歌曲信息失败：${error.message ?: error.javaClass.simpleName}"
+            Log.e("FetchAll", message, error)
+            fetchAllError = message
+            null to null
+        } finally {
+            isFetchingAll = false
         }
-    }
-
-    /**
-     * 从歌词URL下载并保存歌词（网易云模式，需要二次请求）
-     */
-    private fun downloadAndSaveLyricsFromUrl(lrcUrl: String?): String? {
-        if (lrcUrl.isNullOrEmpty()) {
-            Log.d("FetchAll", "歌词URL为空")
-            return null
-        }
-
-        return try {
-            Log.d("FetchAll", "通过URL获取歌词: $lrcUrl")
-
-            val lrcConnection = java.net.URL(lrcUrl).openConnection() as java.net.HttpURLConnection
-            lrcConnection.requestMethod = "GET"
-            lrcConnection.connectTimeout = 10000
-            lrcConnection.readTimeout = 10000
-            lrcConnection.connect()
-
-            if (lrcConnection.responseCode == 200) {
-                val rawResponse = lrcConnection.inputStream.bufferedReader().use { it.readText() }
-                Log.d("FetchAll", "歌词API响应: ${rawResponse.take(500)}")
-
-                val gson = com.google.gson.Gson()
-                val lrcResponse = gson.fromJson(rawResponse, com.music.purelymusic.model.LrcJsonResponse::class.java)
-
-                if (lrcResponse.code == 200 && !lrcResponse.data?.lyric.isNullOrEmpty()) {
-                    saveLyricsFile(lrcResponse.data.lyric)
-                } else {
-                    null
-                }
-            } else {
-                Log.e("FetchAll", "歌词URL请求失败，响应码: ${lrcConnection.responseCode}")
-                null
-            }
-        } catch (e: Exception) {
-            Log.e("FetchAll", "下载歌词失败", e)
-            null
-        }
-    }
-
-    /**
-     * 直接从歌词URL下载并保存歌词（咪咕模式，直接是lrc文件）
-     */
-    private fun downloadAndSaveLyricsFromDirectUrl(lrcUrl: String): String? {
-        return try {
-            Log.d("FetchAll", "直接下载歌词文件: $lrcUrl")
-
-            val lrcConnection = java.net.URL(lrcUrl).openConnection() as java.net.HttpURLConnection
-            lrcConnection.requestMethod = "GET"
-            lrcConnection.connectTimeout = 10000
-            lrcConnection.readTimeout = 10000
-            lrcConnection.connect()
-
-            if (lrcConnection.responseCode == 200) {
-                val lrcContent = lrcConnection.inputStream.bufferedReader().use { it.readText() }
-                Log.d("FetchAll", "歌词内容长度: ${lrcContent.length}")
-                saveLyricsFile(lrcContent)
-            } else {
-                Log.e("FetchAll", "下载歌词文件失败，响应码: ${lrcConnection.responseCode}")
-                null
-            }
-        } catch (e: Exception) {
-            Log.e("FetchAll", "下载歌词文件失败", e)
-            null
-        }
-    }
-
-    /**
-     * 保存歌词文件
-     */
-    private fun saveLyricsFile(lrcContent: String): String? {
-        if (lrcContent.isBlank()) return null
-
-        val fileName = "lrc_${System.currentTimeMillis()}.lrc"
-        val file = java.io.File(context.filesDir, fileName)
-        file.writeText(lrcContent, Charsets.UTF_8)
-        return file.absolutePath
     }
 
     // --- 翻译功能 ---
@@ -2523,14 +2151,12 @@ private fun stopSurroundEffect() {
 
                 // 构建歌词文本：每行包含时间戳和内容
                 val lyricText = lyricLines.joinToString("\n") { line ->
-                    val timeStr = formatTimeToLrc(line.time)
+                    val timeStr = LyricTranslationParser.formatTime(line.time)
                     "[$timeStr]${line.content}"
                 }
 
                 addLog("发送翻译请求，歌词长度: ${lyricText.length}")
-                addLog("歌词前100字符: ${lyricText.take(100)}")
                 Log.d("Translate", "发送翻译请求，歌词长度: ${lyricText.length}")
-                Log.d("Translate", "歌词前100字符: ${lyricText.take(100)}")
 
                 // 调用翻译API，目标语言为中文
                 val response = translateService.translateText(
@@ -2544,14 +2170,10 @@ private fun stopSurroundEffect() {
                 addLog("========== 翻译响应开始 ==========")
                 addLog("响应代码: ${response.code}")
                 addLog("响应消息: ${response.msg}")
-                addLog("响应data: ${response.data}")
-                addLog("完整响应: $response")
                 Log.d("Translate", "API调用成功")
                 Log.d("Translate", "========== 翻译响应开始 ==========")
                 Log.d("Translate", "响应代码: ${response.code}")
                 Log.d("Translate", "响应消息: ${response.msg}")
-                Log.d("Translate", "响应data: ${response.data}")
-                Log.d("Translate", "完整响应: $response")
 
                 // 检查响应是否成功
                 if (response.code != 200 || response.data == null) {
@@ -2571,12 +2193,10 @@ private fun stopSurroundEffect() {
                 }
 
                 // 解码HTML实体
-                val decodedText = decodeHtmlEntities(translatedText)
+                val decodedText = LyricTranslationParser.decodeHtmlEntities(translatedText)
 
                 addLog("翻译响应: translatedText长度=${decodedText.length}")
-                addLog("翻译响应前200字符: ${decodedText.take(200)}")
                 Log.d("Translate", "翻译响应: translatedText长度=${decodedText.length}")
-                Log.d("Translate", "翻译响应前200字符: ${decodedText.take(200)}")
 
                 // 检查翻译文本是否为空
                 if (translatedText.isBlank()) {
@@ -2587,17 +2207,12 @@ private fun stopSurroundEffect() {
                 }
 
                 // 解析翻译后的文本
-                val translatedLines = parseTranslatedText(decodedText, lyricLines)
+                val translatedLines = LyricTranslationParser.parse(decodedText, lyricLines)
 
                 addLog("解析结果：共${translatedLines.size}行")
-                translatedLines.forEachIndexed { index, text ->
-                    addLog("  第${index}行: ${text?.take(30) ?: "(空)"} (长度=${text?.length ?: 0})")
-                }
+                addLog("成功匹配 ${translatedLines.count { !it.isNullOrBlank() }} 行")
                 addLog("========== 翻译响应结束 ==========")
                 Log.d("Translate", "解析结果：共${translatedLines.size}行")
-                translatedLines.forEachIndexed { index, text ->
-                    Log.d("Translate", "  第${index}行: ${text?.take(30) ?: "(空)"} (长度=${text?.length ?: 0})")
-                }
                 Log.d("Translate", "========== 翻译响应结束 ==========")
 
                 // 检查是否有翻译结果
@@ -2616,11 +2231,7 @@ private fun stopSurroundEffect() {
                     lyricLines = newLyricLines
                     showTranslation = true
                     addLog("✅ 翻译完成！showTranslation=$showTranslation")
-                    addLog("更新后的第一行: content=${lyricLines.getOrNull(0)?.content}, translation=${lyricLines.getOrNull(0)?.translation}")
-                    addLog("更新后的第二行: content=${lyricLines.getOrNull(1)?.content}, translation=${lyricLines.getOrNull(1)?.translation}")
                     Log.d("Translate", "翻译完成，showTranslation=$showTranslation")
-                    Log.d("Translate", "更新后的第一行: content=${lyricLines.getOrNull(0)?.content}, translation=${lyricLines.getOrNull(0)?.translation}")
-                    Log.d("Translate", "更新后的第二行: content=${lyricLines.getOrNull(1)?.content}, translation=${lyricLines.getOrNull(1)?.translation}")
                 }
 
             } catch (e: retrofit2.HttpException) {
@@ -2649,256 +2260,7 @@ private fun stopSurroundEffect() {
         }
     }
 
-    /**
-     * 将毫秒转换为LRC时间格式 [mm:ss.xxx]
-     */
-    private fun formatTimeToLrc(ms: Long): String {
-        val minutes = ms / 60000
-        val seconds = (ms % 60000) / 1000
-        val millis = ms % 1000
-        return String.format("%02d:%02d.%03d", minutes, seconds, millis)
-    }
-
-    /**
-     * 解析翻译后的文本，提取每句翻译
-     * 使用 parseContinuous 方法解析包含合并时间戳的翻译文本，然后进行智能匹配
-     */
-    private fun parseTranslatedText(translatedText: String, originalLines: List<LrcLine>): List<String?> {
-        val result: MutableList<String?> = mutableListOf()
-        repeat(originalLines.size) { result.add(null) }
-
-        Log.d("Translate", "========== 解析翻译文本开始 ==========")
-        addLog("========== 解析翻译文本开始 ==========")
-        addLog("翻译文本长度: ${translatedText.length}")
-        addLog("翻译文本前500字符: ${translatedText.take(500)}")
-        addLog("原始歌词行数: ${originalLines.size}")
-        addLog("原始歌词时间戳前3个: ${originalLines.take(3).map { "${formatTimeToLrc(it.time)}(${it.time}ms)" }}")
-
-        // 步骤1: 使用 LrcParser.parseContinuous 解析包含合并时间戳的文本
-        // 这个方法可以处理像 [00:10.255]文本[00:17.957]文本 这样的格式
-        val normalizedText = convertContinuousToStandardLrc(translatedText)
-        val translatedLines = LrcParser.parseContinuous(normalizedText)
-        if (translatedLines.isEmpty()) {
-            val plainLines = translatedText.lineSequence()
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-                .toList()
-
-            plainLines.forEachIndexed { index, line ->
-                val logMsg = "Plain line ${index}: ${line.take(40)}"
-                Log.d("Translate", "  $logMsg")
-                addLog("  $logMsg")
-            }
-
-            for (i in originalLines.indices) {
-                result[i] = plainLines.getOrNull(i)
-            }
-            return result
-        }
-        Log.d("Translate", "parseContinuous解析结果: 共${translatedLines.size}行")
-        addLog("parseContinuous解析结果: 共${translatedLines.size}行")
-
-        // 打印解析后的翻译内容
-        translatedLines.forEachIndexed { index, line ->
-            val logMsg = "翻译第${index}行: [${formatTimeToLrc(line.time)}] ${line.content.take(40)}"
-            Log.d("Translate", "  $logMsg")
-            addLog("  $logMsg")
-        }
-
-        // 步骤2: 使用双向匹配算法
-        // 对于每个原文行，查找最接近的翻译行
-        var matchedCount = 0
-        var unmatchedCount = 0
-        
-        for (i in originalLines.indices) {
-            val originalTime = originalLines[i].time
-            
-            // 查找最接近且未使用的时间戳
-            var bestMatchIndex = -1
-            var minDiff = Long.MAX_VALUE
-            val timeTolerance = 300L // 允许300毫秒误差
-            
-            for (j in translatedLines.indices) {
-                val diff = kotlin.math.abs(translatedLines[j].time - originalTime)
-                if (diff < minDiff) {
-                    minDiff = diff
-                    bestMatchIndex = j
-                }
-            }
-
-            if (bestMatchIndex != -1 && minDiff <= timeTolerance) {
-                result[i] = translatedLines[bestMatchIndex].content
-                matchedCount++
-                val logMsg = "原文行${i} [${formatTimeToLrc(originalTime)}] -> 匹配翻译: ${translatedLines[bestMatchIndex].content.take(40)} (差异: ${minDiff}ms)"
-                Log.d("Translate", "$logMsg")
-                addLog("$logMsg")
-            } else {
-                unmatchedCount++
-                val logMsg = "原文行${i} [${formatTimeToLrc(originalTime)}] -> 未找到匹配翻译 (原始内容: ${originalLines[i].content.take(30)})"
-                Log.d("Translate", "$logMsg")
-                addLog("$logMsg")
-            }
-        }
-
-        Log.d("Translate", "匹配统计: 成功$matchedCount 行, 失败$unmatchedCount 行")
-        addLog("匹配统计: 成功$matchedCount 行, 失败$unmatchedCount 行")
-
-        // Fallback: if translation missing, use original text to avoid empty lines
-        for (i in result.indices) {
-            if (result[i].isNullOrBlank() && originalLines[i].content.isNotBlank()) {
-                result[i] = originalLines[i].content
-                val logMsg = "Fallback to original line $i"
-                Log.d("Translate", logMsg)
-                addLog(logMsg)
-            }
-        }
-        
-        // 打印调试信息
-        Log.d("Translate", "解析结果：")
-        addLog("解析结果：")
-        result.forEachIndexed { index, text ->
-            val logMsg = "  第${index}行: ${text?.take(50) ?: "(空)"} (长度=${text?.length ?: 0})"
-            Log.d("Translate", "$logMsg")
-            addLog("$logMsg")
-        }
-        Log.d("Translate", "========== 解析翻译文本结束 ==========")
-        addLog("========== 解析翻译文本结束 ==========")
-
-        return result
-    }
-
-    /**
-     * 将连续时间戳格式的文本转换为标准LRC格式
-     * 先标准化所有时间戳格式，然后正确处理换行符
-     */
-    private fun convertContinuousToStandardLrc(continuousText: String): String {
-        var result = continuousText
-        
-        // 步骤1: 修复错误格式的时间戳
-        // 修复 [00:6.484] -> [00:06.484] (秒数补零)
-        result = result.replace(Regex("\\[(\\d{2}):(\\d)([.:]\\d{2,3})\\]")) { matchResult ->
-            val min = matchResult.groupValues[1]
-            val sec = matchResult.groupValues[2].padStart(2, '0')
-            val millis = matchResult.groupValues[3]
-            "[$min:$sec$millis]"
-        }
-        
-        // 修复 [0:15.367] -> [00:15.367] (分钟补零)
-        result = result.replace(Regex("\\[(\\d):(\\d{2})([.:]\\d{2,3})\\]")) { matchResult ->
-            val min = matchResult.groupValues[1].padStart(2, '0')
-            val sec = matchResult.groupValues[2]
-            val millis = matchResult.groupValues[3]
-            "[$min:$sec$millis]"
-        }
-        
-        // 修复 [00,49.162] -> [00:49.162] (逗号转冒号)
-        result = result.replace(Regex("\\[(\\d{2}),(\\d{2})([.:]\\d{2,3})\\]")) { matchResult ->
-            val min = matchResult.groupValues[1]
-            val sec = matchResult.groupValues[2]
-            val millis = matchResult.groupValues[3]
-            "[$min:$sec$millis]"
-        }
-        
-        // 修复 [00:3.884] -> [00:03.884] (秒数补零)
-        result = result.replace(Regex("\\[(\\d{2}):(\\d)([.:]\\d{2,3})\\]")) { matchResult ->
-            val min = matchResult.groupValues[1]
-            val sec = matchResult.groupValues[2].padStart(2, '0')
-            val millis = matchResult.groupValues[3]
-            "[$min:$sec$millis]"
-        }
-        
-        // 修复 [02:431.23] -> [02:43.123] (秒数错误，截取前两位)
-        result = result.replace(Regex("\\[(\\d{2}):(\\d{3})([.:]\\d{2,3})\\]")) { matchResult ->
-            val min = matchResult.groupValues[1]
-            val sec = matchResult.groupValues[2].take(2)
-            val millis = matchResult.groupValues[3]
-            "[$min:$sec$millis]"
-        }
-        
-        // 修复 [03:05.65] -> [03:05.065] (毫秒补零)
-        result = result.replace(Regex("\\[(\\d{2}):(\\d{2})[.:](\\d{2})\\]")) { matchResult ->
-            val min = matchResult.groupValues[1]
-            val sec = matchResult.groupValues[2]
-            val millis = matchResult.groupValues[3] + "0"
-            "[$min:$sec.$millis]"
-        }
-        
-        // 步骤2: 提取每个时间戳及其后的文本，重新格式化
-        // 这样可以确保时间戳和文本在同一行，并且每行只有一个时间戳
-        val timePattern = Regex("\\[\\d{2}:\\d{2}[.:]\\d{3}\\]")
-        val matches = timePattern.findAll(result).toList()
-        
-        if (matches.isEmpty()) {
-            return result
-        }
-        
-        val builder = StringBuilder()
-        
-        for (i in matches.indices) {
-            val match = matches[i]
-            val timeStr = match.value
-            
-            // 提取文本：从当前时间戳结束位置到下一个时间戳开始位置
-            val startPos = match.range.last + 1
-            val endPos = if (i < matches.size - 1) {
-                matches[i + 1].range.first
-            } else {
-                result.length
-            }
-            
-            var content = result.substring(startPos, endPos).trim()
-            
-            // 移除内容中的其他时间戳（防止嵌套）
-            content = content.replace(timePattern, "").trim()
-            
-            // 将时间戳和文本放在同一行
-            if (content.isNotEmpty()) {
-                builder.append(timeStr).append(content).append("\n")
-            }
-        }
-        
-        // 步骤3: 移除末尾多余的换行符
-        return builder.toString().trimEnd('\n')
-    }
-
-    /**
-     * 解析LRC时间戳格式 [MM:SS.mmm] 或 [MM:SS:mmm] 为毫秒
-     */
-    private fun parseLrcTime(timeStr: String): Long {
-        try {
-            // 移除方括号，提取时间部分
-            val timeContent = timeStr.substring(1, timeStr.length - 1)
-            val parts = timeContent.split(":")
-            
-            val minutes = parts[0].toInt()
-            val seconds = parts[1].split("[.:]")[0].toInt()
-            
-            // 提取毫秒部分，支持点号或冒号分隔
-            val millisStr = if (parts[1].contains(".")) {
-                parts[1].split(".")[1]
-            } else if (parts[1].contains(":")) {
-                parts[1].split(":")[1]
-            } else {
-                "0"
-            }
-            
-            // 处理毫秒：2位需要乘以10，3位直接使用
-            val millis = when (millisStr.length) {
-                2 -> millisStr.toInt() * 10L  // 例如: 48 -> 480
-                3 -> millisStr.toLong()       // 例如: 484 -> 484
-                else -> millisStr.toLong()    // 其他情况直接使用
-            }
-            
-            return minutes * 60000L + seconds * 1000L + millis
-        } catch (e: Exception) {
-            Log.e("Translate", "解析时间戳失败: $timeStr, 错误: ${e.message}")
-            return 0L
-        }
-    }
-
-    /**
-     * 添加翻译日志
-     */
+    /** 追加不包含歌词正文或 API 密钥的诊断日志。 */
     private fun addLog(message: String) {
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
         translateLogs += "[$timestamp] $message\n"
@@ -2911,67 +2273,4 @@ private fun stopSurroundEffect() {
         showTranslation = !showTranslation
     }
 
-    /**
-     * 解码HTML实体
-     * 将 &amp;quot;、&amp;#039; 等HTML实体转换为正常字符
-     * 并将 \\n 转换为真正的换行符
-     * 支持中文分号（；）和英文分号（;）两种格式
-     */
-    private fun decodeHtmlEntities(text: String): String {
-        var result = text
-        
-        // 处理带中文分号的HTML实体（如 &quot；）
-        result = result.replace("&quot；", "\"")
-        result = result.replace("&apos；", "'")
-        result = result.replace("&lt；", "<")
-        result = result.replace("&gt；", ">")
-        result = result.replace("&amp；", "&")
-        result = result.replace("&#039；", "'")
-        
-        // 处理带英文分号的HTML实体（如 &quot;）
-        result = result.replace("&quot;", "\"")
-        result = result.replace("&apos;", "'")
-        result = result.replace("&lt;", "<")
-        result = result.replace("&gt;", ">")
-        result = result.replace("&amp;", "&")
-        result = result.replace("&#039;", "'")
-        
-        // 处理不带&前缀但可能被错误编码的情况
-        result = result.replace("quot；", "\"")
-        result = result.replace("quot;", "\"")
-        result = result.replace("apos；", "'")
-        result = result.replace("apos;", "'")
-        result = result.replace("lt；", "<")
-        result = result.replace("lt;", "<")
-        result = result.replace("gt；", ">")
-        result = result.replace("gt;", ">")
-        result = result.replace("amp；", "&")
-        result = result.replace("amp;", "&")
-        result = result.replace("#039；", "'")
-        result = result.replace("#039;", "'")
-        
-        // 处理中文全角引号和标点
-        result = result.replace(""", "\"")
-        result = result.replace(""", "\"")
-        result = result.replace("，", ",")
-        result = result.replace("。", ".")
-        result = result.replace("！", "!")
-        result = result.replace("？", "?")
-        result = result.replace("；", ";")  // 中文分号转英文分号
-        
-        // 处理中文全角方括号转换为半角方括号（重要！）
-        result = result.replace("【", "[")
-        result = result.replace("】", "]")
-        result = result.replace("［", "[")
-        result = result.replace("］", "]")
-        
-        // 处理中文全角括号
-        result = result.replace("（", "(")
-        result = result.replace("）", ")")
-        
-        // 处理换行符
-        result = result.replace("\\n", "\n")
-        
-        return result
-    }
 }

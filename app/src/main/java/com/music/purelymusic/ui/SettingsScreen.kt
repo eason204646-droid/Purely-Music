@@ -30,6 +30,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Help
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -62,7 +64,7 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // 顶部标题栏
         Row(
@@ -75,7 +77,7 @@ fun SettingsScreen(
                 text = if (viewModel.currentLanguage == "zh") "设置" else "Settings",
                 fontSize = AppDimensions.textXXL().value.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.Black
+                color = MaterialTheme.colorScheme.onBackground
             )
         }
 
@@ -140,7 +142,7 @@ fun SettingsScreen(
             // 歌词设置
             SettingsSection(
                 title = if (viewModel.currentLanguage == "zh") "歌词" else "Lyrics",
-                icon = Icons.Default.Notes
+                icon = Icons.AutoMirrored.Filled.Notes
             ) {
                 // 歌词发光特效
                 SettingsSwitch(
@@ -207,7 +209,7 @@ fun SettingsScreen(
             // 帮助
             SettingsSection(
                 title = if (viewModel.currentLanguage == "zh") "帮助" else "Help",
-                icon = Icons.Default.Help
+                icon = Icons.AutoMirrored.Filled.Help
             ) {
                 SettingsOption(
                     title = if (viewModel.currentLanguage == "zh") "使用说明" else "User Guide",
@@ -613,7 +615,7 @@ fun SettingsScreen(
                         }
                     }
 
-                    Divider(color = Color(0xFFE0E0E0))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),

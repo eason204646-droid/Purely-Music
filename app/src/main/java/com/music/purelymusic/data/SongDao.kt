@@ -23,14 +23,23 @@ interface SongDao {
     @Query("SELECT * FROM songs ORDER BY id DESC")
     suspend fun getAllSongs(): List<SongEntity>
 
+    @Query("SELECT * FROM songs WHERE musicUri = :musicUri LIMIT 1")
+    suspend fun findByMusicUri(musicUri: String): SongEntity?
+
+    @Query("SELECT * FROM songs WHERE title = :title AND artist = :artist LIMIT 1")
+    suspend fun findByTitleAndArtist(title: String, artist: String): SongEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSong(song: SongEntity)
 
     @Update
     suspend fun updateSong(song: SongEntity)
 
-    @Query("SELECT * FROM songs ORDER BY lastPlayedTime DESC LIMIT 50")
+    @Query("SELECT * FROM songs WHERE lastPlayedTime > 0 ORDER BY lastPlayedTime DESC LIMIT 50")
     suspend fun getRecentSongs(): List<SongEntity>
+
+    @Query("UPDATE songs SET lastPlayedTime = :playedAt, playCount = playCount + 1 WHERE id = :songId")
+    suspend fun recordPlayback(songId: Long, playedAt: Long)
 
     // 🚩 v2.5: 搜索歌曲（按歌名或歌手模糊匹配）
     @Query("SELECT * FROM songs WHERE title LIKE '%' || :query || '%' OR artist LIKE '%' || :query || '%' ORDER BY id DESC")
@@ -47,6 +56,12 @@ interface SongDao {
     // 🚩 v2.5: 更新收藏状态
     @Query("UPDATE songs SET isFavorite = :isFavorite WHERE id = :id")
     suspend fun updateSongFavorite(id: Long, isFavorite: Int)
+
+    @Query("UPDATE songs SET albumId = NULL, album = NULL WHERE albumId = :albumId")
+    suspend fun clearAlbum(albumId: String)
+
+    @Query("SELECT COUNT(*) FROM songs WHERE musicUri = :path OR coverUri = :path OR lrcPath = :path")
+    suspend fun countPathReferences(path: String): Int
 
     @Delete
     suspend fun deleteSong(song: SongEntity)

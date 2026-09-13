@@ -32,6 +32,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Notes
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -260,7 +263,7 @@ fun PlayerScreen(
                         }
 
                         IconButton(onClick = { viewModel.showPlaylist = !viewModel.showPlaylist }, modifier = Modifier.size(AppDimensions.iconButtonSizeS())) {
-                            Icon(Icons.Default.PlaylistPlay, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(AppDimensions.iconL()))
+                            Icon(Icons.AutoMirrored.Filled.PlaylistPlay, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(AppDimensions.iconL()))
                         }
                     }
 
@@ -424,7 +427,7 @@ fun PlayerScreen(
                         modifier = Modifier.size(AppDimensions.iconButtonSizeS())
                     ) {
                         Icon(
-                            imageVector = if (showLyrics) Icons.Default.Album else Icons.Default.Notes,
+                            imageVector = if (showLyrics) Icons.Default.Album else Icons.AutoMirrored.Filled.Notes,
                             contentDescription = viewModel.textModeSwitch,
                             tint = Color.White.copy(alpha = 0.9f),
                             modifier = Modifier.size(AppDimensions.iconM())
@@ -520,7 +523,7 @@ fun PlayerScreen(
                         }
 
                         IconButton(onClick = { viewModel.showPlaylist = !viewModel.showPlaylist }, modifier = Modifier.size(AppDimensions.iconButtonSizeM())) {
-                            Icon(Icons.Default.PlaylistPlay, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(AppDimensions.iconL()))
+                            Icon(Icons.AutoMirrored.Filled.PlaylistPlay, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(AppDimensions.iconL()))
                         }
                     }
                 }
@@ -552,8 +555,17 @@ fun PlaylistView(viewModel: PlayerViewModel, modifier: Modifier = Modifier) {
         // 关闭按钮
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            if (playingQueue.isNotEmpty()) {
+                TextButton(onClick = { viewModel.clearPlayingList() }) {
+                    Text(
+                        if (viewModel.currentLanguage == "zh") "清空队列" else "Clear queue",
+                        color = Color.White.copy(alpha = 0.85f)
+                    )
+                }
+            }
             IconButton(
                 onClick = { viewModel.showPlaylist = false },
                 modifier = Modifier.size(AppDimensions.iconButtonSizeS())
@@ -660,14 +672,14 @@ fun PlaylistItem(
             }
             if (isPlaying) {
                 Icon(
-                    imageVector = Icons.Default.VolumeUp,
+                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                     contentDescription = viewModel.textNowPlaying,
                     tint = Color.White.copy(alpha = 0.9f),
                     modifier = Modifier.size(AppDimensions.iconS())
                 )
             }
         }
-        androidx.compose.material3.Divider(
+        androidx.compose.material3.HorizontalDivider(
             color = Color(0xFFE0E0E0),
             thickness = 1.dp,
             modifier = Modifier.padding(horizontal = AppDimensions.paddingCard())

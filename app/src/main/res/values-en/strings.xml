@@ -26,4 +26,5 @@ January 2020 http://license.coscl.org.cn/MulanPSL2
     <string name="now_playing">Now playing</string>
     <string name="mode_switch">Mode switch</string>
     <string name="play_mode">Play mode</string>
+    <string name="queue_empty">Queue is empty</string>
 </resources>

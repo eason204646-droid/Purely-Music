@@ -27,8 +27,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DragHandle
@@ -336,7 +336,7 @@ fun PlaylistDetailScreen(
                 onClick = onBack
             ) {
                 Icon(
-                    imageVector = Icons.Default.ArrowBack,
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "返回",
                     tint = Color.White,
                     modifier = Modifier.padding(8.dp).size(24.dp)
@@ -407,7 +407,7 @@ fun DraggableSongItem(
                 onClick = onClick,
                 showDragHandle = true,
                 isDragging = isDragged,
-                dragHandleModifier = Modifier.pointerInput(Unit) {
+                modifier = Modifier.pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = {
                             onDragStart()
@@ -486,7 +486,7 @@ fun AddSongsToPlaylistDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                androidx.compose.material3.Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                 Spacer(modifier = Modifier.height(16.dp))
 

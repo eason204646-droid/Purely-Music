@@ -16,4 +16,6 @@ local.properties
 keystore.properties
 .claude/
 .reasonix/
-.reasonix/
+
+.kotlin/
+/app/release/

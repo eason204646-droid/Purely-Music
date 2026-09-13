@@ -32,8 +32,8 @@ interface AlbumDao {
     @Query("SELECT * FROM albums WHERE id = :albumId LIMIT 1")
     suspend fun getAlbumById(albumId: String): AlbumEntity?
 
-    @Query("SELECT * FROM albums WHERE name = :name LIMIT 1")
-    suspend fun getAlbumByName(name: String): AlbumEntity?
+    @Query("SELECT * FROM albums WHERE name = :name AND artist = :artist LIMIT 1")
+    suspend fun getAlbumByNameAndArtist(name: String, artist: String): AlbumEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAlbum(album: AlbumEntity)
@@ -46,4 +46,7 @@ interface AlbumDao {
 
     @Query("DELETE FROM albums WHERE id = :albumId")
     suspend fun deleteAlbumById(albumId: String)
+
+    @Query("SELECT COUNT(*) FROM albums WHERE coverUri = :path")
+    suspend fun countCoverReferences(path: String): Int
 }

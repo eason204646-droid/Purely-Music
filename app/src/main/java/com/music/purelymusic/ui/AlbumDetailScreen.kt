@@ -24,7 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -58,7 +58,7 @@ fun AlbumDetailScreen(
 ) {
     val albumSongs = remember(album.name, viewModel.libraryList) {
         viewModel.libraryList.filter { song ->
-            song.album == album.name
+            song.albumId == album.id || (song.albumId == null && song.album == album.name)
         }
     }
 
@@ -215,7 +215,7 @@ fun AlbumDetailScreen(
                 onClick = onBack
             ) {
                 Icon(
-                    imageVector = Icons.Default.ArrowBack,
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = if (viewModel.currentLanguage == "zh") "返回" else "Back",
                     tint = Color.White,
                     modifier = Modifier.padding(8.dp).size(24.dp)

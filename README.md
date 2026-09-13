@@ -96,8 +96,8 @@ Purely Music 是一款开源 Android 本地音乐播放器，使用 Kotlin、Jet
 - **applicationId**：`com.music.purelymusic`
 - **minSdk**：26
 - **targetSdk / compileSdk**：36
-- **versionName**：`2.6`
-- **versionCode**：27
+- **versionName**：`2.8`
+- **versionCode**：29
 
 ## 构建
 
@@ -106,6 +106,30 @@ git clone https://github.com/eason204646-droid/purely-music.git
 cd purely-music
 ./gradlew assembleDebug
 ```
+
+联网补全和歌词翻译需要在本机 `local.properties` 中配置：
+
+```properties
+MUSIC_API_KEY=your_api_key
+```
+
+API Key 不应提交到仓库。移动端安装包无法安全保存服务端密钥；正式分发时建议通过自有后端代理请求，并对密钥设置额度和来源限制。
+
+## 工程结构
+
+- `playback/`：由 `MediaSessionService` 托管的后台播放器与系统媒体会话
+- `data/AppDatabase.kt`：Room 数据库、版本迁移与 schema 导出
+- `data/AppFileStore.kt`：音乐、封面和歌词的原子写入与安全清理
+- `data/MetadataRepository.kt`：联网元数据获取、HTTPS 与响应大小限制
+- `viewmodel/`：界面状态与业务编排
+
+提交前建议运行完整验证：
+
+```bash
+./gradlew testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
+```
+
+同一组检查也会由 GitHub Actions 自动执行。
 
 ## 下载
 

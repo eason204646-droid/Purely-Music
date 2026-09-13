@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.PauseCircleFilled
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircleFilled
@@ -82,7 +83,7 @@ fun HomeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White),
+            .background(MaterialTheme.colorScheme.background),
         contentAlignment = if (windowClass.isExpanded) Alignment.TopCenter else Alignment.TopStart
     ) {
         Column(
@@ -102,7 +103,7 @@ fun HomeScreen(
                 text = if (viewModel.currentLanguage == "zh") "主页" else "Home",
                 fontSize = AppDimensions.textXXXL().value.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = Color.Black
+                color = MaterialTheme.colorScheme.onBackground
             )
             Box {
                 IconButton(
@@ -163,7 +164,7 @@ fun HomeScreen(
                             )
                         },
                         leadingIcon = {
-                            Icon(Icons.Default.PlaylistAdd, contentDescription = "Create playlist", tint = Color.Black)
+                            Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Create playlist", tint = Color.Black)
                         },
                         onClick = {
                             showMenu = false
@@ -346,11 +347,11 @@ fun RecentSongItem(song: Song, onClick: () -> Unit) {
 
 @Composable
 fun SongItem(
-    song: Song, 
+    song: Song,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     showDragHandle: Boolean = false,
-    isDragging: Boolean = false,
-    dragHandleModifier: Modifier = Modifier
+    isDragging: Boolean = false
 ) {
     Column {
         Row(
@@ -399,7 +400,7 @@ fun SongItem(
             // 拖拽手柄
             if (showDragHandle) {
                 Box(
-                    modifier = dragHandleModifier
+                    modifier = modifier
                         .size(40.dp)
                         .padding(end = 8.dp),
                     contentAlignment = Alignment.Center

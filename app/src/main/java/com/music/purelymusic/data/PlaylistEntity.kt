@@ -16,10 +16,11 @@
 //January 2020 http://license.coscl.org.cn/MulanPSL2
 package com.music.purelymusic.data
 
+import androidx.room.ColumnInfo
+import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import androidx.room.Relation
 import com.music.purelymusic.model.Playlist
 
 @Entity(tableName = "playlists")
@@ -27,10 +28,9 @@ data class PlaylistEntity(
     @PrimaryKey val id: String,
     val name: String,
     val coverUri: String?,
-    val songIdsJson: String, // 🚩 存储为 JSON 字符串
     val description: String? = null, // 🚩 新增：播放列表描述（版本7添加）
-    val createdAt: Long = 0, // 🚩 新增：创建时间（版本7添加）
-    val updatedAt: Long = 0 // 🚩 新增：更新时间（版本7添加）
+    @ColumnInfo(defaultValue = "0") val createdAt: Long = 0,
+    @ColumnInfo(defaultValue = "0") val updatedAt: Long = 0
 )
 
 // 转换工具：Playlist <-> Entity
@@ -39,15 +39,34 @@ fun Playlist.toEntity(): PlaylistEntity {
         id = id,
         name = name,
         coverUri = coverUri,
-        songIdsJson = Gson().toJson(songIds),
         description = description,
         createdAt = createdAt,
         updatedAt = updatedAt
     )
 }
 
-fun PlaylistEntity.toPlaylist(): Playlist {
-    val type = object : TypeToken<List<Long>>() {}.type
-    val ids: List<Long> = Gson().fromJson(songIdsJson, type)
-    return Playlist(id, name, coverUri, ids, description, createdAt, updatedAt)
+data class PlaylistWithSongs(
+    @Embedded val playlist: PlaylistEntity,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "playlistId",
+        entity = PlaylistSongCrossRef::class
+    )
+    val songRefs: List<PlaylistSongCrossRef>
+)
+
+fun Playlist.toSongRefs(): List<PlaylistSongCrossRef> = songIds.mapIndexed { index, songId ->
+    PlaylistSongCrossRef(id, songId, index)
+}
+
+fun PlaylistWithSongs.toPlaylist(): Playlist = with(playlist) {
+    Playlist(
+        id = id,
+        name = name,
+        coverUri = coverUri,
+        songIds = songRefs.sortedBy { it.position }.map { it.songId },
+        description = description,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )
 }

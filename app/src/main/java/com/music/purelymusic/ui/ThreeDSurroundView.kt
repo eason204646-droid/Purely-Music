@@ -36,10 +36,10 @@ import androidx.compose.ui.unit.sp
 import androidx.media3.common.util.UnstableApi
 import com.music.purelymusic.viewmodel.PlayerViewModel
 import kotlinx.coroutines.delay
+import java.util.Locale
 import kotlin.math.*
 
 @androidx.annotation.OptIn(UnstableApi::class)
-@OptIn(UnstableApi::class)
 @Composable
 fun ThreeDSurroundView(
     viewModel: PlayerViewModel,
@@ -306,7 +306,7 @@ fun ThreeDSurroundView(
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
-                                text = "${String.format("%.1f", speed)}x",
+                                text = "${String.format(Locale.ROOT, "%.1f", speed)}x",
                                 color = themeRed,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
