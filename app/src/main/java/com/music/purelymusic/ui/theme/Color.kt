@@ -28,10 +28,13 @@ val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
 
 // 针对音乐 App 的自定义颜色（例如 Apple Music 的红色）
-val AppleRed = Color(0xFFFF2D55)
+val AppleRed = Color(0xFFFF375F)
+val GlassBackground = Color(0xFFF7F7FA)
+val GlassSurface = Color(0xFFFDFDFF)
+val GlassSurfaceVariant = Color(0xFFEDEDF3)
 
 // 红色主题扩展颜色
-val RedPrimary = Color(0xFFE53935)      // 主红色
+val RedPrimary = Color(0xFFFF375F)      // 主红色
 val RedLight = Color(0xFFFF5252)        // 浅红色
 val RedDark = Color(0xFFB71C1C)         // 深红色
 val Red10 = Color(0xFFFFEBEE)           // 极浅红色背景

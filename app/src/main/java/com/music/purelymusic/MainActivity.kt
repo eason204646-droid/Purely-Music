@@ -45,8 +45,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -60,6 +63,8 @@ import com.music.purelymusic.ui.*
 import com.music.purelymusic.ui.theme.*
 import com.music.purelymusic.viewmodel.PlayerViewModel
 import com.music.purelymusic.ui.utils.AppDimensions
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -127,127 +132,22 @@ fun MainScreen(viewModel: PlayerViewModel) {
         uri?.let { viewModel.tempLrcUri = it }
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = {
-            if (currentRoute == "home" || currentRoute == "library" || currentRoute == "settings") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                ) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(64.dp),
-                        shape = RoundedCornerShape(32.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        shadowElevation = 8.dp,
-                        tonalElevation = 0.dp
-                    ) {
-                        NavigationBar(
-                            containerColor = Color.Transparent,
-                            tonalElevation = 0.dp
-                        ) {
-                            val itemColors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = RedPrimary,
-                                selectedTextColor = RedPrimary,
-                                indicatorColor = Color.Transparent,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+    val isPrimaryRoute = currentRoute == "home" || currentRoute == "library" || currentRoute == "settings"
+    var showWhatsNew by remember { mutableStateOf(com.music.purelymusic.utils.PreferencesManager.shouldShowReleaseNotes(ReleaseNotes.version)) }
+    val liquidGlassHazeState = remember { HazeState() }
 
-                            val navItems: List<Pair<String, String>> = listOf(
-                                Pair(if (viewModel.currentLanguage == "zh") "主页" else "Home", "home"),
-                                Pair(if (viewModel.currentLanguage == "zh") "资料库" else "Library", "library"),
-                                Pair(if (viewModel.currentLanguage == "zh") "设置" else "Settings", "settings")
-                            )
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Haze effects must be siblings of their source. Keeping the source in a dedicated
+        // backdrop layer lets every glass control sample a live backdrop without becoming a
+        // descendant of Modifier.haze (which Haze rejects at draw time).
+        LiquidGlassBackdrop(
+            hazeState = liquidGlassHazeState,
+            blurredBackground = viewModel.blurredBackground,
+            modifier = Modifier.matchParentSize()
+        )
 
-                            // 使用Box作为容器，用于放置背景指示器
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                            ) {
-                                // 背景指示器
-                                val density = LocalDensity.current
-                                var containerWidth by remember { mutableFloatStateOf(0f) }
-                                
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .onSizeChanged { size ->
-                                            containerWidth = size.width.toFloat()
-                                        }
-                                ) {
-                                    // 背景指示器层 - 只显示一个
-                                    val selectedIndex = navItems.indexOfFirst { it.second == currentRoute }
-                                    if (selectedIndex >= 0 && containerWidth > 0) {
-                                        val itemWidth = containerWidth / navItems.size
-                                        val offsetX by animateDpAsState(
-                                            targetValue = with(density) { (selectedIndex * itemWidth).toDp() },
-                                            animationSpec = tween(durationMillis = 300, easing = EaseInOutCubic),
-                                            label = "navOffset"
-                                        )
-                                        
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxHeight()
-                                                .width(with(density) { itemWidth.toDp() })
-                                                .offset(x = offsetX)
-                                                .padding(vertical = 12.dp, horizontal = 16.dp)
-                                                .background(
-                                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                                    shape = RoundedCornerShape(20.dp)
-                                                )
-                                        )
-                                    }
-                                    
-                                    // 导航项层
-                                    Row(
-                                        modifier = Modifier.fillMaxSize(),
-                                        horizontalArrangement = Arrangement.SpaceEvenly,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        navItems.forEachIndexed { index, item ->
-                                            val isSelected = currentRoute == item.second
-                                            Box(
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .fillMaxHeight(),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                // 可点击的视觉区域 - 只在文字和背景指示器区域
-                                                Box(
-                                                    modifier = Modifier
-                                                        .width(with(density) { (containerWidth / navItems.size).toDp() })
-                                                        .fillMaxHeight()
-                                                        .padding(vertical = 12.dp, horizontal = 16.dp)
-                                                        .clip(RoundedCornerShape(20.dp))
-                                                        .clickable {
-                                                            if (currentRoute != item.second) {
-                                                                navController.navigate(item.second) { popUpTo("home") { inclusive = true } }
-                                                            }
-                                                        },
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        item.first,
-                                                        fontSize = 14.sp,
-                                                        color = if (isSelected) RedPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    ) { innerPadding ->
+        CompositionLocalProvider(LocalLiquidGlassHazeState provides liquidGlassHazeState) {
+    Scaffold(containerColor = MaterialTheme.colorScheme.background) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
 
             NavHost(navController = navController, startDestination = "home") {
@@ -266,6 +166,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
                 composable("library") {
                     LibraryScreen(
                         viewModel = viewModel,
+                        bottomContentPadding = if (viewModel.currentSong != null) AppDimensions.miniPlayerHeight() + 100.dp else 88.dp,
                         onPickFile = { filePickerLauncher.launch("audio/*") },
                         onBatchPickFile = { batchFilePickerLauncher.launch(arrayOf("audio/*")) },
                         onPickCover = { coverPickerLauncher.launch("image/*") },
@@ -379,12 +280,123 @@ fun MainScreen(viewModel: PlayerViewModel) {
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = if (currentRoute == "home" || currentRoute == "library" || currentRoute == "settings") AppDimensions.miniPlayerNavBarSpacing() else AppDimensions.paddingSmall())
+                    .padding(bottom = if (isPrimaryRoute) 76.dp else AppDimensions.paddingSmall())
             ) {
                 MiniPlayer(
                     viewModel = viewModel,
                     onClick = { navController.navigate("player") }
                 )
+            }
+
+            if (showWhatsNew) {
+                androidx.compose.ui.window.Dialog(onDismissRequest = {
+                    com.music.purelymusic.utils.PreferencesManager.markReleaseNotesSeen(ReleaseNotes.version)
+                    showWhatsNew = false
+                }) {
+                    // Haze 1.7 synchronizes dialog effects with the activity source.
+                    WhatsNewSheet(language = viewModel.currentLanguage, onDismiss = {
+                        com.music.purelymusic.utils.PreferencesManager.markReleaseNotesSeen(ReleaseNotes.version)
+                        showWhatsNew = false
+                    })
+                }
+            }
+        }
+    }
+    if (isPrimaryRoute) {
+        LiquidGlassNavigationBar(
+            currentRoute = currentRoute,
+            language = viewModel.currentLanguage,
+            onNavigate = { route ->
+                if (currentRoute != route) {
+                    navController.navigate(route) { popUpTo("home") { inclusive = true } }
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+        )
+    }
+    }
+    }
+}
+
+/**
+ * The sole Haze source for the app shell. It deliberately has no glass controls as children:
+ * Haze only supports source/effect nodes as siblings, not ancestors/descendants. The bitmap is
+ * updated whenever the current track's cover changes, so the blur remains a live music backdrop.
+ */
+@Composable
+private fun LiquidGlassBackdrop(
+    hazeState: HazeState,
+    blurredBackground: android.graphics.Bitmap?,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .hazeSource(hazeState)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.surfaceVariant,
+                        MaterialTheme.colorScheme.background
+                    )
+                )
+            )
+    ) {
+        blurredBackground?.let { bitmap ->
+            androidx.compose.foundation.Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.18f))
+            )
+        }
+    }
+}
+
+@Composable
+private fun LiquidGlassNavigationBar(
+    currentRoute: String?,
+    language: String,
+    onNavigate: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val items = listOf(
+        (if (language == "zh") "主页" else "Home") to "home",
+        (if (language == "zh") "资料库" else "Library") to "library",
+        (if (language == "zh") "设置" else "Settings") to "settings"
+    )
+    LiquidGlass(
+        modifier = modifier.fillMaxWidth().height(60.dp),
+        shape = RoundedCornerShape(28.dp),
+        opacity = 0.90f,
+        highlightAlpha = 0.28f,
+        edgeAlpha = 0.32f,
+        shadowElevation = 0.dp
+    ) {
+        Row(modifier = Modifier.fillMaxSize().padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
+            items.forEach { (label, route) ->
+                val selected = currentRoute == route
+                GlassPressable(
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    onClick = { onNavigate(route) }
+                ) {
+                    if (selected) {
+                        Box(
+                            modifier = Modifier.fillMaxSize().background(RedPrimary.copy(alpha = 0.16f), RoundedCornerShape(22.dp))
+                        )
+                    }
+                    Text(
+                        label,
+                        fontSize = 12.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (selected) AppleRed else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

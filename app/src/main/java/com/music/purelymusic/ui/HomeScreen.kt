@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
@@ -99,16 +100,26 @@ fun HomeScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = if (viewModel.currentLanguage == "zh") "主页" else "Home",
-                fontSize = AppDimensions.textXXXL().value.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
+            Column {
+                Text(
+                    text = if (viewModel.currentLanguage == "zh") "现在想听什么？" else "What are we playing?",
+                    fontSize = AppDimensions.textXXXL().value.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    text = if (viewModel.currentLanguage == "zh") "你的私人聆听空间" else "Your private listening space",
+                    fontSize = AppDimensions.textS().value.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
             Box {
-                IconButton(
+                GlassControl(
                     onClick = { showMenu = !showMenu },
-                    modifier = Modifier.size(AppDimensions.iconButtonSizeM())
+                    modifier = Modifier.size(AppDimensions.iconButtonSizeM()),
+                    shape = CircleShape,
+                    dark = false
                 ) {
                     Icon(
                         Icons.Default.Add,
@@ -118,54 +129,30 @@ fun HomeScreen(
                     )
                 }
 
-                DropdownMenu(
+                GlassDropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
-                    modifier = Modifier
-                        .background(Gray50, RoundedCornerShape(12.dp))
-                        .clip(RoundedCornerShape(12.dp)),
                     offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)
                 ) {
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                if (viewModel.currentLanguage == "zh") "导入歌曲" else "Import Song",
-                                color = Color.Black
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Default.MusicNote, contentDescription = "Import music", tint = Color.Black)
-                        },
+                    GlassMenuItem(
+                        label = if (viewModel.currentLanguage == "zh") "导入歌曲" else "Import Song",
+                        icon = Icons.Default.MusicNote,
                         onClick = {
                             showMenu = false
                             onPickFile()
                         }
                     )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                if (viewModel.currentLanguage == "zh") "批量导入" else "Batch Import",
-                                color = Color.Black
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Default.LibraryMusic, contentDescription = "Batch import", tint = Color.Black)
-                        },
+                    GlassMenuItem(
+                        label = if (viewModel.currentLanguage == "zh") "批量导入" else "Batch Import",
+                        icon = Icons.Default.LibraryMusic,
                         onClick = {
                             showMenu = false
                             onBatchPickFile()
                         }
                     )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                if (viewModel.currentLanguage == "zh") "创建播放列表" else "Create Playlist",
-                                color = Color.Black
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Create playlist", tint = Color.Black)
-                        },
+                    GlassMenuItem(
+                        label = if (viewModel.currentLanguage == "zh") "创建播放列表" else "Create Playlist",
+                        icon = Icons.AutoMirrored.Filled.PlaylistAdd,
                         onClick = {
                             showMenu = false
                             onNavigateToCreatePlaylist()
@@ -177,8 +164,17 @@ fun HomeScreen(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = AppDimensions.miniPlayerHeight() + AppDimensions.paddingScreen())
+            contentPadding = PaddingValues(bottom = AppDimensions.miniPlayerHeight() + 96.dp)
         ) {
+            viewModel.currentSong?.let { song ->
+                item {
+                    HomeNowPlayingCard(
+                        song = song,
+                        isPlaying = viewModel.isActuallyPlaying,
+                        onClick = onNavigateToPlayer
+                    )
+                }
+            }
             if (viewModel.recentSongs.isNotEmpty()) {
                 item {
                     Column(modifier = Modifier.padding(vertical = AppDimensions.spacingS())) {
@@ -312,6 +308,44 @@ fun HomeScreen(
 }
 
 @Composable
+private fun HomeNowPlayingCard(song: Song, isPlaying: Boolean, onClick: () -> Unit) {
+    GlassPressable(
+        modifier = Modifier.fillMaxWidth().padding(top = AppDimensions.spacingS(), bottom = AppDimensions.spacingM()),
+        onClick = onClick
+    ) {
+        LiquidGlass(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            contentPadding = PaddingValues(12.dp),
+            opacity = 0.90f,
+            highlightAlpha = 0.42f,
+            edgeAlpha = 0.40f,
+            shadowElevation = 0.dp
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                AsyncImage(
+                    model = song.coverUri ?: R.drawable.default_cover,
+                    contentDescription = null,
+                    modifier = Modifier.size(58.dp).clip(RoundedCornerShape(16.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                    Text(if (isPlaying) "正在播放" else "继续聆听", color = AppleRed, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(song.title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(song.artist, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, maxLines = 1)
+                }
+                Icon(
+                    if (isPlaying) Icons.Default.PauseCircleFilled else Icons.Default.PlayCircleFilled,
+                    null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(34.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun RecentSongItem(song: Song, onClick: () -> Unit) {
     Column(
         modifier = Modifier
@@ -425,14 +459,13 @@ fun SongItem(
 @Composable
 fun MiniPlayer(viewModel: PlayerViewModel, onClick: () -> Unit) {
     val currentSong = viewModel.currentSong ?: return
-    Surface(
+    GlassPressable(
         modifier = Modifier.fillMaxWidth().height(AppDimensions.miniPlayerHeight()).padding(horizontal = AppDimensions.miniPlayerPaddingH()),
-        shape = RoundedCornerShape(28.dp),
-        color = Color.White,
-        shadowElevation = AppDimensions.elevationL()
+        onClick = onClick
     ) {
+        LiquidGlass(modifier = Modifier.fillMaxSize(), shape = RoundedCornerShape(28.dp))
         Row(
-            modifier = Modifier.fillMaxSize().clickable { onClick() }.padding(horizontal = AppDimensions.miniPlayerPaddingH()),
+            modifier = Modifier.fillMaxSize().padding(horizontal = AppDimensions.miniPlayerPaddingH()),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
@@ -442,14 +475,19 @@ fun MiniPlayer(viewModel: PlayerViewModel, onClick: () -> Unit) {
                 contentScale = ContentScale.Crop
             )
             Column(modifier = Modifier.weight(1f).padding(start = AppDimensions.paddingCard())) {
-                Text(currentSong.title, color = Color.Black, fontWeight = FontWeight.Bold, fontSize = AppDimensions.textM().value.sp, maxLines = 1)
-                Text(currentSong.artist, color = Color.Gray, fontSize = AppDimensions.textS().value.sp, maxLines = 1)
+                Text(currentSong.title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = AppDimensions.textM().value.sp, maxLines = 1)
+                Text(currentSong.artist, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = AppDimensions.textS().value.sp, maxLines = 1)
             }
-            IconButton(onClick = { viewModel.togglePlayPause() }, modifier = Modifier.size(AppDimensions.iconButtonSizeM())) {
+            GlassControl(
+                modifier = Modifier.size(AppDimensions.iconButtonSizeM()),
+                shape = CircleShape,
+                dark = false,
+                onClick = { viewModel.togglePlayPause() }
+            ) {
                 Icon(
                     imageVector = if (viewModel.isActuallyPlaying) Icons.Default.PauseCircleFilled else Icons.Default.PlayCircleFilled,
                     contentDescription = if (viewModel.isActuallyPlaying) "Pause" else "Play",
-                    tint = Color.Black,
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(AppDimensions.iconXL())
                 )
             }

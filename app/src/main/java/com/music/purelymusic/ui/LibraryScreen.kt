@@ -19,6 +19,7 @@ import android.util.Log
 import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -74,6 +75,7 @@ import com.music.purelymusic.ui.utils.rememberWindowSizeClass
 @Composable
 fun LibraryScreen(
     viewModel: PlayerViewModel,
+    bottomContentPadding: androidx.compose.ui.unit.Dp = 12.dp,
     onPickFile: () -> Unit,
     onBatchPickFile: () -> Unit,
     onPickCover: () -> Unit,
@@ -232,16 +234,25 @@ fun LibraryScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = if (viewModel.currentLanguage == "zh") "我的资料库" else "My Library",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
+                Column {
+                    Text(
+                        text = if (viewModel.currentLanguage == "zh") "资料库" else "Library",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Text(
+                        text = if (viewModel.currentLanguage == "zh") "你的音乐，井然有序。" else "Your music, in order.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = AppDimensions.textS().value.sp
+                    )
+                }
                 Box {
-                    IconButton(
+                    GlassControl(
                         onClick = { showMenu = !showMenu },
-                        modifier = Modifier.size(AppDimensions.iconButtonSizeM())
+                        modifier = Modifier.size(AppDimensions.iconButtonSizeM()),
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        dark = false
                     ) {
                         Icon(
                             Icons.Default.Add,
@@ -251,54 +262,30 @@ fun LibraryScreen(
                         )
                     }
                     
-                    DropdownMenu(
+                    GlassDropdownMenu(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false },
-                        modifier = Modifier
-                            .background(Color(0xFFF5F5F5), RoundedCornerShape(12.dp))
-                            .clip(RoundedCornerShape(12.dp)),
                         offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)
                     ) {
-                        DropdownMenuItem(
-                            text = { 
-                                Text(
-                                    if (viewModel.currentLanguage == "zh") "导入歌曲" else "Import Song",
-                                    color = Color.Black
-                                ) 
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.Black)
-                            },
+                        GlassMenuItem(
+                            label = if (viewModel.currentLanguage == "zh") "导入歌曲" else "Import Song",
+                            icon = Icons.Default.MusicNote,
                             onClick = {
                                 showMenu = false
                                 onPickFile()
                             }
                         )
-                        DropdownMenuItem(
-                            text = { 
-                                Text(
-                                    if (viewModel.currentLanguage == "zh") "批量导入" else "Batch Import",
-                                    color = Color.Black
-                                ) 
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Color.Black)
-                            },
+                        GlassMenuItem(
+                            label = if (viewModel.currentLanguage == "zh") "批量导入" else "Batch Import",
+                            icon = Icons.Default.LibraryMusic,
                             onClick = {
                                 showMenu = false
                                 onBatchPickFile()
                             }
                         )
-                        DropdownMenuItem(
-                            text = { 
-                                Text(
-                                    if (viewModel.currentLanguage == "zh") "创建播放列表" else "Create Playlist",
-                                    color = Color.Black
-                                ) 
-                            },
-                            leadingIcon = {
-                                Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null, tint = Color.Black)
-                            },
+                        GlassMenuItem(
+                            label = if (viewModel.currentLanguage == "zh") "创建播放列表" else "Create Playlist",
+                            icon = Icons.AutoMirrored.Filled.PlaylistAdd,
                             onClick = {
                                 showMenu = false
                                 onNavigateToCreatePlaylist()
@@ -315,7 +302,17 @@ fun LibraryScreen(
                     viewModel.performSearch(viewModel.searchQuery, onlyFavorites = showFavoritesOnly)
                 }
             }
-            OutlinedTextField(
+            LiquidGlass(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = AppDimensions.spacingM()),
+                shape = RoundedCornerShape(AppDimensions.cornerRadiusL()),
+                opacity = 0.82f,
+                highlightAlpha = 0.42f,
+                edgeAlpha = 0.40f,
+                shadowElevation = 0.dp
+            ) {
+            TextField(
                 value = viewModel.searchQuery,
                 onValueChange = { viewModel.performSearch(it, onlyFavorites = showFavoritesOnly) },
                 placeholder = {
@@ -336,17 +333,21 @@ fun LibraryScreen(
                 },
                 singleLine = true,
                 shape = RoundedCornerShape(AppDimensions.cornerRadiusL()),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFFE53935),
-                    unfocusedBorderColor = Color(0xFFE0E0E0),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
                     focusedTextColor = Color.Black,
                     unfocusedTextColor = Color.Black,
                     cursorColor = Color(0xFFE53935)
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = AppDimensions.spacingM())
+                    .clip(RoundedCornerShape(AppDimensions.cornerRadiusL()))
             )
+            }
 
             // 🚩 v2.5: 自适应列数 — 手机固定2列，大屏自动更多
             val gridColumns = when (rememberWindowSizeClass().widthSize) {
@@ -357,7 +358,9 @@ fun LibraryScreen(
             LazyVerticalGrid(
                 columns = gridColumns,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = AppDimensions.paddingScreen()),
+                // The mini player is an overlay. Reserve its exact footprint so the final
+                // row remains reachable instead of disappearing behind it.
+                contentPadding = PaddingValues(bottom = bottomContentPadding + AppDimensions.paddingScreen()),
                 horizontalArrangement = Arrangement.spacedBy(AppDimensions.libraryGridSpacing()),
                 verticalArrangement = Arrangement.spacedBy(AppDimensions.libraryGridSpacing())
             ) {
@@ -1056,24 +1059,15 @@ fun PlaylistItem(playlist: Playlist, viewModel: PlayerViewModel, onClick: () -> 
             )
         }
 
-        DropdownMenu(
-
-                    expanded = expanded,
-
-                    onDismissRequest = { expanded = false },
-
-                    modifier = Modifier
-
-                        .background(Color(0xFFF5F5F5), RoundedCornerShape(12.dp))
-
-                        .clip(RoundedCornerShape(12.dp)),
-
-                    offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)
-
-                ) {
-            DropdownMenuItem(
-                text = { Text(if (viewModel.currentLanguage == "zh") "删除歌单" else "Delete Playlist", color = Color.Red) },
-                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red) },
+        GlassDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)
+        ) {
+            GlassMenuItem(
+                label = if (viewModel.currentLanguage == "zh") "删除歌单" else "Delete Playlist",
+                icon = Icons.Default.Delete,
+                destructive = true,
                 onClick = {
                     playlistToDelete = playlist
                     expanded = false
@@ -1133,56 +1127,42 @@ fun SongGridItem(song: Song, viewModel: PlayerViewModel, onNavigateToPlayer: () 
             Text(song.artist, fontSize = AppDimensions.textS().value.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
-        DropdownMenu(
+        GlassDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier
-                .background(Color(0xFFF5F5F5), RoundedCornerShape(12.dp))
-                .clip(RoundedCornerShape(12.dp)),
             offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)
         ) {
-            DropdownMenuItem(
-                text = { Text(
-                    if (viewModel.currentLanguage == "zh") {
-                        if (song.isFavorite) "取消收藏" else "收藏"
-                    } else {
-                        if (song.isFavorite) "Unfavorite" else "Favorite"
-                    },
-                    color = Color.Black
-                ) },
-                leadingIcon = {
-                    Icon(
-                        if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        null,
-                        tint = if (song.isFavorite) Color(0xFFE53935) else Color.Black,
-                        modifier = Modifier.size(AppDimensions.iconS())
-                    )
-                },
+            GlassMenuItem(
+                label = if (viewModel.currentLanguage == "zh") {
+                    if (song.isFavorite) "取消收藏" else "收藏"
+                } else if (song.isFavorite) "Unfavorite" else "Favorite",
+                icon = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                 onClick = {
                     viewModel.toggleFavorite(song)
                     expanded = false
                 }
             )
-            DropdownMenuItem(
-                text = { Text(if (viewModel.currentLanguage == "zh") "编辑" else "Edit", color = Color.Black) },
-                leadingIcon = { Icon(Icons.Default.Edit, null, tint = Color.Black, modifier = Modifier.size(AppDimensions.iconS())) },
+            GlassMenuItem(
+                label = if (viewModel.currentLanguage == "zh") "编辑" else "Edit",
+                icon = Icons.Default.Edit,
                 onClick = {
                     viewModel.startEditSong(song)
                     expanded = false
                 }
             )
-            DropdownMenuItem(
-                text = { Text(if (viewModel.currentLanguage == "zh") "添加到歌单" else "Add to Playlist", color = Color.Black) },
-                leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, null, tint = Color.Black, modifier = Modifier.size(AppDimensions.iconS())) },
+            GlassMenuItem(
+                label = if (viewModel.currentLanguage == "zh") "添加到歌单" else "Add to Playlist",
+                icon = Icons.AutoMirrored.Filled.PlaylistAdd,
                 onClick = {
                     viewModel.selectedSongsForAdd = setOf(song.id)
                     viewModel.showAddSongDialog = true
                     expanded = false
                 }
             )
-            DropdownMenuItem(
-                text = { Text(if (viewModel.currentLanguage == "zh") "删除" else "Delete", color = Color.Red) },
-                leadingIcon = { Icon(Icons.Default.Delete, null, tint = Color.Red, modifier = Modifier.size(AppDimensions.iconS())) },
+            GlassMenuItem(
+                label = if (viewModel.currentLanguage == "zh") "删除" else "Delete",
+                icon = Icons.Default.Delete,
+                destructive = true,
                 onClick = {
                     songToDelete = song
                     expanded = false
@@ -1295,14 +1275,15 @@ fun AlbumItem(album: com.music.purelymusic.model.Album, viewModel: PlayerViewMod
             )
         }
 
-        DropdownMenu(
+        GlassDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)
         ) {
-            DropdownMenuItem(
-                text = { Text("删除") },
-                leadingIcon = { Icon(Icons.Default.Delete, null, modifier = Modifier.size(AppDimensions.iconS())) },
+            GlassMenuItem(
+                label = if (viewModel.currentLanguage == "zh") "删除专辑" else "Delete Album",
+                icon = Icons.Default.Delete,
+                destructive = true,
                 onClick = {
                     albumToDelete = album
                     expanded = false

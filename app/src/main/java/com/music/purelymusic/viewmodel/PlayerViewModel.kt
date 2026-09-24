@@ -64,6 +64,7 @@ import java.io.File
 import java.nio.charset.Charset
 import kotlin.math.sin
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @androidx.annotation.OptIn(UnstableApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
@@ -423,6 +424,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var exoPlayer: ExoPlayer? = playbackRuntime.player
     private var transitionPlayer: ExoPlayer? = null
     private var crossfadeJob: Job? = null
+    private var blurBackgroundJob: Job? = null
     private var isCrossfadeInProgress = false
     private var hasScheduledCrossfadeForCurrentSong = false
     private var suppressNextEndedCallback = false
@@ -515,6 +517,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private set
     var equalizerLevelRange by mutableStateOf((-1500).toShort() to 1500.toShort())
         private set
+    var equalizerPreset by mutableStateOf("Flat")
+        private set
 
     private fun attachEqualizerToCurrentSession() {
         if (!equalizerEnabled) {
@@ -563,6 +567,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 this[bandIndex] = clamped
             }
             equalizerBandLevels = newLevels
+            equalizerPreset = "Custom"
             com.music.purelymusic.utils.PreferencesManager.saveEqualizerBands(newLevels)
         }
     }
@@ -578,6 +583,34 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val resetLevels = List(equalizerBandLevels.size) { zeroLevel }
         equalizerBandLevels = resetLevels
         com.music.purelymusic.utils.PreferencesManager.saveEqualizerBands(resetLevels)
+        equalizerPreset = "Flat"
+    }
+
+    /** Apply a portable curve to whatever band layout the device exposes. */
+    fun applyEqualizerPreset(preset: String) {
+        val effect = equalizer ?: return
+        if (equalizerBandLevels.isEmpty()) return
+        val curve = when (preset) {
+            "Bass" -> listOf(0.72f, 0.56f, 0.25f, 0.06f, -0.10f)
+            "Vocal" -> listOf(-0.16f, 0.02f, 0.34f, 0.48f, 0.12f)
+            "Bright" -> listOf(-0.22f, -0.06f, 0.14f, 0.42f, 0.62f)
+            "Night" -> listOf(0.30f, 0.20f, 0.10f, 0.04f, -0.08f)
+            else -> List(5) { 0f }
+        }
+        val range = maxOf(kotlin.math.abs(equalizerLevelRange.first.toInt()), kotlin.math.abs(equalizerLevelRange.second.toInt()))
+        val levels = equalizerBandLevels.indices.map { band ->
+            val curveIndex = if (equalizerBandLevels.size == 1) 2 else {
+                (band.toFloat() / (equalizerBandLevels.lastIndex) * curve.lastIndex).roundToInt()
+            }
+            (curve[curveIndex] * range).roundToInt().toShort().coerceIn(equalizerLevelRange.first, equalizerLevelRange.second)
+        }
+        runCatching {
+            levels.forEachIndexed { band, level -> effect.setBandLevel(band.toShort(), level) }
+        }.onSuccess {
+            equalizerBandLevels = levels
+            equalizerPreset = preset
+            com.music.purelymusic.utils.PreferencesManager.saveEqualizerBands(levels)
+        }
     }
 
     private fun releaseEqualizer() {
@@ -1783,21 +1816,48 @@ private fun stopSurroundEffect() {
     }
 
     private fun updateBlurBackground(path: String?) {
-        viewModelScope.launch(Dispatchers.IO) {
+        blurBackgroundJob?.cancel()
+        blurBackgroundJob = viewModelScope.launch(Dispatchers.IO) {
             val bitmap = if (path != null && File(path).exists()) {
-                BitmapFactory.decodeFile(path)
+                // Background blur never needs the original cover resolution. Decoding a large
+                // camera image at full size can allocate tens of megabytes before BlurUtil has
+                // a chance to downscale it, which is especially easy to OOM on emulators.
+                decodeBackgroundCover(path)
             } else {
                 // 加载默认封面
                 BitmapFactory.decodeResource(context.resources, R.drawable.default_cover)
             }
-            val blurred = bitmap?.let { BlurUtil.doBlur(it, 25, 20) }
+            val blurred = bitmap?.let {
+                if (it.width >= 25 && it.height >= 25) BlurUtil.doBlur(it, 25, 20) else it
+            }
             withContext(Dispatchers.Main) { blurredBackground = blurred }
         }
+    }
+
+    private fun decodeBackgroundCover(path: String): android.graphics.Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        val maxDimension = 1_024
+        var sampleSize = 1
+        while (bounds.outWidth / sampleSize > maxDimension ||
+            bounds.outHeight / sampleSize > maxDimension
+        ) {
+            sampleSize *= 2
+        }
+
+        return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+            // The blurred result does not need an alpha channel, and RGB_565 halves memory use.
+            inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+        })
     }
 
     override fun onCleared() {
         super.onCleared()
         resetCrossfadeState()
+        blurBackgroundJob?.cancel()
         stop3DSurroundEffect()
         releaseEqualizer()
         exoPlayer?.removeListener(playerListener)
@@ -2144,95 +2204,7 @@ private fun stopSurroundEffect() {
                     return@launch
                 }
 
-                addLog("========== 开始翻译 ==========")
-                addLog("原始歌词行数: ${lyricLines.size}")
-                Log.d("Translate", "========== 开始翻译 ==========")
-                Log.d("Translate", "原始歌词行数: ${lyricLines.size}")
-
-                // 构建歌词文本：每行包含时间戳和内容
-                val lyricText = lyricLines.joinToString("\n") { line ->
-                    val timeStr = LyricTranslationParser.formatTime(line.time)
-                    "[$timeStr]${line.content}"
-                }
-
-                addLog("发送翻译请求，歌词长度: ${lyricText.length}")
-                Log.d("Translate", "发送翻译请求，歌词长度: ${lyricText.length}")
-
-                // 调用翻译API，目标语言为中文
-                val response = translateService.translateText(
-                    apiKey = BuildConfig.MUSIC_API_KEY,
-                    text = lyricText,
-                    fromLang = "auto",
-                    targetLang = "zh"
-                )
-
-                addLog("API调用成功")
-                addLog("========== 翻译响应开始 ==========")
-                addLog("响应代码: ${response.code}")
-                addLog("响应消息: ${response.msg}")
-                Log.d("Translate", "API调用成功")
-                Log.d("Translate", "========== 翻译响应开始 ==========")
-                Log.d("Translate", "响应代码: ${response.code}")
-                Log.d("Translate", "响应消息: ${response.msg}")
-
-                // 检查响应是否成功
-                if (response.code != 200 || response.data == null) {
-                    translateError = "翻译服务返回错误: ${response.msg} (code: ${response.code})"
-                    addLog("❌ 翻译失败: $translateError")
-                    Log.e("Translate", "翻译失败: $translateError")
-                    return@launch
-                }
-
-                // 获取翻译结果
-                val translatedText = response.data!!.data?.jieguo
-                if (translatedText == null) {
-                    translateError = "翻译服务返回格式错误，未找到翻译结果"
-                    addLog("❌ 翻译结果为空")
-                    Log.e("Translate", "翻译结果为空")
-                    return@launch
-                }
-
-                // 解码HTML实体
-                val decodedText = LyricTranslationParser.decodeHtmlEntities(translatedText)
-
-                addLog("翻译响应: translatedText长度=${decodedText.length}")
-                Log.d("Translate", "翻译响应: translatedText长度=${decodedText.length}")
-
-                // 检查翻译文本是否为空
-                if (translatedText.isBlank()) {
-                    translateError = "翻译服务返回空内容，请稍后重试"
-                    addLog("❌ 翻译文本为空")
-                    Log.e("Translate", "翻译文本为空")
-                    return@launch
-                }
-
-                // 解析翻译后的文本
-                val translatedLines = LyricTranslationParser.parse(decodedText, lyricLines)
-
-                addLog("解析结果：共${translatedLines.size}行")
-                addLog("成功匹配 ${translatedLines.count { !it.isNullOrBlank() }} 行")
-                addLog("========== 翻译响应结束 ==========")
-                Log.d("Translate", "解析结果：共${translatedLines.size}行")
-                Log.d("Translate", "========== 翻译响应结束 ==========")
-
-                // 检查是否有翻译结果
-                val hasTranslation = translatedLines.any { !it.isNullOrEmpty() }
-                if (!hasTranslation) {
-                    translateError = "未能解析出翻译内容，API返回格式可能已改变"
-                    addLog("❌ 未能解析出翻译内容")
-                    return@launch
-                }
-
-                withContext(Dispatchers.Main) {
-                    // 更新歌词行，添加翻译
-                    val newLyricLines = lyricLines.mapIndexed { index, line ->
-                        line.copy(translation = translatedLines.getOrElse(index) { null })
-                    }
-                    lyricLines = newLyricLines
-                    showTranslation = true
-                    addLog("✅ 翻译完成！showTranslation=$showTranslation")
-                    Log.d("Translate", "翻译完成，showTranslation=$showTranslation")
-                }
+                translateLyricsWithRecovery()
 
             } catch (e: retrofit2.HttpException) {
                 val errorMsg = "网络请求失败: ${e.code()} - ${e.message()}"
@@ -2258,6 +2230,75 @@ private fun stopSurroundEffect() {
                 isTranslating = false
             }
         }
+    }
+
+    /**
+     * Translates tagged, small batches first, then retries only the missing lines. This avoids
+     * the timestamp rewriting and silent response truncation caused by one huge LRC request.
+     */
+    private suspend fun translateLyricsWithRecovery() {
+        val translatable = lyricLines.mapIndexedNotNull { index, line ->
+            index.takeIf { line.content.isNotBlank() }?.let { it to line }
+        }
+        val resolved = mutableMapOf<Int, String>()
+        addLog("开始翻译 ${translatable.size} 行歌词（分批保留行标识）")
+
+        translatable.chunked(16).forEachIndexed { batchIndex, batch ->
+            val payload = batch.joinToString("\n") { (index, line) ->
+                "[[PMT_${index.toString().padStart(4, '0')}]] ${line.content}"
+            }
+            requestTranslation(payload)?.let { response ->
+                val marked = LyricTranslationParser.parseMarked(response)
+                resolved.putAll(marked)
+                // Only use positional matching when no marker survived at all. Mixing the two
+                // paths is what previously put a whole tagged response onto one lyric line.
+                if (marked.isEmpty() && !LyricTranslationParser.containsTranslationMarker(response)) {
+                    val ordered = LyricTranslationParser.parse(response, batch.map { it.second })
+                    batch.forEachIndexed { localIndex, (sourceIndex, _) ->
+                        ordered.getOrNull(localIndex)?.let {
+                            resolved.putIfAbsent(sourceIndex, it)
+                        }
+                    }
+                }
+            }
+            addLog("批次 ${batchIndex + 1} 完成，已匹配 ${resolved.size}/${translatable.size} 行")
+        }
+
+        val missing = translatable.filter { (index, _) -> resolved[index].isNullOrBlank() }
+        if (missing.isNotEmpty()) addLog("正在补翻 ${missing.size} 个遗漏句子")
+        missing.forEach { (index, line) ->
+            requestTranslation(line.content)?.let { response ->
+                LyricTranslationParser.sanitizeTranslation(response)
+                    ?.let { resolved[index] = it }
+            }
+        }
+
+        if (resolved.isEmpty()) {
+            translateError = "未能解析出翻译内容，请稍后重试"
+            addLog("❌ 未获得有效翻译")
+            return
+        }
+        lyricLines = lyricLines.mapIndexed { index, line ->
+            line.copy(translation = resolved[index]?.let(LyricTranslationParser::sanitizeTranslation))
+        }
+        showTranslation = true
+        val omitted = translatable.size - resolved.size
+        addLog("✅ 翻译完成：${resolved.size}/${translatable.size} 行${if (omitted > 0) "，仍有 $omitted 行未返回" else ""}")
+    }
+
+    private suspend fun requestTranslation(text: String): String? {
+        if (text.isBlank()) return null
+        val response = translateService.translateText(
+            apiKey = BuildConfig.MUSIC_API_KEY,
+            text = text,
+            fromLang = "auto",
+            targetLang = "zh"
+        )
+        if (response.code != 200) {
+            addLog("翻译服务返回 ${response.code}: ${response.msg}")
+            return null
+        }
+        return response.data?.data?.jieguo?.takeIf(String::isNotBlank)
     }
 
     /** 追加不包含歌词正文或 API 密钥的诊断日志。 */

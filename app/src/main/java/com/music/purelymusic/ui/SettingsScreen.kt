@@ -64,7 +64,7 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(Color(0xFFFDFDFF))
     ) {
         // 顶部标题栏
         Row(
@@ -73,12 +73,20 @@ fun SettingsScreen(
                 .padding(horizontal = AppDimensions.paddingScreen(), vertical = AppDimensions.paddingScreen()),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = if (viewModel.currentLanguage == "zh") "设置" else "Settings",
-                fontSize = AppDimensions.textXXL().value.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
+            Column {
+                Text(
+                    text = if (viewModel.currentLanguage == "zh") "设置" else "Settings",
+                    fontSize = AppDimensions.textXXXL().value.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    text = if (viewModel.currentLanguage == "zh") "播放、歌词与资料库偏好" else "Playback, lyrics, and library preferences",
+                    fontSize = AppDimensions.textS().value.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
         }
 
         // 设置内容
@@ -86,7 +94,8 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = AppDimensions.paddingScreen()),
+                .padding(horizontal = AppDimensions.paddingScreen())
+                .padding(bottom = 92.dp),
             verticalArrangement = Arrangement.spacedBy(AppDimensions.spacingM())
         ) {
             // 播放设置
@@ -119,7 +128,7 @@ fun SettingsScreen(
                     steps = 8
                 )
                 SettingsSwitch(
-                    title = if (viewModel.currentLanguage == "zh") "均衡器（beta）" else "Equalizer (beta)",
+                    title = if (viewModel.currentLanguage == "zh") "均衡器" else "Equalizer",
                     subtitle = if (viewModel.currentLanguage == "zh") "开启后可在播放界面进入均衡器" else "Enable access to the equalizer from the player screen",
                     checked = viewModel.equalizerEnabled,
                     onCheckedChange = { viewModel.equalizerEnabled = it }
@@ -438,38 +447,62 @@ fun SettingsScreen(
             60 to if (viewModel.currentLanguage == "zh") "60 分钟" else "60 min"
         )
 
-        AlertDialog(
+        androidx.compose.ui.window.Dialog(
             onDismissRequest = { showSleepTimerDialog = false },
-            title = {
-                Text(
-                    if (viewModel.currentLanguage == "zh") "睡眠定时器" else "Sleep Timer",
-                    color = Color.Black,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            // Haze 1.7 synchronizes dialog effects with the activity source.
+            LiquidGlass(
+                modifier = Modifier.fillMaxWidth(0.88f).widthIn(max = 420.dp),
+                shape = RoundedCornerShape(28.dp),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 22.dp),
+                opacity = 0.91f,
+                highlightAlpha = 0.34f,
+                edgeAlpha = 0.30f,
+                shadowElevation = 0.dp
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        if (viewModel.currentLanguage == "zh") "睡眠定时器" else "Sleep Timer",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        if (viewModel.currentLanguage == "zh") "选择多久后停止播放" else "Choose when playback should stop",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp
+                    )
+                    Spacer(Modifier.height(4.dp))
                     sleepOptions.forEach { (minutes, label) ->
                         val isSelected = !viewModel.sleepTimerActive && viewModel.sleepTimerMinutes == minutes
                         val isActiveOption = viewModel.sleepTimerActive && viewModel.sleepTimerMinutes == minutes
-                        Card(
+                        GlassPressable(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    if (minutes == 0) {
-                                        viewModel.cancelSleepTimer()
-                                    } else {
-                                        viewModel.startSleepTimer(minutes)
-                                    }
-                                    showSleepTimerDialog = false
-                                },
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected || isActiveOption) Color(0xFFFFCDD2) else Color.White
-                            ),
-                            shape = RoundedCornerShape(12.dp)
+                                .fillMaxWidth(),
+                            onClick = {
+                                if (minutes == 0) viewModel.cancelSleepTimer() else viewModel.startSleepTimer(minutes)
+                                showSleepTimerDialog = false
+                            }
                         ) {
+                            LiquidGlass(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(18.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+                                opacity = if (isSelected || isActiveOption) 0.88f else 0.72f,
+                                highlightAlpha = if (isSelected || isActiveOption) 0.44f else 0.26f,
+                                edgeAlpha = 0.34f,
+                                shadowElevation = 0.dp
+                            ) {
+                                if (isSelected || isActiveOption) {
+                                    Box(
+                                        Modifier
+                                            .matchParentSize()
+                                            .background(Color(0xFFFF375F).copy(alpha = 0.13f), RoundedCornerShape(18.dp))
+                                    )
+                                }
                             Row(
-                                modifier = Modifier.padding(16.dp),
+                                modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
@@ -496,18 +529,16 @@ fun SettingsScreen(
                             }
                         }
                     }
+                    }
+                    TextButton(onClick = { showSleepTimerDialog = false }, modifier = Modifier.align(Alignment.End)) {
+                        Text(
+                            if (viewModel.currentLanguage == "zh") "关闭" else "Close",
+                            color = Color(0xFFFF375F)
+                        )
+                    }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showSleepTimerDialog = false }) {
-                    Text(
-                        if (viewModel.currentLanguage == "zh") "关闭" else "Close",
-                        color = Color(0xFFE53935)
-                    )
-                }
-            },
-            containerColor = Color(0xFFF5F5F5)
-        )
+            }
+        }
     }
 
     // 翻译日志弹窗
@@ -658,7 +689,7 @@ fun SettingsSection(
     Column(
         verticalArrangement = Arrangement.spacedBy(AppDimensions.spacingS())
     ) {
-        // 标题
+        // Restrained section chrome keeps settings readable; unlike navigation it is nearly opaque.
         Row(
             modifier = Modifier.padding(vertical = AppDimensions.spacingS()),
             verticalAlignment = Alignment.CenterVertically
@@ -666,31 +697,26 @@ fun SettingsSection(
             Icon(
                 icon,
                 contentDescription = null,
-                tint = Color(0xFFE53935),
-                modifier = Modifier.size(AppDimensions.iconM())
+            tint = Color(0xFFFF375F),
+            modifier = Modifier.size(AppDimensions.iconS())
             )
             Spacer(modifier = Modifier.width(AppDimensions.spacingS()))
             Text(
                 text = title,
                 fontSize = AppDimensions.textL().value.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF424242)
+                color = MaterialTheme.colorScheme.onBackground
             )
         }
 
-        // 内容卡片
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(AppDimensions.cornerRadiusM()),
-            color = Color(0xFFF5F5F5),
-            tonalElevation = 0.dp
+        // Settings are a clean continuous preference sheet, not a floating card inside a card.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = AppDimensions.paddingSmall()),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(AppDimensions.paddingCard()),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                content()
-            }
+            content()
         }
     }
 }

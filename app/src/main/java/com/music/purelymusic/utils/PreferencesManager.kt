@@ -51,6 +51,7 @@ object PreferencesManager {
 
     // 均衡器开关
     private const val KEY_EQUALIZER_ENABLED = "equalizer_enabled"
+    private const val KEY_LAST_SEEN_RELEASE_NOTES = "last_seen_release_notes"
     
     private var prefs: SharedPreferences? = null
     
@@ -181,6 +182,15 @@ object PreferencesManager {
 
     fun saveEqualizerEnabled(enabled: Boolean) {
         prefs?.edit()?.putBoolean(KEY_EQUALIZER_ENABLED, enabled)?.apply()
+    }
+
+    /** A versioned key makes the update sheet appear exactly once after each app update. */
+    fun shouldShowReleaseNotes(version: String): Boolean {
+        return prefs?.getString(KEY_LAST_SEEN_RELEASE_NOTES, null) != version
+    }
+
+    fun markReleaseNotesSeen(version: String) {
+        prefs?.edit()?.putString(KEY_LAST_SEEN_RELEASE_NOTES, version)?.apply()
     }
 
     // 均衡器频段增益持久化

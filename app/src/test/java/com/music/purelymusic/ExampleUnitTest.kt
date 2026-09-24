@@ -64,4 +64,33 @@ class CoreBehaviorTest {
 
         assertEquals(listOf("第一行&", "第二行"), translated)
     }
+
+    @Test
+    fun taggedTranslationKeepsEveryOriginalLineAddressable() {
+        val parsed = LyricTranslationParser.parseMarked(
+            "[[PMT_0000]] 第一行\n[[PMT_0017]] 第二行"
+        )
+
+        assertEquals("第一行", parsed[0])
+        assertEquals("第二行", parsed[17])
+    }
+
+    @Test
+    fun taggedTranslationAcceptsProviderMutatedMarkersWithoutLeakingThem() {
+        val parsed = LyricTranslationParser.parseMarked(
+            "[[PTM_0021]] 曼希尔德\n[[PTC_0022]] 你为什么总是来找我？\n[[PMT_0023]] 我的生活"
+        )
+
+        assertEquals("曼希尔德", parsed[21])
+        assertEquals("你为什么总是来找我？", parsed[22])
+        assertEquals("我的生活", parsed[23])
+    }
+
+    @Test
+    fun translationSanitizerRemovesAnyLeakedBatchMarkers() {
+        assertEquals(
+            "这是一个更可爱的词",
+            LyricTranslationParser.sanitizeTranslation("[[PTM_0021]] 这是一个更可爱的词 [[UNKNOWN_9]]")
+        )
+    }
 }

@@ -110,96 +110,41 @@ fun PlaylistDetailScreen(
     }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = Color.Transparent
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
+            CollectionAtmosphere(cover = playlist.coverUri, modifier = Modifier.fillMaxSize())
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(bottom = 100.dp),
                 state = listState
             ) {
                 item {
-                    Box(modifier = Modifier.fillMaxWidth().height(380.dp)) {
-                        AsyncImage(
-                            model = playlist.coverUri ?: R.drawable.default_cover,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                        Box(modifier = Modifier.fillMaxSize().background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    Color.Transparent,
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.4f),
-                                    Color.Black.copy(alpha = 0.85f)
-                                )
-                            )
-                        ))
-
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(24.dp)
-                                .padding(bottom = 32.dp),
-                            verticalArrangement = Arrangement.Bottom
-                        ) {
-                            Text(
-                                text = playlist.name,
-                                color = Color.White,
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "$totalSongs 首歌曲",
-                                color = Color.White.copy(alpha = 0.8f),
-                                fontSize = 14.sp
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                Button(
-                                    onClick = {
-                                        viewModel.playPlaylist(playlist, isRandom = false)
-                                        onNavigateToPlayer()
-                                    },
-                                    modifier = Modifier.weight(1f).height(48.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary
-                                    ),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.PlayArrow,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("播放全部", color = Color.White)
-                                }
-                                Button(
-                                    onClick = {
-                                        viewModel.playPlaylist(playlist, isRandom = true)
-                                        onNavigateToPlayer()
-                                    },
-                                    modifier = Modifier.weight(1f).height(48.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color.White.copy(alpha = 0.2f),
-                                        contentColor = Color.White
-                                    ),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("随机播放", color = Color.White)
-                                }
-                            }
+                    CollectionHeader(
+                        cover = playlist.coverUri,
+                        eyebrow = if (viewModel.currentLanguage == "zh") "播放列表" else "Playlist",
+                        title = playlist.name,
+                        subtitle = if (viewModel.currentLanguage == "zh") "$totalSongs 首歌曲" else "$totalSongs song${if (totalSongs == 1) "" else "s"}",
+                        playLabel = if (viewModel.currentLanguage == "zh") "播放全部" else "Play all",
+                        shuffleLabel = if (viewModel.currentLanguage == "zh") "随机播放" else "Shuffle",
+                        onPlay = {
+                            viewModel.playPlaylist(playlist, isRandom = false)
+                            onNavigateToPlayer()
+                        },
+                        onShuffle = {
+                            viewModel.playPlaylist(playlist, isRandom = true)
+                            onNavigateToPlayer()
                         }
-                    }
+                    )
+                }
+
+                item {
+                    Text(
+                        text = if (viewModel.currentLanguage == "zh") "歌曲" else "Songs",
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
 
                 itemsIndexed(currentSongList) { index, song ->
@@ -326,20 +271,21 @@ fun PlaylistDetailScreen(
                 }
             }
 
-            Surface(
+            GlassControl(
                 modifier = Modifier
                     .statusBarsPadding()
                     .padding(top = 12.dp, start = 8.dp)
+                    .size(44.dp)
                     .zIndex(1f),
                 shape = CircleShape,
-                color = Color.Black.copy(alpha = 0.3f),
+                dark = false,
                 onClick = onBack
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "返回",
-                    tint = Color.White,
-                    modifier = Modifier.padding(8.dp).size(24.dp)
+                    contentDescription = if (viewModel.currentLanguage == "zh") "返回" else "Back",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(23.dp)
                 )
             }
         }

@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -162,6 +165,47 @@ fun EqualizerScreen(
                                 color = Color.White.copy(alpha = 0.72f),
                                 fontSize = AppDimensions.textS().value.sp
                             )
+                        }
+                    }
+                }
+
+                if (bandLevels.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = if (viewModel.currentLanguage == "zh") "聆听预设" else "Listening presets",
+                            color = Color.White.copy(alpha = 0.82f),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = AppDimensions.textS().value.sp
+                        )
+                        val presets = listOf(
+                            "Flat" to if (viewModel.currentLanguage == "zh") "原声" else "Flat",
+                            "Bass" to if (viewModel.currentLanguage == "zh") "低频" else "Bass",
+                            "Vocal" to if (viewModel.currentLanguage == "zh") "人声" else "Vocal",
+                            "Bright" to if (viewModel.currentLanguage == "zh") "明亮" else "Bright",
+                            "Night" to if (viewModel.currentLanguage == "zh") "夜听" else "Night"
+                        )
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(presets) { (key, label) ->
+                                val selected = viewModel.equalizerPreset == key
+                                GlassPressable(
+                                    modifier = Modifier.height(38.dp),
+                                    onClick = { viewModel.applyEqualizerPreset(key) }
+                                ) {
+                                    LiquidGlass(
+                                        modifier = Modifier.fillMaxSize(),
+                                        shape = RoundedCornerShape(16.dp),
+                                        dark = true,
+                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp)
+                                    )
+                                    Text(
+                                        label,
+                                        color = if (selected) RedLight else Color.White.copy(alpha = 0.8f),
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = AppDimensions.textS().value.sp,
+                                        modifier = Modifier.align(Alignment.Center)
+                                    )
+                                }
+                            }
                         }
                     }
                 }

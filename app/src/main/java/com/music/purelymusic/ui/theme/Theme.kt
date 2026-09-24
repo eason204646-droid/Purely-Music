@@ -27,7 +27,7 @@ private val DarkColorScheme = darkColorScheme(
     primary = AppleRed,
     secondary = Red40,
     tertiary = Red60,
-    background = DarkSurface,
+    background = Color(0xFF101014),
     surface = DarkSurface,
     surfaceVariant = DarkSurfaceDim,
     onBackground = Color.White,
@@ -38,11 +38,11 @@ private val LightColorScheme = lightColorScheme(
     primary = RedPrimary,
     secondary = Red40,
     tertiary = Red60,
-    background = Color.White,
-    surface = Color.White,
-    surfaceVariant = Gray50,
-    onBackground = Color.Black,
-    onSurface = Color.Black,
+    background = GlassBackground,
+    surface = GlassSurface,
+    surfaceVariant = GlassSurfaceVariant,
+    onBackground = Color(0xFF141418),
+    onSurface = Color(0xFF141418),
 )
 
 @Composable

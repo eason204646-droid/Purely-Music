@@ -242,20 +242,18 @@ fun PlayerScreen(
                             Icon(Icons.Default.SkipPrevious, null, tint = Color.White, modifier = Modifier.size(AppDimensions.playerControlIconSize()))
                         }
 
-                        Surface(
-                            onClick = { viewModel.togglePlayPause() },
+                        GlassControl(
+                            modifier = Modifier.size(AppDimensions.playerPlayButtonSize()),
                             shape = CircleShape,
-                            color = Color.White.copy(alpha = 0.15f),
-                            modifier = Modifier.size(AppDimensions.playerPlayButtonSize())
+                            dark = true,
+                            onClick = { viewModel.togglePlayPause() }
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(AppDimensions.playerPlayIconSize())
-                                )
-                            }
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(AppDimensions.playerPlayIconSize())
+                            )
                         }
 
                         IconButton(onClick = { viewModel.playNext() }, modifier = Modifier.size(AppDimensions.iconButtonSizeL())) {
@@ -455,7 +453,8 @@ fun PlayerScreen(
                         value = viewModel.currentPosition.toFloat(),
                         onValueChange = { viewModel.seekTo(it) },
                         valueRange = 0f..(viewModel.duration.toFloat().coerceAtLeast(1f)),
-                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.3f))
+                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.24f)),
+                        modifier = Modifier.height(24.dp)
                     )
                     Row(modifier = Modifier.fillMaxWidth()) {
                         Text(formatTime(viewModel.currentPosition), color = Color.White.copy(alpha = 0.6f), fontSize = AppDimensions.textS().value.sp)
@@ -502,20 +501,18 @@ fun PlayerScreen(
                             Icon(Icons.Default.SkipPrevious, null, tint = Color.White, modifier = Modifier.size(AppDimensions.playerControlIconSize()))
                         }
 
-                        Surface(
-                            onClick = { viewModel.togglePlayPause() },
+                        GlassControl(
+                            modifier = Modifier.size(AppDimensions.playerPlayButtonSize()),
                             shape = CircleShape,
-                            color = Color.White.copy(alpha = 0.15f),
-                            modifier = Modifier.size(AppDimensions.playerPlayButtonSize())
+                            dark = true,
+                            onClick = { viewModel.togglePlayPause() }
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(AppDimensions.playerPlayIconSize())
-                                )
-                            }
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(AppDimensions.playerPlayIconSize())
+                            )
                         }
 
                         IconButton(onClick = { viewModel.playNext() }, modifier = Modifier.size(AppDimensions.iconButtonSizeXL())) {
