@@ -109,12 +109,12 @@ fun CreatePlaylistScreen(
                         )
                         Column(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
                             Text(song.title, fontWeight = FontWeight.Bold)
-                            Text(song.artist, fontSize = 12.sp, color = Color.Gray)
+                            Text(song.artist, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Icon(
                             imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
                             contentDescription = null,
-                            tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray
+                            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -126,29 +126,29 @@ fun CreatePlaylistScreen(
                     modifier = Modifier
                         .size(200.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFFFFCDD2))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
                         .clickable { onPickPlaylistCover() },
                     contentAlignment = Alignment.Center
                 ) {
                     if (viewModel.tempPlaylistCoverUri != null) {
                         AsyncImage(model = viewModel.tempPlaylistCoverUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     } else {
-                        Text("点击上传封面", color = Color(0xFFB71C1C))
+                        Text("点击上传封面", color = MaterialTheme.colorScheme.primary)
                     }
                 }
                 Spacer(modifier = Modifier.height(32.dp))
                 TextField(
                     value = playlistName,
                     onValueChange = { playlistName = it },
-                    label = { Text("歌单名称", color = Color(0xFFB71C1C)) },
+                    label = { Text("歌单名称", color = MaterialTheme.colorScheme.primary) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color(0xFFFFEBEE),
-                        unfocusedContainerColor = Color(0xFFFFEBEE),
-                        focusedTextColor = Color(0xFFB71C1C),
-                        unfocusedTextColor = Color(0xFFB71C1C),
-                        cursorColor = Color(0xFFB71C1C)
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        cursorColor = MaterialTheme.colorScheme.primary
                     )
                 )
             }

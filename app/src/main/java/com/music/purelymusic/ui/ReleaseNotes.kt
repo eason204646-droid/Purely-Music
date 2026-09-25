@@ -7,11 +7,11 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,7 +52,7 @@ fun WhatsNewSheet(language: String, onDismiss: () -> Unit) {
                     }
                     Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
                         Text(title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        Text(detail, color = Color(0xFF68686E), fontSize = 13.sp, lineHeight = 18.sp)
+                        Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, lineHeight = 18.sp)
                     }
                 }
             }

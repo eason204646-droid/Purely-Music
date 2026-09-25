@@ -50,7 +50,7 @@ fun EditPlaylistScreen(
     // 🚩 空保护：如果找不到歌单，显示加载中，防止 NPE
     if (playlist == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = Color(0xFFE53935))
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
         }
         return
     }
@@ -82,12 +82,12 @@ fun EditPlaylistScreen(
                             onBack()
                         }
                     ) {
-                        Text("保存", color = Color(0xFFE53935), fontWeight = FontWeight.Bold)
+                        Text("保存", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     }
                 }
             )
         },
-        containerColor = Color.White
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding)
@@ -109,12 +109,12 @@ fun EditPlaylistScreen(
                     Checkbox(
                         checked = isChecked,
                         onCheckedChange = null,
-                        colors = CheckboxDefaults.colors(checkedColor = Color(0xFFE53935))
+                        colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(text = song.title, fontSize = 16.sp)
-                        Text(text = song.artist, fontSize = 12.sp, color = Color.Gray)
+                        Text(text = song.artist, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }

@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
@@ -73,7 +75,7 @@ fun WithoutLiquidGlassHaze(content: @Composable () -> Unit) {
 fun LiquidGlass(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(28.dp),
-    dark: Boolean = false,
+    dark: Boolean = isSystemInDarkTheme(),
     contentPadding: PaddingValues = PaddingValues(0.dp),
     opacity: Float = if (dark) 0.62f else 0.84f,
     highlightAlpha: Float = if (dark) 0.14f else 0.34f,
@@ -239,7 +241,7 @@ fun GlassMenuItem(
     destructive: Boolean = false,
     onClick: () -> Unit
 ) {
-    val color = if (destructive) Color(0xFFFF375F) else Color(0xFF17171B)
+    val color = if (destructive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
     GlassPressable(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), onClick = onClick) {
         Icon(icon, null, tint = color, modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp))
         Text(

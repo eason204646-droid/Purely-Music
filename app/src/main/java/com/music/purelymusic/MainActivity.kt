@@ -22,6 +22,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.SideEffect
+import androidx.core.view.WindowCompat
+import android.view.Window
 import androidx.activity.result.contract.ActivityResultContracts
 import coil.ImageLoader
 import coil.disk.DiskCache
@@ -93,17 +97,24 @@ class MainActivity : ComponentActivity() {
         setContent {
             AMPlayerTheme {
                 val playerViewModel: PlayerViewModel = viewModel()
-                MainScreen(playerViewModel)
+                MainScreen(playerViewModel, window)
             }
         }
     }
 }
 
 @Composable
-fun MainScreen(viewModel: PlayerViewModel) {
+fun MainScreen(viewModel: PlayerViewModel, window: Window) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    val useDarkSystemBars = isSystemInDarkTheme() || currentRoute == "player" || currentRoute == "equalizer"
+    SideEffect {
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !useDarkSystemBars
+            isAppearanceLightNavigationBars = !useDarkSystemBars
+        }
+    }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -368,14 +379,14 @@ private fun LiquidGlassNavigationBar(
                 ) {
                     if (selected) {
                         Box(
-                            modifier = Modifier.fillMaxSize().background(RedPrimary.copy(alpha = 0.16f), RoundedCornerShape(22.dp))
+                            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f), RoundedCornerShape(22.dp))
                         )
                     }
                     Text(
                         label,
                         fontSize = 12.sp,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (selected) AppleRed else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }

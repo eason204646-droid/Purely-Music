@@ -341,7 +341,7 @@ fun DraggableSongItem(
                 spotColor = Color.Black.copy(alpha = 0.12f)
             )
             .background(
-                if (isDragged) Color(0xFFF2F2F2)
+                if (isDragged) MaterialTheme.colorScheme.surfaceContainerHigh
                 else Color.Transparent
             )
             .padding(start = AppDimensions.paddingScreen())
@@ -423,16 +423,16 @@ fun AddSongsToPlaylistDialog(
                             text = "添加歌曲",
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.Black
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "选择要添加到歌单的歌曲",
                             fontSize = 14.sp,
-                            color = Color.Black.copy(alpha = 0.6f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "关闭", tint = Color.Black)
+                        Icon(Icons.Default.Close, contentDescription = "关闭", tint = MaterialTheme.colorScheme.onSurface)
                     }
                 }
 
@@ -480,7 +480,7 @@ fun AddSongsToPlaylistDialog(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.textButtonColors(
-                            contentColor = Color(0xFFE53935)
+                            contentColor = MaterialTheme.colorScheme.primary
                         )
                     ) {
                         Text("取消", fontSize = 15.sp)
@@ -529,7 +529,7 @@ fun SelectableSongItem(
         color = if (isSelected) {
             MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
         } else {
-            Color.Black.copy(alpha = 0.05f)
+            MaterialTheme.colorScheme.surfaceContainer
         },
         border = if (isSelected) {
             androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
@@ -597,7 +597,7 @@ fun SelectableSongItem(
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = Color.Black
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
@@ -605,7 +605,7 @@ fun SelectableSongItem(
                     fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = Color.Black.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

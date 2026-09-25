@@ -135,7 +135,7 @@ fun HomeScreen(
                             text = if (viewModel.currentLanguage == "zh") "最近播放" else "Recently Played",
                             fontSize = AppDimensions.homeSectionTitleSize().value.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.Black,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(bottom = AppDimensions.paddingCard())
                         )
 
@@ -171,13 +171,13 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 text = if (viewModel.currentLanguage == "zh") "还没有导入歌曲" else "No songs yet",
-                                color = Color.Gray,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = AppDimensions.textM().value.sp
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = if (viewModel.currentLanguage == "zh") "点击右上角 + 开始导入" else "Tap + to import music",
-                                color = Color.Gray.copy(alpha = 0.6f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 fontSize = AppDimensions.textS().value.sp
                             )
                         }
@@ -189,7 +189,7 @@ fun HomeScreen(
                         text = if (viewModel.currentLanguage == "zh") "所有歌曲" else "All Songs",
                         fontSize = AppDimensions.homeSectionTitleSize().value.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Black,
+                        color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(top = AppDimensions.paddingScreen(), bottom = AppDimensions.paddingCard())
                     )
                 }
@@ -226,13 +226,13 @@ fun HomeScreen(
                         onClick = { showMenu = !showMenu },
                         modifier = Modifier.size(AppDimensions.iconButtonSizeM()),
                         shape = CircleShape,
-                        dark = false,
+                        dark = androidx.compose.foundation.isSystemInDarkTheme(),
                         opacity = 0.60f
                     ) {
                         Icon(
                             Icons.Default.Add,
                             contentDescription = if (viewModel.currentLanguage == "zh") "添加" else "Add",
-                            tint = RedPrimary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(AppDimensions.iconM())
                         )
                     }
@@ -337,7 +337,7 @@ fun RecentSongItem(song: Song, onClick: () -> Unit) {
         Spacer(modifier = Modifier.height(AppDimensions.spacingS()))
         Text(
             text = song.title,
-            color = Color.Black,
+            color = MaterialTheme.colorScheme.onSurface,
             fontSize = AppDimensions.textM().value.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
@@ -345,7 +345,7 @@ fun RecentSongItem(song: Song, onClick: () -> Unit) {
         )
         Text(
             text = song.artist,
-            color = Color.Gray,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = AppDimensions.textS().value.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -389,7 +389,7 @@ fun SongItem(
                 ) {
                 Text(
                     song.title,
-                    color = Color.Black,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = AppDimensions.textL().value.sp,
                     fontWeight = if (isDragging) FontWeight.Bold else FontWeight.SemiBold,
                     maxLines = 1,
@@ -398,7 +398,7 @@ fun SongItem(
                     Spacer(modifier = Modifier.height(AppDimensions.spacingXS()))
                 Text(
                     song.artist,
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = AppDimensions.textM().value.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -416,7 +416,7 @@ fun SongItem(
                     Icon(
                         imageVector = Icons.Default.DragHandle,
                         contentDescription = "Drag to reorder",
-                        tint = if (isDragging) Color.Gray else Color.Gray.copy(alpha = 0.5f),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isDragging) 1f else 0.6f),
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -460,7 +460,7 @@ fun MiniPlayer(viewModel: PlayerViewModel, onClick: () -> Unit) {
             GlassControl(
                 modifier = Modifier.size(AppDimensions.iconButtonSizeM()),
                 shape = CircleShape,
-                dark = false,
+                dark = androidx.compose.foundation.isSystemInDarkTheme(),
                 onClick = { viewModel.togglePlayPause() }
             ) {
                 Icon(
@@ -543,8 +543,8 @@ fun HomeImportMusicDialog(
                 viewModel.saveSongError = null
             }
         },
-        containerColor = Gray50,
-        title = { Text(if (viewModel.currentLanguage == "zh") "补充歌曲信息" else "Add Song Info", color = Color.Black) },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        title = { Text(if (viewModel.currentLanguage == "zh") "补充歌曲信息" else "Add Song Info", color = MaterialTheme.colorScheme.onSurface) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(AppDimensions.spacingS())) {
                 GlassDialogTextField(
@@ -573,12 +573,12 @@ fun HomeImportMusicDialog(
                         Text(
                             text = if (viewModel.currentLanguage == "zh") "手动导入" else "Manual Import",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.Black
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Icon(
                             imageVector = if (showManualImport) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                             contentDescription = null,
-                            tint = Color.Black.copy(alpha = 0.7f)
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     
@@ -589,7 +589,7 @@ fun HomeImportMusicDialog(
                             Text(
                                 text = if (viewModel.currentLanguage == "zh") "歌曲封面" else "Album Cover",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.Black.copy(alpha = 0.7f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = AppDimensions.spacingXS())
                             )
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -622,7 +622,7 @@ fun HomeImportMusicDialog(
                             Text(
                                 text = if (viewModel.currentLanguage == "zh") "歌词文件 (LRC)" else "Lyrics File (LRC)",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.Black.copy(alpha = 0.7f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = AppDimensions.spacingXS())
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -658,7 +658,7 @@ fun HomeImportMusicDialog(
                             ClickableText(
                                 text = annotatedString,
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    color = Color.Black.copy(alpha = 0.6f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = AppDimensions.textXS().value.sp
                                 ),
                                 modifier = Modifier.padding(top = AppDimensions.spacingXS(), start = AppDimensions.spacingXS()),
@@ -722,7 +722,7 @@ fun HomeImportMusicDialog(
             title = {
                 Text(
                     if (viewModel.currentLanguage == "zh") "自动获取失败" else "Auto-fetch Failed",
-                    color = Color.Black,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -730,13 +730,13 @@ fun HomeImportMusicDialog(
                 Column {
                     Text(
                         viewModel.fetchAllError ?: (if (viewModel.currentLanguage == "zh") "无法自动获取歌曲信息" else "Failed to fetch song information"),
-                        color = Color.Black.copy(alpha = 0.8f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                         fontSize = 14.sp
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         if (viewModel.currentLanguage == "zh") "您可以选择重试或手动导入信息" else "You can retry or manually import the information",
-                        color = Color.Black.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp
                     )
                 }
@@ -764,7 +764,7 @@ fun HomeImportMusicDialog(
                     Text(if (viewModel.currentLanguage == "zh") "重试" else "Retry", color = RedPrimary)
                 }
             },
-            containerColor = Gray50
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         )
     }
 }
@@ -779,11 +779,11 @@ fun BatchImportProgressDialog(
 ) {
     GlassAlertDialog(
         onDismissRequest = { /* 不允许手动关闭 */ },
-        containerColor = Color.White,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         title = {
             Text(
                 text = if (currentLanguage == "zh") "批量导入中" else "Batch Importing",
-                color = Color.Black,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold
             )
         },
@@ -798,21 +798,21 @@ fun BatchImportProgressDialog(
                     modifier = Modifier.size(64.dp),
                     strokeWidth = 6.dp,
                     color = RedPrimary,
-                    trackColor = Gray100
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
                 )
                 
                 Text(
                     text = "$progress / $total",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.Black
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 
                 if (currentSong != null) {
                     Text(
                         text = if (currentLanguage == "zh") "正在处理: $currentSong" else "Processing: $currentSong",
                         fontSize = 14.sp,
-                        color = Color.Gray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

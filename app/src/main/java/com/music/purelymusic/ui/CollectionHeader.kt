@@ -98,9 +98,9 @@ fun CollectionAtmosphere(
                 .background(
                     Brush.verticalGradient(
                         listOf(
-                            Color(0xFFF9F9FC).copy(alpha = 0.79f),
-                            Color(0xFFFCFCFE).copy(alpha = 0.91f),
-                            Color(0xFFFDFDFF).copy(alpha = 0.96f)
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.79f),
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.91f),
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
                         )
                     )
                 )

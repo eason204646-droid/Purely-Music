@@ -19,7 +19,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
-import com.music.purelymusic.ui.theme.AppleRed
 
 /** The activity's full-page source is separate from sources used by individual controls. */
 val LocalGlassDialogHazeState = compositionLocalOf<HazeState?> { null }
@@ -33,7 +32,7 @@ fun GlassAlertDialog(
     icon: @Composable (() -> Unit)? = null,
     title: @Composable (() -> Unit)? = null,
     text: @Composable (() -> Unit)? = null,
-    containerColor: Color = Color(0xFFF9F9FC),
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
     shape: Shape = RoundedCornerShape(28.dp),
     properties: DialogProperties = DialogProperties()
 ) {
@@ -50,7 +49,7 @@ fun GlassAlertDialog(
     AlertDialog(
         onDismissRequest = onDismissRequest,
         confirmButton = confirmButton,
-        modifier = glassModifier.border(1.dp, Color(0xFF87919D).copy(alpha = 0.32f), shape),
+        modifier = glassModifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape),
         dismissButton = dismissButton,
         icon = icon,
         title = title,
@@ -93,21 +92,21 @@ fun GlassDialogTextField(
         isError = isError,
         singleLine = true,
         colors = TextFieldDefaults.colors(
-            focusedTextColor = Color(0xFF17171B),
-            unfocusedTextColor = Color(0xFF17171B),
-            disabledTextColor = Color(0xFF17171B).copy(alpha = 0.55f),
+            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+            disabledTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
             focusedContainerColor = Color.Transparent,
             unfocusedContainerColor = Color.Transparent,
             disabledContainerColor = Color.Transparent,
             errorContainerColor = Color.Transparent,
-            focusedIndicatorColor = AppleRed,
-            unfocusedIndicatorColor = Color(0xFF87919D).copy(alpha = 0.45f),
-            disabledIndicatorColor = Color(0xFF87919D).copy(alpha = 0.25f),
+            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+            unfocusedIndicatorColor = MaterialTheme.colorScheme.outline,
+            disabledIndicatorColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
             errorIndicatorColor = MaterialTheme.colorScheme.error,
-            focusedLabelColor = AppleRed,
-            unfocusedLabelColor = Color(0xFF3F4650),
-            disabledLabelColor = Color(0xFF3F4650).copy(alpha = 0.55f),
-            cursorColor = AppleRed,
+            focusedLabelColor = MaterialTheme.colorScheme.primary,
+            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+            cursorColor = MaterialTheme.colorScheme.primary,
             errorCursorColor = MaterialTheme.colorScheme.error
         )
     )

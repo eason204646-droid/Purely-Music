@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -64,7 +65,7 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFFDFDFF))
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // 顶部标题栏
         Row(
@@ -297,7 +298,7 @@ fun SettingsScreen(
                         "If you like our app, please consider supporting us on Afdian or giving us a free star on GitHub. Your support is greatly appreciated."
                     },
                     fontSize = AppDimensions.textS().value.sp,
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = AppDimensions.paddingCard())
                 )
                 SettingsOption(
@@ -350,7 +351,7 @@ fun SettingsScreen(
             title = {
                 Text(
                     if (viewModel.currentLanguage == "zh") "选择歌词样式" else "Select Lyrics Style",
-                    color = Color.Black,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -365,7 +366,7 @@ fun SettingsScreen(
                                 showLyricStyleDialog = false
                             },
                         colors = CardDefaults.cardColors(
-                            containerColor = if (viewModel.lyricStyle == "multi") Color(0xFFFFCDD2) else Color.White
+                            containerColor = if (viewModel.lyricStyle == "multi") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer
                         ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -376,12 +377,12 @@ fun SettingsScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     if (viewModel.currentLanguage == "zh") "多行歌词" else "Multi-line Lyrics",
-                                    color = Color.Black,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
                                     if (viewModel.currentLanguage == "zh") "显示多行歌词，当前歌词高亮" else "Show multiple lyrics with current one highlighted",
-                                    color = Color.Black.copy(alpha = 0.7f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 12.sp
                                 )
                             }
@@ -389,7 +390,7 @@ fun SettingsScreen(
                                 Icon(
                                     Icons.Default.Check,
                                     contentDescription = null,
-                                    tint = Color(0xFFE53935)
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -404,7 +405,7 @@ fun SettingsScreen(
                                 showLyricStyleDialog = false
                             },
                         colors = CardDefaults.cardColors(
-                            containerColor = if (viewModel.lyricStyle == "single") Color(0xFFFFCDD2) else Color.White
+                            containerColor = if (viewModel.lyricStyle == "single") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer
                         ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -415,12 +416,12 @@ fun SettingsScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     if (viewModel.currentLanguage == "zh") "单行歌词" else "Single-line Lyrics",
-                                    color = Color.Black,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
                                     if (viewModel.currentLanguage == "zh") "只显示当前歌词，更大更醒目" else "Show only current lyrics, larger and more prominent",
-                                    color = Color.Black.copy(alpha = 0.7f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 12.sp
                                 )
                             }
@@ -428,7 +429,7 @@ fun SettingsScreen(
                                 Icon(
                                     Icons.Default.Check,
                                     contentDescription = null,
-                                    tint = Color(0xFFE53935)
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -439,11 +440,11 @@ fun SettingsScreen(
                 TextButton(onClick = { showLyricStyleDialog = false }) {
                     Text(
                         if (viewModel.currentLanguage == "zh") "取消" else "Cancel",
-                        color = Color(0xFFE53935)
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             },
-            containerColor = Color(0xFFF5F5F5)
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         )
     }
 
@@ -508,7 +509,7 @@ fun SettingsScreen(
                                     Box(
                                         Modifier
                                             .matchParentSize()
-                                            .background(Color(0xFFFF375F).copy(alpha = 0.13f), RoundedCornerShape(18.dp))
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.13f), RoundedCornerShape(18.dp))
                                     )
                                 }
                             Row(
@@ -518,13 +519,13 @@ fun SettingsScreen(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         label,
-                                        color = Color.Black,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                         fontWeight = if (isSelected || isActiveOption) FontWeight.Bold else FontWeight.Normal
                                     )
                                     if (isActiveOption && minutes > 0) {
                                         Text(
                                             if (viewModel.currentLanguage == "zh") "剩余 ${viewModel.sleepTimerDisplay}" else "${viewModel.sleepTimerDisplay} remaining",
-                                            color = Color(0xFFE53935),
+                                            color = MaterialTheme.colorScheme.primary,
                                             fontSize = 12.sp
                                         )
                                     }
@@ -533,7 +534,7 @@ fun SettingsScreen(
                                     Icon(
                                         Icons.Default.Check,
                                         contentDescription = null,
-                                        tint = Color(0xFFE53935)
+                                        tint = MaterialTheme.colorScheme.primary
                                     )
                                 }
                             }
@@ -543,7 +544,7 @@ fun SettingsScreen(
                     TextButton(onClick = { showSleepTimerDialog = false }, modifier = Modifier.align(Alignment.End)) {
                         Text(
                             if (viewModel.currentLanguage == "zh") "关闭" else "Close",
-                            color = Color(0xFFFF375F)
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -562,7 +563,7 @@ fun SettingsScreen(
             title = {
                 Text(
                     if (viewModel.currentLanguage == "zh") "翻译日志" else "Translation Logs",
-                    color = Color.Black,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -571,7 +572,7 @@ fun SettingsScreen(
                     modifier = Modifier
                         .height(400.dp)
                         .fillMaxWidth()
-                        .background(Color(0xFFF5F5F5))
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
                 ) {
                     Column(
                         modifier = Modifier
@@ -583,7 +584,7 @@ fun SettingsScreen(
                             text = if (viewModel.translateLogs.isBlank()) {
                                 if (viewModel.currentLanguage == "zh") "暂无日志" else "No logs"
                             } else viewModel.translateLogs,
-                            color = Color.Black.copy(alpha = 0.9f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                             fontSize = 12.sp,
                             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                         )
@@ -600,7 +601,7 @@ fun SettingsScreen(
                     ) {
                         Text(
                             if (viewModel.currentLanguage == "zh") "复制" else "Copy",
-                            color = Color(0xFFE53935)
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -609,17 +610,19 @@ fun SettingsScreen(
                 TextButton(onClick = { showTranslateLogDialog = false }) {
                     Text(
                         if (viewModel.currentLanguage == "zh") "关闭" else "Close",
-                        color = Color(0xFFE53935)
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             },
-            containerColor = Color.White
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         )
     }
 
     // 帮助文档全屏弹窗（Markdown 渲染）
     if (showHelpDialog) {
         val markwon = remember { Markwon.create(context) }
+        val helpTextColor = MaterialTheme.colorScheme.onSurface.toArgb()
+        val helpLinkColor = MaterialTheme.colorScheme.primary.toArgb()
         GlassDialog(
             onDismissRequest = { showHelpDialog = false },
             properties = androidx.compose.ui.window.DialogProperties(
@@ -630,7 +633,7 @@ fun SettingsScreen(
         ) {
             Surface(
                 modifier = Modifier.fillMaxSize(),
-                color = Color.White
+                color = MaterialTheme.colorScheme.surface
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Row(
@@ -644,14 +647,14 @@ fun SettingsScreen(
                             text = helpDialogTitle,
                             fontSize = AppDimensions.textL().value.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.Black,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f)
                         )
                         IconButton(onClick = { showHelpDialog = false }) {
                             Icon(
                                 Icons.Default.Close,
                                 contentDescription = if (viewModel.currentLanguage == "zh") "关闭" else "Close",
-                                tint = Color.Black
+                                tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -663,7 +666,6 @@ fun SettingsScreen(
                         factory = { ctx ->
                             val scrollView = NestedScrollView(ctx)
                             val textView = TextView(ctx)
-                            textView.setTextColor(android.graphics.Color.BLACK)
                             textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                             textView.setLineSpacing(0f, 1.2f)
                             textView.movementMethod = LinkMovementMethod.getInstance()
@@ -681,6 +683,8 @@ fun SettingsScreen(
                         },
                         update = { scrollView ->
                             val textView = scrollView.tag as TextView
+                            textView.setTextColor(helpTextColor)
+                            textView.setLinkTextColor(helpLinkColor)
                             markwon.setMarkdown(textView, helpDialogContent)
                         }
                     )
@@ -707,7 +711,7 @@ fun SettingsSection(
             Icon(
                 icon,
                 contentDescription = null,
-            tint = Color(0xFFFF375F),
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(AppDimensions.iconS())
             )
             Spacer(modifier = Modifier.width(AppDimensions.spacingS()))
@@ -743,7 +747,7 @@ fun SettingsOption(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(AppDimensions.cornerRadiusS()))
-            .background(if (isSelected) Color(0xFFE0E0E0).copy(alpha = 0.5f) else Color.Transparent)
+            .background(if (isSelected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent)
             .clickable { onClick() }
             .padding(vertical = AppDimensions.paddingCard(), horizontal = AppDimensions.paddingCard()),
         verticalAlignment = Alignment.CenterVertically
@@ -753,13 +757,13 @@ fun SettingsOption(
                 text = title,
                 fontSize = AppDimensions.textM().value.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                color = Color.Black
+                color = MaterialTheme.colorScheme.onSurface
             )
             if (subtitle != null) {
                 Text(
                     text = subtitle,
                     fontSize = AppDimensions.textS().value.sp,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -767,14 +771,14 @@ fun SettingsOption(
             Icon(
                 Icons.Default.Check,
                 contentDescription = "已选中",
-                tint = Color(0xFF757575),
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(AppDimensions.iconM())
             )
         } else if (showChevron) {
             Icon(
                 Icons.Default.ChevronRight,
                 contentDescription = null,
-                tint = Color.Gray,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(AppDimensions.iconM())
             )
         }
@@ -799,13 +803,13 @@ fun SettingsSwitch(
                 text = title,
                 fontSize = AppDimensions.textM().value.sp,
                 fontWeight = FontWeight.Normal,
-                color = Color.Black
+                color = MaterialTheme.colorScheme.onSurface
             )
             if (subtitle != null) {
                 Text(
                     text = subtitle,
                     fontSize = AppDimensions.textS().value.sp,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -813,10 +817,10 @@ fun SettingsSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color(0xFFE53935),
-                checkedTrackColor = Color(0xFFFFCDD2),
-                uncheckedThumbColor = Color(0xFF9E9E9E),
-                uncheckedTrackColor = Color(0xFFE0E0E0)
+                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         )    }
 }
@@ -847,13 +851,13 @@ fun SettingsSlider(
                     text = title,
                     fontSize = AppDimensions.textM().value.sp,
                     fontWeight = FontWeight.Normal,
-                    color = if (enabled) Color.Black else Color.Gray
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (subtitle != null) {
                     Text(
                         text = subtitle,
                         fontSize = AppDimensions.textS().value.sp,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -862,7 +866,7 @@ fun SettingsSlider(
                 text = valueText,
                 fontSize = AppDimensions.textS().value.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (enabled) Color(0xFFE53935) else Color.Gray,
+                color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.End
             )
         }
@@ -874,12 +878,12 @@ fun SettingsSlider(
             steps = steps,
             enabled = enabled,
             colors = SliderDefaults.colors(
-                thumbColor = Color(0xFFE53935),
-                activeTrackColor = Color(0xFFE53935),
-                inactiveTrackColor = Color(0xFFFFCDD2),
-                disabledThumbColor = Color(0xFFBDBDBD),
-                disabledActiveTrackColor = Color(0xFFBDBDBD),
-                disabledInactiveTrackColor = Color(0xFFE0E0E0)
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                disabledThumbColor = MaterialTheme.colorScheme.outline,
+                disabledActiveTrackColor = MaterialTheme.colorScheme.outline,
+                disabledInactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         )
     }

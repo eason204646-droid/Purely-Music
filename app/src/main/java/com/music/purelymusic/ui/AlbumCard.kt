@@ -19,12 +19,12 @@ package com.music.purelymusic.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,7 +55,7 @@ fun AlbumCard(album: Album, onClick: () -> Unit) {
         Spacer(modifier = Modifier.height(AppDimensions.spacingS()))
         Text(
             text = album.name,
-            color = Color.Black,
+            color = MaterialTheme.colorScheme.onSurface,
             fontSize = AppDimensions.textM().value.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
@@ -63,7 +63,7 @@ fun AlbumCard(album: Album, onClick: () -> Unit) {
         )
         Text(
             text = album.artist,
-            color = Color.Gray,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = AppDimensions.textS().value.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

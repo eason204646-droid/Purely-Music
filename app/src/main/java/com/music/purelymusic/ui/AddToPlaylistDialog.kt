@@ -25,11 +25,11 @@ fun AddToPlaylistDialog(
 
     GlassAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFFF5F5F5),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         title = {
             Text(
                 if (viewModel.currentLanguage == "zh") "选择歌单" else "Select Playlist",
-                color = Color.Black,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold
             )
         },
@@ -37,7 +37,7 @@ fun AddToPlaylistDialog(
             if (playlists.isEmpty()) {
                 Text(
                     if (viewModel.currentLanguage == "zh") "暂无歌单，请先创建歌单" else "No playlists yet. Create one first.",
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
                 Column(
@@ -56,7 +56,7 @@ fun AddToPlaylistDialog(
                                     onDismiss()
                                 },
                             colors = CardDefaults.cardColors(
-                                containerColor = Color.White
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer
                             ),
                             shape = RoundedCornerShape(12.dp)
                         ) {
@@ -69,20 +69,20 @@ fun AddToPlaylistDialog(
                                 Icon(
                                     Icons.AutoMirrored.Filled.PlaylistPlay,
                                     contentDescription = null,
-                                    tint = Color(0xFFE53935),
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(AppDimensions.iconM())
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = playlist.name,
-                                        color = Color.Black,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                         fontWeight = FontWeight.SemiBold,
                                         fontSize = 14.sp
                                     )
                                     Text(
                                         text = if (viewModel.currentLanguage == "zh") "${playlist.songIds.size} 首" else "${playlist.songIds.size} songs",
-                                        color = Color.Gray,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 12.sp
                                     )
                                 }
@@ -96,7 +96,7 @@ fun AddToPlaylistDialog(
             TextButton(onClick = onDismiss) {
                 Text(
                     if (viewModel.currentLanguage == "zh") "取消" else "Cancel",
-                    color = Color(0xFFE53935)
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         }

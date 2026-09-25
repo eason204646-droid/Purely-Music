@@ -359,7 +359,7 @@ fun LibraryScreen(
                                         "duration" -> if (viewModel.currentLanguage == "zh") "时长" else "Duration"
                                         else -> if (viewModel.currentLanguage == "zh") "最近添加" else "Recent"
                                     },
-                                    color = Color(0xFFE53935),
+                                    color = MaterialTheme.colorScheme.primary,
                                     fontSize = AppDimensions.textS().value.sp
                                 )
                             }
@@ -388,11 +388,11 @@ fun LibraryScreen(
                         Surface(
                             onClick = { showFavoritesOnly = false },
                             shape = RoundedCornerShape(AppDimensions.cornerRadiusM()),
-                            color = if (!showFavoritesOnly) Color(0xFFE53935) else Color(0xFFF5F5F5)
+                            color = if (!showFavoritesOnly) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
                         ) {
                             Text(
                                 text = if (viewModel.currentLanguage == "zh") "全部" else "All",
-                                color = if (!showFavoritesOnly) Color.White else Color.Black,
+                                color = if (!showFavoritesOnly) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                 fontSize = AppDimensions.textS().value.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
@@ -401,7 +401,7 @@ fun LibraryScreen(
                         Surface(
                             onClick = { showFavoritesOnly = true },
                             shape = RoundedCornerShape(AppDimensions.cornerRadiusM()),
-                            color = if (showFavoritesOnly) Color(0xFFE53935) else Color(0xFFF5F5F5)
+                            color = if (showFavoritesOnly) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -410,13 +410,13 @@ fun LibraryScreen(
                                 Icon(
                                     Icons.Default.Favorite,
                                     contentDescription = null,
-                                    tint = if (showFavoritesOnly) Color.White else Color.Black,
+                                    tint = if (showFavoritesOnly) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.size(AppDimensions.iconS())
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = if (viewModel.currentLanguage == "zh") "收藏" else "Fav",
-                                    color = if (showFavoritesOnly) Color.White else Color.Black,
+                                    color = if (showFavoritesOnly) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                     fontSize = AppDimensions.textS().value.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -454,7 +454,7 @@ fun LibraryScreen(
                                         if (viewModel.currentLanguage == "zh") "还没有收藏歌曲" else "No favorite songs yet"
                                     else -> if (viewModel.currentLanguage == "zh") "暂无歌曲，点击 ＋ 导入" else "No songs yet. Tap ＋ to import"
                                 },
-                                color = Color.Gray,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = AppDimensions.textM().value.sp
                             )
                         }
@@ -484,16 +484,16 @@ fun LibraryScreen(
                         placeholder = {
                             Text(
                                 if (viewModel.currentLanguage == "zh") "搜索歌曲或歌手..." else "Search songs or artists...",
-                                color = Color(0xFF49515B)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         },
                         leadingIcon = {
-                            Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF49515B))
+                            Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         },
                         trailingIcon = {
                             if (viewModel.searchQuery.isNotEmpty()) {
                                 IconButton(onClick = { viewModel.performSearch("") }) {
-                                    Icon(Icons.Default.Clear, contentDescription = null, tint = Color(0xFF49515B))
+                                    Icon(Icons.Default.Clear, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         },
@@ -505,9 +505,9 @@ fun LibraryScreen(
                             focusedIndicatorColor = Color.Transparent,
                             unfocusedIndicatorColor = Color.Transparent,
                             disabledIndicatorColor = Color.Transparent,
-                            focusedTextColor = Color.Black,
-                            unfocusedTextColor = Color.Black,
-                            cursorColor = Color(0xFFE53935)
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            cursorColor = MaterialTheme.colorScheme.primary
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -535,7 +535,7 @@ fun LibraryScreen(
                         onClick = { showMenu = !showMenu },
                         modifier = Modifier.size(AppDimensions.iconButtonSizeM()),
                         shape = androidx.compose.foundation.shape.CircleShape,
-                        dark = false,
+                        dark = androidx.compose.foundation.isSystemInDarkTheme(),
                         opacity = 0.60f
                     ) {
                         Icon(
@@ -640,8 +640,8 @@ fun ImportMusicDialog(
                 viewModel.saveSongError = null
             }
         },
-        containerColor = Color.White,
-        title = { Text(if (viewModel.currentLanguage == "zh") "补充歌曲信息" else "Add Song Info", color = Color.Black) },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        title = { Text(if (viewModel.currentLanguage == "zh") "补充歌曲信息" else "Add Song Info", color = MaterialTheme.colorScheme.onSurface) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(AppDimensions.spacingS())) {
                 GlassDialogTextField(
@@ -670,12 +670,12 @@ fun ImportMusicDialog(
                         Text(
                             text = if (viewModel.currentLanguage == "zh") "手动导入" else "Manual Import",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.Black
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Icon(
                             imageVector = if (showManualImport) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                             contentDescription = null,
-                            tint = Color.Black.copy(alpha = 0.7f)
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     
@@ -686,7 +686,7 @@ fun ImportMusicDialog(
                             Text(
                                 text = if (viewModel.currentLanguage == "zh") "歌曲封面" else "Album Cover",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.Black.copy(alpha = 0.7f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = AppDimensions.spacingXS())
                             )
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -719,7 +719,7 @@ fun ImportMusicDialog(
                             Text(
                                 text = if (viewModel.currentLanguage == "zh") "歌词文件 (LRC)" else "Lyrics File (LRC)",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.Black.copy(alpha = 0.7f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = AppDimensions.spacingXS())
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -755,7 +755,7 @@ fun ImportMusicDialog(
                             androidx.compose.foundation.text.ClickableText(
                                 text = annotatedString,
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    color = Color.Black.copy(alpha = 0.6f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = AppDimensions.textXS().value.sp
                                 ),
                                 modifier = Modifier.padding(top = AppDimensions.spacingXS(), start = AppDimensions.spacingXS()),
@@ -819,7 +819,7 @@ fun ImportMusicDialog(
             title = {
                 Text(
                     if (viewModel.currentLanguage == "zh") "自动获取失败" else "Auto-fetch Failed",
-                    color = Color.Black,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -827,13 +827,13 @@ fun ImportMusicDialog(
                 Column {
                     Text(
                         viewModel.fetchAllError ?: (if (viewModel.currentLanguage == "zh") "无法自动获取歌曲信息" else "Failed to fetch song information"),
-                        color = Color.Black.copy(alpha = 0.8f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                         fontSize = 14.sp
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         if (viewModel.currentLanguage == "zh") "您可以选择重试或手动导入信息" else "You can retry or manually import the information",
-                        color = Color.Black.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp
                     )
                 }
@@ -846,7 +846,7 @@ fun ImportMusicDialog(
                         showManualImport = true  // 展开手动导入区域
                     }
                 ) {
-                    Text(if (viewModel.currentLanguage == "zh") "手动导入" else "Manual Import", color = Color(0xFFE53935))
+                    Text(if (viewModel.currentLanguage == "zh") "手动导入" else "Manual Import", color = MaterialTheme.colorScheme.primary)
                 }
             },
             dismissButton = {
@@ -858,10 +858,10 @@ fun ImportMusicDialog(
                         saveSong()
                     }
                 ) {
-                    Text(if (viewModel.currentLanguage == "zh") "重试" else "Retry", color = Color(0xFFE53935))
+                    Text(if (viewModel.currentLanguage == "zh") "重试" else "Retry", color = MaterialTheme.colorScheme.primary)
                 }
             },
-            containerColor = Color.White
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         )
     }
 }
@@ -880,8 +880,8 @@ fun EditSongDialog(
         onDismissRequest = {
             viewModel.cancelEditSong()
         },
-        containerColor = Color(0xFFF5F5F5),
-        title = { Text(if (viewModel.currentLanguage == "zh") "编辑歌曲信息" else "Edit Song Info", fontWeight = FontWeight.Bold, color = Color.Black) },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        title = { Text(if (viewModel.currentLanguage == "zh") "编辑歌曲信息" else "Edit Song Info", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(AppDimensions.paddingCard())) {
                 GlassDialogTextField(
@@ -1072,7 +1072,7 @@ fun PlaylistItem(playlist: Playlist, viewModel: PlayerViewModel, onClick: () -> 
                     TextButton(onClick = {
                         playlistToDelete?.let { viewModel.deletePlaylist(it) }
                         playlistToDelete = null
-                    }) { Text(if (viewModel.currentLanguage == "zh") "删除" else "Delete", color = Color(0xFFE53935)) }
+                    }) { Text(if (viewModel.currentLanguage == "zh") "删除" else "Delete", color = MaterialTheme.colorScheme.primary) }
                 },
                 dismissButton = {
                     TextButton(onClick = { playlistToDelete = null }) { Text(if (viewModel.currentLanguage == "zh") "取消" else "Cancel") }
@@ -1168,7 +1168,7 @@ fun SongGridItem(song: Song, viewModel: PlayerViewModel, onNavigateToPlayer: () 
                     TextButton(onClick = {
                         songToDelete?.let { viewModel.deleteSong(it) }
                         songToDelete = null
-                    }) { Text(if (viewModel.currentLanguage == "zh") "删除" else "Delete", color = Color(0xFFE53935)) }
+                    }) { Text(if (viewModel.currentLanguage == "zh") "删除" else "Delete", color = MaterialTheme.colorScheme.primary) }
                 },
                 dismissButton = {
                     TextButton(onClick = { songToDelete = null }) { Text(if (viewModel.currentLanguage == "zh") "取消" else "Cancel") }
@@ -1351,7 +1351,7 @@ fun AlbumItem(album: com.music.purelymusic.model.Album, viewModel: PlayerViewMod
                     TextButton(onClick = {
                         albumToDelete?.let { viewModel.deleteAlbum(it) }
                         albumToDelete = null
-                    }) { Text(if (viewModel.currentLanguage == "zh") "删除" else "Delete", color = Color(0xFFE53935)) }
+                    }) { Text(if (viewModel.currentLanguage == "zh") "删除" else "Delete", color = MaterialTheme.colorScheme.primary) }
                 },
                 dismissButton = {
                     TextButton(onClick = { albumToDelete = null }) { Text(if (viewModel.currentLanguage == "zh") "取消" else "Cancel") }
@@ -1368,11 +1368,11 @@ fun ImportProcessingDialog(
 ) {
     GlassAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFFF5F5F5),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         title = {
             Text(
                 text = "处理中",
-                color = Color.Black,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold
             )
         },
@@ -1385,12 +1385,12 @@ fun ImportProcessingDialog(
                 CircularProgressIndicator(
                     modifier = Modifier.size(48.dp),
                     strokeWidth = 4.dp,
-                    color = Color(0xFFE53935)
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = "正在读取音频文件信息...",
-                    color = Color.Black.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 14.sp
                 )
             }
@@ -1414,11 +1414,11 @@ fun BatchImportPausedDialog(
 
     GlassAlertDialog(
         onDismissRequest = { /* 不允许手动关闭 */ },
-        containerColor = Color.White,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         title = {
             Text(
                 text = if (currentLanguage == "zh") "补充歌曲信息" else "Add Song Info",
-                color = Color.Black,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold
             )
         },
@@ -1430,7 +1430,7 @@ fun BatchImportPausedDialog(
                 Text(
                     text = if (currentLanguage == "zh") "文件: $fileName" else "File: $fileName",
                     fontSize = 12.sp,
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1459,19 +1459,19 @@ fun BatchImportPausedDialog(
                 },
                 enabled = title.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFE53935)
+                    containerColor = MaterialTheme.colorScheme.primary
                 )
             ) {
-                Text(if (currentLanguage == "zh") "确定" else "OK", color = Color.White)
+                Text(if (currentLanguage == "zh") "确定" else "OK", color = MaterialTheme.colorScheme.onPrimary)
             }
         },
         dismissButton = {
             Row {
                 TextButton(onClick = onSkip) {
-                    Text(if (currentLanguage == "zh") "跳过" else "Skip", color = Color.Gray)
+                    Text(if (currentLanguage == "zh") "跳过" else "Skip", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 TextButton(onClick = onCancel) {
-                    Text(if (currentLanguage == "zh") "取消全部" else "Cancel All", color = Color(0xFFE53935))
+                    Text(if (currentLanguage == "zh") "取消全部" else "Cancel All", color = MaterialTheme.colorScheme.primary)
                 }
             }
         }

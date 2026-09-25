@@ -20,15 +20,13 @@ January 2020 http://license.coscl.org.cn/MulanPSL2
 <resources>
 
     <style name="Theme.AMPlayer" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="android:windowTranslucentStatus">true</item>
-        <item name="android:windowTranslucentNavigation">true</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
 
-        <item name="colorPrimary">@android:color/white</item>
-        <item name="colorOnPrimary">@android:color/black</item>
+        <item name="colorPrimary">@color/app_theme_primary</item>
+        <item name="colorOnPrimary">@color/app_theme_on_primary</item>
         <item name="colorContainer">@android:color/darker_gray</item>
         <item name="colorOnContainer">@android:color/white</item>
 
-        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowBackground">@color/app_window_background</item>
     </style>
 </resources>
