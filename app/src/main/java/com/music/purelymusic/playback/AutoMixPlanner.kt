@@ -25,8 +25,11 @@ data class TransitionPlan(
     val startMs: Long,
     val fadeMs: Long,
     val incomingStartMs: Long,
-    val incomingSpeed: Float
+    val incomingSpeed: Float,
+    val style: TransitionStyle = TransitionStyle.SOFT_BLEND
 )
+
+enum class TransitionStyle { BEAT_MIX, SHORT_CUT, SOFT_BLEND }
 
 /** Keeps musical choices independent of the players and Android codecs. */
 object AutoMixPlanner {
@@ -41,6 +44,7 @@ object AutoMixPlanner {
         val audibleEnd = outgoing?.lastAudibleMs
             ?.coerceIn(outgoingDurationMs - 8_000L, outgoingDurationMs)
             ?: outgoingDurationMs
+        val trailingSilenceMs = outgoingDurationMs - audibleEnd
         var endMs = (audibleEnd - 150L).coerceAtMost(outgoingDurationMs - 250L)
         val outBpm = outgoing?.closingBpm ?: outgoing?.bpm
         val outBeatAnchor = outgoing?.closingBeatMs ?: outgoing?.firstBeatMs
@@ -57,11 +61,21 @@ object AutoMixPlanner {
         val beatMatched = speed in 0.94f..1.06f && (harmony == null || harmony >= 0.55f) &&
             outBeatAnchor != null &&
             incomingBeat != null && incomingBeat in incomingAudible..(incomingAudible + 1_200L)
+        val style = when {
+            beatMatched -> TransitionStyle.BEAT_MIX
+            trailingSilenceMs >= 1_000L -> TransitionStyle.SHORT_CUT
+            else -> TransitionStyle.SOFT_BLEND
+        }
+        if (style == TransitionStyle.SHORT_CUT) {
+            endMs = (audibleEnd + 80L).coerceAtMost(outgoingDurationMs - 250L)
+        }
         val incomingStart = if (beatMatched) incomingBeat!! else incomingAudible
 
-        val desiredFade = if (beatMatched) {
+        val desiredFade = if (style == TransitionStyle.BEAT_MIX) {
             val beatMs = 60_000f / outBpm!!
             (beatMs * 8f).roundToLong().coerceIn(2_000L, 6_500L)
+        } else if (style == TransitionStyle.SHORT_CUT) {
+            650L
         } else if (outgoing != null && incoming != null &&
             outgoing.averageEnergy < 0.08f && incoming.averageEnergy < 0.08f) {
             4_000L
@@ -82,13 +96,14 @@ object AutoMixPlanner {
                 if (abs(alignedStart - startMs) < 300.0) startMs = alignedStart.roundToLong()
             }
         }
-        if (startMs < 1_000L || endMs - startMs < 1_000L) return null
+        if (startMs < 1_000L || endMs - startMs < 400L) return null
 
         return TransitionPlan(
             startMs = startMs,
             fadeMs = endMs - startMs,
             incomingStartMs = incomingStart,
-            incomingSpeed = if (beatMatched) speed else 1f
+            incomingSpeed = if (beatMatched) speed else 1f,
+            style = style
         )
     }
 

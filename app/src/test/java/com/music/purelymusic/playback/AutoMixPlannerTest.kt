@@ -16,8 +16,9 @@ class AutoMixPlannerTest {
 
         assertNotNull(plan)
         assertEquals(1_400L, plan!!.incomingStartMs)
-        assertEquals(176_850L, plan.startMs + plan.fadeMs)
-        assertTrue(plan.fadeMs in 2_000L..4_000L)
+        assertEquals(177_080L, plan.startMs + plan.fadeMs)
+        assertEquals(TransitionStyle.SHORT_CUT, plan.style)
+        assertEquals(650L, plan.fadeMs)
     }
 
     @Test
@@ -31,6 +32,7 @@ class AutoMixPlannerTest {
         assertEquals(1_000L, plan!!.incomingStartMs)
         assertTrue(plan.incomingSpeed > 1f && plan.incomingSpeed < 1.06f)
         assertTrue(plan.fadeMs >= 3_800L)
+        assertEquals(TransitionStyle.BEAT_MIX, plan.style)
     }
 
     @Test
@@ -43,6 +45,7 @@ class AutoMixPlannerTest {
         assertNotNull(plan)
         assertEquals(1f, plan!!.incomingSpeed, 0.0001f)
         assertEquals(2_700L, plan.fadeMs)
+        assertEquals(TransitionStyle.SOFT_BLEND, plan.style)
     }
 
     @Test

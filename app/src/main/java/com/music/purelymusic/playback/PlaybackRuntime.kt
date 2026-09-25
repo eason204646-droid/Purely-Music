@@ -14,9 +14,6 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import com.music.purelymusic.utils.PreferencesManager
 import java.util.concurrent.CopyOnWriteArraySet
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -309,13 +306,14 @@ class PlaybackRuntime private constructor(context: Context) {
                 1f
             )
         }
+        val prefetchMs = if (plan?.style == TransitionStyle.SHORT_CUT) 2_500L else 1_500L
         if (plan == null || outgoing.currentPosition !in
-            (plan.startMs - 1_500L).coerceAtLeast(0L)..(plan.startMs + plan.fadeMs - 400L)) return
+            (plan.startMs - prefetchMs).coerceAtLeast(0L)..(plan.startMs + plan.fadeMs - 400L)) return
 
         crossfadeScheduledForItem = true
         val items = (0 until outgoing.mediaItemCount).map(outgoing::getMediaItemAt)
         val outgoingItem = outgoing.currentMediaItem
-        val useEqualPowerFade = autoMixEnabled
+        val useAutoMixEnvelope = autoMixEnabled
         val job = scope.launch(start = CoroutineStart.LAZY) {
             var incoming: ExoPlayer? = null
             var committed = false
@@ -348,9 +346,12 @@ class PlaybackRuntime private constructor(context: Context) {
                     outgoing.duration - outgoing.currentPosition - 150L
                 )
                 if (fadeMs < 400L) return@launch
-                equalizer.bindTransition(incoming)
+                val spectralMix = autoMixEnabled && plan.style == TransitionStyle.BEAT_MIX
+                equalizer.bindTransition(incoming, forAutoMix = spectralMix)
+                if (spectralMix) equalizer.beginAutoMixTransition(outgoing)
                 incoming.play()
                 val fadeStarted = SystemClock.elapsedRealtime()
+                var lastSculptAt = fadeStarted - 100L
                 while (isActive) {
                     val elapsed = SystemClock.elapsedRealtime() - fadeStarted
                     if (incoming.playerError != null ||
@@ -360,14 +361,17 @@ class PlaybackRuntime private constructor(context: Context) {
                     }
                     val fraction = (elapsed.toFloat() / fadeMs)
                         .coerceIn(0f, 1f)
-                    if (useEqualPowerFade) {
-                        val angle = fraction * PI / 2.0
-                        val headroom = 1f - 0.08f * sin(fraction * PI).toFloat()
-                        outgoing.volume = (cos(angle) * headroom).toFloat()
-                        incoming.volume = (sin(angle) * headroom).toFloat()
+                    if (useAutoMixEnvelope) {
+                        val gains = TransitionEnvelope.gains(plan.style, fraction)
+                        outgoing.volume = gains.outgoing
+                        incoming.volume = gains.incoming
                     } else {
                         outgoing.volume = 1f - fraction
                         incoming.volume = fraction
+                    }
+                    if (spectralMix && (elapsed - lastSculptAt >= 100L || fraction >= 1f)) {
+                        equalizer.shapeAutoMixTransition(fraction)
+                        lastSculptAt = elapsed
                     }
                     if (fraction >= 1f) break
                     delay(25L)
@@ -386,7 +390,7 @@ class PlaybackRuntime private constructor(context: Context) {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                Log.e("PlaybackRuntime", "Crossfade failed", error)
+                Log.e("PlaybackRuntime", "Track transition failed", error)
             } finally {
                 if (!committed) {
                     equalizer.releaseTransition()
