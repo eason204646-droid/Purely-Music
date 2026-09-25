@@ -17,6 +17,13 @@ internal object TransitionEnvelope {
                 incoming = smoothStep((t - 0.12f) / 0.88f)
             )
         }
+        if (style == TransitionStyle.DROP_MIX) {
+            val headroom = 1f - 0.05f * sin(t * PI).toFloat()
+            return TransitionGains(
+                outgoing = (cos(smoothStep(t / 0.72f) * PI / 2.0) * headroom).toFloat(),
+                incoming = (sin(smoothStep((t - 0.15f) / 0.75f) * PI / 2.0) * headroom).toFloat()
+            )
+        }
         val shaped = if (style == TransitionStyle.BEAT_MIX) smoothStep(t) else t
         val headroom = 1f - 0.08f * sin(t * PI).toFloat()
         return TransitionGains(

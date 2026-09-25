@@ -177,6 +177,7 @@ fun PlayerScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(text = currentSong?.title ?: viewModel.textUnknownTrack, color = Color.White, fontSize = AppDimensions.textXL().value.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(text = currentSong?.artist ?: viewModel.textUnknownArtist, color = Color.White.copy(alpha = 0.8f), fontSize = AppDimensions.textM().value.sp)
+                            AutoMixIndicator(viewModel)
                         }
                         val currentFav = currentSong?.isFavorite ?: false
                         IconButton(
@@ -397,6 +398,7 @@ fun PlayerScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(text = currentSong?.title ?: viewModel.textUnknownTrack, color = Color.White, fontSize = AppDimensions.textXXL().value.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(text = currentSong?.artist ?: viewModel.textUnknownArtist, color = Color.White.copy(alpha = 0.8f), fontSize = AppDimensions.textM().value.sp)
+                        AutoMixIndicator(viewModel)
                     }
 
                     // 🚩 v2.5: 收藏按钮
@@ -528,6 +530,23 @@ fun PlayerScreen(
                 Spacer(modifier = Modifier.height(AppDimensions.spacingL()))
             }
         }
+    }
+}
+
+@Composable
+private fun AutoMixIndicator(viewModel: PlayerViewModel) {
+    AnimatedVisibility(
+        visible = viewModel.isAutoMixTransitioning,
+        enter = fadeIn(animationSpec = tween(180)),
+        exit = fadeOut(animationSpec = tween(180))
+    ) {
+        Text(
+            text = if (viewModel.currentLanguage == "zh") "智能混音" else "Smart Mix",
+            color = Color.White.copy(alpha = 0.72f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(top = 2.dp)
+        )
     }
 }
 

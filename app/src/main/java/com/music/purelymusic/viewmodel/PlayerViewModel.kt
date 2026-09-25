@@ -423,6 +423,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var blurBackgroundJob: Job? = null
     var isActuallyPlaying by mutableStateOf(false)
         private set
+    var isAutoMixTransitioning by mutableStateOf(false)
+        private set
+    private val runtimeTransitionListener: (Boolean) -> Unit = { transitioning ->
+        isAutoMixTransitioning = transitioning
+    }
 
     private val runtimePlayerChangeListener: (ExoPlayer) -> Unit = { player ->
         exoPlayer?.removeListener(playerListener)
@@ -833,6 +838,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
         exoPlayer?.addListener(playerListener)
         playbackRuntime.addPlayerChangeListener(runtimePlayerChangeListener)
+        playbackRuntime.addTransitionListener(runtimeTransitionListener)
         playbackRuntime.equalizer.addListener(equalizerStateListener)
 
         // 初始化 Spatializer (Android 12+)
@@ -1694,6 +1700,7 @@ private fun stop3DSurroundEffect() {
         playbackRuntime.equalizer.removeListener(equalizerStateListener)
         exoPlayer?.removeListener(playerListener)
         playbackRuntime.removePlayerChangeListener(runtimePlayerChangeListener)
+        playbackRuntime.removeTransitionListener(runtimeTransitionListener)
     }
 
     

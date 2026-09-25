@@ -26,6 +26,7 @@ class PlaybackEqualizer {
     private var transitionEffect: BoundEffect? = null
     private var autoMixOutgoingEffect: BoundEffect? = null
     private var transitionSculpting = false
+    private var transitionStyle = TransitionStyle.BEAT_MIX
     private var enabled = false
     var state = State()
         private set
@@ -70,7 +71,8 @@ class PlaybackEqualizer {
             .onFailure { Log.e("PlaybackEqualizer", "Unable to bind transition effect", it) }
     }
 
-    fun beginAutoMixTransition(outgoing: ExoPlayer) {
+    fun beginAutoMixTransition(outgoing: ExoPlayer, style: TransitionStyle) {
+        transitionStyle = style
         if (transitionEffect == null || outgoing.audioSessionId <= 0) return
         if (enabled) {
             bind(outgoing)
@@ -104,7 +106,7 @@ class PlaybackEqualizer {
             base.levels.forEachIndexed { index, level ->
                 val range = base.frequencies[index]
                 val centerHz = (range.first + range.second) / 2
-                val attenuation = AutoMixSpectrum.attenuationMillibels(centerHz, t, outgoing)
+                val attenuation = AutoMixSpectrum.attenuationMillibels(centerHz, t, outgoing, transitionStyle)
                 val shaped = (level + attenuation)
                     .coerceIn(base.levelRange.first.toInt(), base.levelRange.second.toInt())
                 effect.setBandLevel(index.toShort(), shaped.toShort())

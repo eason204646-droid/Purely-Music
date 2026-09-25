@@ -63,7 +63,9 @@ internal class LocalTrackAnalyzer(private val context: Context) {
                 openingChroma = first.chroma,
                 closingChroma = last.chroma,
                 closingBpm = closingBeat?.bpm,
-                closingBeatMs = closingBeat?.anchorMs
+                closingBeatMs = closingBeat?.anchorMs,
+                earlyExitMs = TransitionOpportunities.earlyExit(last.points, durationUs / 1_000L),
+                strongEntryMs = TransitionOpportunities.strongEntry(first.points)
             )
         } catch (_: Exception) {
             // Unsupported local codecs and damaged files use the ordinary fade plan.

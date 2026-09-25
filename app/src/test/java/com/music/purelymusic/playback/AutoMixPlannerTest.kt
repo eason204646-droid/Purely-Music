@@ -98,4 +98,39 @@ class AutoMixPlannerTest {
     fun shortTracksDoNotOverlap() {
         assertNull(AutoMixPlanner.plan(7_000, null, null))
     }
+
+    @Test
+    fun alignedDropUsesAnalyzedEarlyExitAndStrongEntry() {
+        val outgoing = TrackAnalysis(
+            180_000L, 0L, 180_000L, 120f, 0L, 0.16f,
+            closingBpm = 120f, closingBeatMs = 160_000L, earlyExitMs = 165_000L
+        )
+        val incoming = TrackAnalysis(
+            190_000L, 0L, 190_000L, 120f, 0L, 0.16f,
+            strongEntryMs = 8_000L
+        )
+
+        val plan = AutoMixPlanner.plan(180_000L, outgoing, incoming)
+
+        assertNotNull(plan)
+        assertEquals(TransitionStyle.DROP_MIX, plan!!.style)
+        assertEquals(8_000L, plan.incomingStartMs)
+        assertTrue(plan.startMs in 165_000L..165_500L)
+        assertTrue(plan.startMs + plan.fadeMs <= 172_000L)
+    }
+
+    @Test
+    fun incompatibleTempoDoesNotUseEarlyExit() {
+        val outgoing = TrackAnalysis(
+            180_000L, 0L, 180_000L, 120f, 0L, 0.16f,
+            earlyExitMs = 165_000L
+        )
+        val incoming = TrackAnalysis(190_000L, 0L, 190_000L, 90f, 0L, 0.16f)
+
+        val plan = AutoMixPlanner.plan(180_000L, outgoing, incoming)
+
+        assertNotNull(plan)
+        assertEquals(TransitionStyle.SOFT_BLEND, plan!!.style)
+        assertTrue(plan.startMs > 175_000L)
+    }
 }

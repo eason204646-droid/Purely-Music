@@ -18,7 +18,9 @@ data class TrackAnalysis(
     val openingChroma: List<Float>? = null,
     val closingChroma: List<Float>? = null,
     val closingBpm: Float? = null,
-    val closingBeatMs: Long? = null
+    val closingBeatMs: Long? = null,
+    val earlyExitMs: Long? = null,
+    val strongEntryMs: Long? = null
 )
 
 data class TransitionPlan(
@@ -29,7 +31,7 @@ data class TransitionPlan(
     val style: TransitionStyle = TransitionStyle.SOFT_BLEND
 )
 
-enum class TransitionStyle { BEAT_MIX, SHORT_CUT, SOFT_BLEND }
+enum class TransitionStyle { BEAT_MIX, DROP_MIX, SHORT_CUT, SOFT_BLEND }
 
 /** Keeps musical choices independent of the players and Android codecs. */
 object AutoMixPlanner {
@@ -50,7 +52,8 @@ object AutoMixPlanner {
         val outBeatAnchor = outgoing?.closingBeatMs ?: outgoing?.firstBeatMs
         val inBpm = incoming?.bpm
         val speed = if (outBpm != null && inBpm != null) outBpm / inBpm else 1f
-        val incomingAudible = incoming?.firstAudibleMs?.coerceIn(0L, 8_000L) ?: 0L
+        val incomingAudible = incoming?.strongEntryMs?.takeIf { it in 0L..12_000L }
+            ?: incoming?.firstAudibleMs?.coerceIn(0L, 8_000L) ?: 0L
         val incomingBeat = if (incoming?.firstBeatMs != null && inBpm != null) {
             val period = 60_000.0 / inBpm
             val anchor = incoming.firstBeatMs.toDouble()
@@ -61,7 +64,11 @@ object AutoMixPlanner {
         val beatMatched = speed in 0.94f..1.06f && (harmony == null || harmony >= 0.55f) &&
             outBeatAnchor != null &&
             incomingBeat != null && incomingBeat in incomingAudible..(incomingAudible + 1_200L)
+        val earlyExit = outgoing?.earlyExitMs?.takeIf {
+            beatMatched && it in (outgoingDurationMs - 16_000L)..(outgoingDurationMs - 9_000L)
+        }
         val style = when {
+            earlyExit != null -> TransitionStyle.DROP_MIX
             beatMatched -> TransitionStyle.BEAT_MIX
             trailingSilenceMs >= 1_000L -> TransitionStyle.SHORT_CUT
             else -> TransitionStyle.SOFT_BLEND
@@ -71,7 +78,7 @@ object AutoMixPlanner {
         }
         val incomingStart = if (beatMatched) incomingBeat!! else incomingAudible
 
-        val desiredFade = if (style == TransitionStyle.BEAT_MIX) {
+        val desiredFade = if (style == TransitionStyle.BEAT_MIX || style == TransitionStyle.DROP_MIX) {
             val beatMs = 60_000f / outBpm!!
             (beatMs * 8f).roundToLong().coerceIn(2_000L, 6_500L)
         } else if (style == TransitionStyle.SHORT_CUT) {
@@ -84,7 +91,12 @@ object AutoMixPlanner {
         }
 
         var startMs = endMs - desiredFade
-        if (beatMatched) {
+        if (earlyExit != null) {
+            val beatMs = 60_000.0 / outBpm!!
+            val beatAnchor = outBeatAnchor!!.toDouble()
+            startMs = (beatAnchor + ceil((earlyExit - beatAnchor) / beatMs) * beatMs).roundToLong()
+            endMs = (startMs + desiredFade).coerceAtMost(outgoingDurationMs - 250L)
+        } else if (beatMatched) {
             val beatMs = 60_000.0 / outBpm!!
             val beatAnchor = outBeatAnchor!!.toDouble()
             val alignedEnd = beatAnchor + floor((endMs - beatAnchor) / beatMs) * beatMs

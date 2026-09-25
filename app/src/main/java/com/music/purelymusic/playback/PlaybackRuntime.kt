@@ -31,6 +31,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 class PlaybackRuntime private constructor(context: Context) {
     private val appContext = context.applicationContext
     private val playerChangeListeners = CopyOnWriteArraySet<(ExoPlayer) -> Unit>()
+    private val transitionListeners = CopyOnWriteArraySet<(Boolean) -> Unit>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val equalizer = PlaybackEqualizer()
     private val audioAttributes = AudioAttributes.Builder()
@@ -50,6 +51,9 @@ class PlaybackRuntime private constructor(context: Context) {
     private var crossfadeJob: Job? = null
     private var speedRecoveryJob: Job? = null
     private var transitionPlayer: ExoPlayer? = null
+    @Volatile
+    var isAutoMixTransitioning = false
+        private set
     private var crossfadeScheduledForItem = false
     private var sleepTimerJob: Job? = null
     private var sleepTimerDeadlineMs: Long = 0L
@@ -181,6 +185,7 @@ class PlaybackRuntime private constructor(context: Context) {
     }
 
     fun cancelCrossfade() {
+        setAutoMixTransitioning(false)
         val runningJob = crossfadeJob
         runningJob?.cancel()
         cancelSpeedRecovery()
@@ -306,7 +311,7 @@ class PlaybackRuntime private constructor(context: Context) {
                 1f
             )
         }
-        val prefetchMs = if (plan?.style == TransitionStyle.SHORT_CUT) 2_500L else 1_500L
+        val prefetchMs = if (plan?.style == TransitionStyle.SHORT_CUT) 2_500L else 2_000L
         if (plan == null || outgoing.currentPosition !in
             (plan.startMs - prefetchMs).coerceAtLeast(0L)..(plan.startMs + plan.fadeMs - 400L)) return
 
@@ -346,10 +351,12 @@ class PlaybackRuntime private constructor(context: Context) {
                     outgoing.duration - outgoing.currentPosition - 150L
                 )
                 if (fadeMs < 400L) return@launch
-                val spectralMix = autoMixEnabled && plan.style == TransitionStyle.BEAT_MIX
+                val spectralMix = autoMixEnabled &&
+                    (plan.style == TransitionStyle.BEAT_MIX || plan.style == TransitionStyle.DROP_MIX)
                 equalizer.bindTransition(incoming, forAutoMix = spectralMix)
-                if (spectralMix) equalizer.beginAutoMixTransition(outgoing)
+                if (spectralMix) equalizer.beginAutoMixTransition(outgoing, plan.style)
                 incoming.play()
+                if (useAutoMixEnvelope) setAutoMixTransitioning(true)
                 val fadeStarted = SystemClock.elapsedRealtime()
                 var lastSculptAt = fadeStarted - 100L
                 while (isActive) {
@@ -392,6 +399,7 @@ class PlaybackRuntime private constructor(context: Context) {
             } catch (error: Exception) {
                 Log.e("PlaybackRuntime", "Track transition failed", error)
             } finally {
+                setAutoMixTransitioning(false)
                 if (!committed) {
                     equalizer.releaseTransition()
                     if (transitionPlayer === incoming) transitionPlayer = null
@@ -431,6 +439,24 @@ class PlaybackRuntime private constructor(context: Context) {
 
     fun removePlayerChangeListener(listener: (ExoPlayer) -> Unit) {
         playerChangeListeners -= listener
+    }
+
+    fun addTransitionListener(listener: (Boolean) -> Unit) {
+        transitionListeners += listener
+        listener(isAutoMixTransitioning)
+    }
+
+    fun removeTransitionListener(listener: (Boolean) -> Unit) {
+        transitionListeners -= listener
+    }
+
+    private fun setAutoMixTransitioning(value: Boolean) {
+        if (isAutoMixTransitioning == value) return
+        isAutoMixTransitioning = value
+        transitionListeners.forEach { listener ->
+            runCatching { listener(value) }
+                .onFailure { Log.e("PlaybackRuntime", "Transition observer failed", it) }
+        }
     }
 
     @Synchronized
