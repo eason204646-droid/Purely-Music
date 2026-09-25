@@ -32,4 +32,18 @@ class AutoMixSpectrumTest {
         assertEquals(-1400, early)
         assertEquals(0, late)
     }
+
+    @Test
+    fun softBlendOpensIncomingUpperBandsBeforeBass() {
+        val bass = AutoMixSpectrum.attenuationMillibels(
+            100, 0.5f, outgoing = false, style = TransitionStyle.SOFT_BLEND
+        )
+        val treble = AutoMixSpectrum.attenuationMillibels(
+            5_000, 0.5f, outgoing = false, style = TransitionStyle.SOFT_BLEND
+        )
+        assertTrue(bass < treble)
+        assertEquals(0, AutoMixSpectrum.attenuationMillibels(
+            100, 1f, outgoing = false, style = TransitionStyle.SOFT_BLEND
+        ))
+    }
 }

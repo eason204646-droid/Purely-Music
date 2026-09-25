@@ -300,7 +300,7 @@ class PlaybackRuntime private constructor(context: Context) {
                     isContinuousAlbum(outgoing, nextIndex))) return
         val remaining = outgoing.duration - outgoing.currentPosition
         val plan = if (autoMixEnabled) {
-            autoMixPlan ?: if (remaining <= 4_500L) {
+            autoMixPlan ?: if (remaining <= 13_000L) {
                 AutoMixPlanner.plan(outgoing.duration, null, null)
             } else null
         } else {
@@ -311,7 +311,7 @@ class PlaybackRuntime private constructor(context: Context) {
                 1f
             )
         }
-        val prefetchMs = if (plan?.style == TransitionStyle.SHORT_CUT) 2_500L else 2_000L
+        val prefetchMs = if (autoMixEnabled) 3_000L else 2_000L
         if (plan == null || outgoing.currentPosition !in
             (plan.startMs - prefetchMs).coerceAtLeast(0L)..(plan.startMs + plan.fadeMs - 400L)) return
 
@@ -350,9 +350,8 @@ class PlaybackRuntime private constructor(context: Context) {
                     plan.startMs + plan.fadeMs - outgoing.currentPosition,
                     outgoing.duration - outgoing.currentPosition - 150L
                 )
-                if (fadeMs < 400L) return@launch
-                val spectralMix = autoMixEnabled &&
-                    (plan.style == TransitionStyle.BEAT_MIX || plan.style == TransitionStyle.DROP_MIX)
+                if (fadeMs < if (useAutoMixEnvelope) AutoMixPlanner.MIN_BLEND_MS else 400L) return@launch
+                val spectralMix = autoMixEnabled
                 equalizer.bindTransition(incoming, forAutoMix = spectralMix)
                 if (spectralMix) equalizer.beginAutoMixTransition(outgoing, plan.style)
                 incoming.play()

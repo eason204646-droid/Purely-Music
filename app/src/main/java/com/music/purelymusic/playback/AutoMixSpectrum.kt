@@ -3,7 +3,7 @@ package com.music.purelymusic.playback
 
 import kotlin.math.roundToInt
 
-/** Bass handoff and a restrained filter sweep during beat-aligned transitions. */
+/** Separates bass and upper bands so two tracks can overlap without masking each other. */
 internal object AutoMixSpectrum {
     fun attenuationMillibels(
         centerHz: Int,
@@ -12,6 +12,22 @@ internal object AutoMixSpectrum {
         style: TransitionStyle = TransitionStyle.BEAT_MIX
     ): Int {
         val t = progress.coerceIn(0f, 1f)
+        if (style == TransitionStyle.SOFT_BLEND) {
+            val attenuation = if (outgoing) {
+                when {
+                    centerHz < 250 -> -1000f * smoothStep((t - 0.28f) / 0.55f)
+                    centerHz < 1800 -> -750f * smoothStep((t - 0.4f) / 0.45f)
+                    else -> -500f * smoothStep((t - 0.6f) / 0.3f)
+                }
+            } else {
+                when {
+                    centerHz < 250 -> -1200f * (1f - smoothStep((t - 0.42f) / 0.43f))
+                    centerHz < 1800 -> -900f * (1f - smoothStep((t - 0.35f) / 0.45f))
+                    else -> -800f * (1f - smoothStep(t / 0.7f))
+                }
+            }
+            return attenuation.roundToInt()
+        }
         if (style == TransitionStyle.DROP_MIX) {
             val attenuation = if (outgoing) {
                 when {

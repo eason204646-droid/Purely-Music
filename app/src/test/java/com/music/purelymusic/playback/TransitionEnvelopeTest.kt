@@ -18,11 +18,11 @@ class TransitionEnvelopeTest {
     }
 
     @Test
-    fun shortCutHasLessOverlapThanBeatMix() {
-        val cut = TransitionEnvelope.gains(TransitionStyle.SHORT_CUT, 0.5f)
-        val beat = TransitionEnvelope.gains(TransitionStyle.BEAT_MIX, 0.5f)
-        assertTrue(cut.outgoing + cut.incoming < beat.outgoing + beat.incoming)
-        assertTrue(cut.outgoing > 0f && cut.incoming > 0f)
+    fun softBlendIntroducesFilteredTrackBeforeMainHandoff() {
+        val opening = TransitionEnvelope.gains(TransitionStyle.SOFT_BLEND, 0.25f)
+        val handoff = TransitionEnvelope.gains(TransitionStyle.SOFT_BLEND, 0.6f)
+        assertTrue(opening.outgoing > 0.9f && opening.incoming in 0f..0.3f)
+        assertTrue(handoff.incoming > 0.5f && handoff.outgoing < 0.8f)
     }
 
     @Test

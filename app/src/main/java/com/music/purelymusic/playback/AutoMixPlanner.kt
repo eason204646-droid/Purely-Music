@@ -1,7 +1,6 @@
 // Copyright (c) 2026 eason204646. Licensed under Mulan PSL v2.
 package com.music.purelymusic.playback
 
-import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToLong
@@ -31,28 +30,33 @@ data class TransitionPlan(
     val style: TransitionStyle = TransitionStyle.SOFT_BLEND
 )
 
-enum class TransitionStyle { BEAT_MIX, DROP_MIX, SHORT_CUT, SOFT_BLEND }
+enum class TransitionStyle { BEAT_MIX, DROP_MIX, SOFT_BLEND }
 
 /** Keeps musical choices independent of the players and Android codecs. */
 object AutoMixPlanner {
+    const val MIN_BLEND_MS = 5_000L
+
     fun plan(
         outgoingDurationMs: Long,
         outgoing: TrackAnalysis?,
         incoming: TrackAnalysis?
     ): TransitionPlan? {
-        if (outgoingDurationMs < 8_000L) return null
+        if (outgoingDurationMs < 20_000L) return null
 
-        // Never remove more than eight seconds: a long quiet passage may be intentional.
+        // Blend into the musical ending instead of spending the overlap in trailing silence.
         val audibleEnd = outgoing?.lastAudibleMs
-            ?.coerceIn(outgoingDurationMs - 8_000L, outgoingDurationMs)
+            ?.coerceIn(outgoingDurationMs - 15_000L, outgoingDurationMs)
             ?: outgoingDurationMs
         val trailingSilenceMs = outgoingDurationMs - audibleEnd
-        var endMs = (audibleEnd - 150L).coerceAtMost(outgoingDurationMs - 250L)
+        val regularEndMs = if (trailingSilenceMs >= 500L) {
+            (audibleEnd + 100L).coerceAtMost(outgoingDurationMs - 250L)
+        } else outgoingDurationMs - 250L
         val outBpm = outgoing?.closingBpm ?: outgoing?.bpm
         val outBeatAnchor = outgoing?.closingBeatMs ?: outgoing?.firstBeatMs
         val inBpm = incoming?.bpm
         val speed = if (outBpm != null && inBpm != null) outBpm / inBpm else 1f
-        val incomingAudible = incoming?.strongEntryMs?.takeIf { it in 0L..12_000L }
+        val strongEntry = incoming?.strongEntryMs?.takeIf { it in 2_000L..12_000L }
+        val incomingAudible = strongEntry
             ?: incoming?.firstAudibleMs?.coerceIn(0L, 8_000L) ?: 0L
         val incomingBeat = if (incoming?.firstBeatMs != null && inBpm != null) {
             val period = 60_000.0 / inBpm
@@ -67,52 +71,57 @@ object AutoMixPlanner {
         val earlyExit = outgoing?.earlyExitMs?.takeIf {
             beatMatched && it in (outgoingDurationMs - 16_000L)..(outgoingDurationMs - 9_000L)
         }
-        val style = when {
-            earlyExit != null -> TransitionStyle.DROP_MIX
-            beatMatched -> TransitionStyle.BEAT_MIX
-            trailingSilenceMs >= 1_000L -> TransitionStyle.SHORT_CUT
-            else -> TransitionStyle.SOFT_BLEND
-        }
-        if (style == TransitionStyle.SHORT_CUT) {
-            endMs = (audibleEnd + 80L).coerceAtMost(outgoingDurationMs - 250L)
-        }
-        val incomingStart = if (beatMatched) incomingBeat!! else incomingAudible
-
-        val desiredFade = if (style == TransitionStyle.BEAT_MIX || style == TransitionStyle.DROP_MIX) {
-            val beatMs = 60_000f / outBpm!!
-            (beatMs * 8f).roundToLong().coerceIn(2_000L, 6_500L)
-        } else if (style == TransitionStyle.SHORT_CUT) {
-            650L
+        val desiredFade = if (beatMatched) {
+            val beatMs = 60_000.0 / outBpm!!
+            (beatMs * ceil(10_000.0 / beatMs)).roundToLong().coerceIn(8_500L, 11_500L)
         } else if (outgoing != null && incoming != null &&
             outgoing.averageEnergy < 0.08f && incoming.averageEnergy < 0.08f) {
-            4_000L
+            12_000L
         } else {
-            2_700L
+            10_500L
         }
 
-        var startMs = endMs - desiredFade
-        if (earlyExit != null) {
+        val alignedEarlyStart = if (earlyExit != null) {
             val beatMs = 60_000.0 / outBpm!!
             val beatAnchor = outBeatAnchor!!.toDouble()
-            startMs = (beatAnchor + ceil((earlyExit - beatAnchor) / beatMs) * beatMs).roundToLong()
-            endMs = (startMs + desiredFade).coerceAtMost(outgoingDurationMs - 250L)
-        } else if (beatMatched) {
-            val beatMs = 60_000.0 / outBpm!!
-            val beatAnchor = outBeatAnchor!!.toDouble()
-            val alignedEnd = beatAnchor + floor((endMs - beatAnchor) / beatMs) * beatMs
-            if (abs(alignedEnd - endMs) < 300.0) {
-                endMs = alignedEnd.roundToLong()
-                startMs = endMs - desiredFade
-            } else {
-                val alignedStart = beatAnchor + floor((startMs - beatAnchor) / beatMs) * beatMs
-                if (abs(alignedStart - startMs) < 300.0) startMs = alignedStart.roundToLong()
-            }
+            (beatAnchor + ceil((earlyExit - beatAnchor) / beatMs) * beatMs).roundToLong()
+        } else null
+        val useEarlyExit = alignedEarlyStart != null &&
+            regularEndMs - alignedEarlyStart >= MIN_BLEND_MS
+        val style = when {
+            useEarlyExit -> TransitionStyle.DROP_MIX
+            beatMatched -> TransitionStyle.BEAT_MIX
+            else -> TransitionStyle.SOFT_BLEND
         }
-        if (startMs < 1_000L || endMs - startMs < 400L) return null
+        val endMs = if (useEarlyExit) {
+            minOf(alignedEarlyStart!! + desiredFade, regularEndMs)
+        } else regularEndMs
+        var startMs = if (useEarlyExit) alignedEarlyStart!! else endMs - desiredFade
+        if (beatMatched && !useEarlyExit) {
+            val beatMs = 60_000.0 / outBpm!!
+            val beatAnchor = outBeatAnchor!!.toDouble()
+            startMs = (beatAnchor + floor((startMs - beatAnchor) / beatMs + 0.5) * beatMs)
+                .roundToLong()
+        }
+        val fadeMs = endMs - startMs
+        if (startMs < 1_000L || fadeMs < MIN_BLEND_MS) return null
+
+        // Keep a few seconds of the next intro before its detected rise reaches the blend's middle.
+        val incomingLead = if (strongEntry != null) {
+            (strongEntry - fadeMs * 0.55f * speed).roundToLong().coerceAtLeast(0L)
+        } else {
+            (incoming?.firstAudibleMs?.coerceIn(0L, 8_000L) ?: 0L) - 500L
+        }.coerceAtLeast(0L)
+        val incomingStart = if (beatMatched) {
+            val beatMs = 60_000.0 / inBpm!!
+            val beatAnchor = incoming!!.firstBeatMs!!.toDouble()
+            (beatAnchor + floor((incomingLead - beatAnchor) / beatMs) * beatMs)
+                .roundToLong().coerceAtLeast(0L)
+        } else incomingLead
 
         return TransitionPlan(
             startMs = startMs,
-            fadeMs = endMs - startMs,
+            fadeMs = fadeMs,
             incomingStartMs = incomingStart,
             incomingSpeed = if (beatMatched) speed else 1f,
             style = style
