@@ -48,6 +48,7 @@ object PreferencesManager {
     private const val KEY_CROSSFADE_ENABLED = "crossfade_enabled"
     private const val KEY_CROSSFADE_DURATION_SECONDS = "crossfade_duration_seconds"
     private const val DEFAULT_CROSSFADE_DURATION_SECONDS = 3
+    private const val KEY_AUTO_MIX_ENABLED = "auto_mix_enabled"
 
     // 均衡器开关
     private const val KEY_EQUALIZER_ENABLED = "equalizer_enabled"
@@ -175,6 +176,14 @@ object PreferencesManager {
      */
     fun saveCrossfadeDurationSeconds(seconds: Int) {
         prefs?.edit()?.putInt(KEY_CROSSFADE_DURATION_SECONDS, seconds.coerceIn(1, 10))?.apply()
+    }
+
+    fun getAutoMixEnabled(): Boolean {
+        return prefs?.getBoolean(KEY_AUTO_MIX_ENABLED, false) ?: false
+    }
+
+    fun saveAutoMixEnabled(enabled: Boolean) {
+        prefs?.edit()?.putBoolean(KEY_AUTO_MIX_ENABLED, enabled)?.apply()
     }
 
     fun getEqualizerEnabled(): Boolean {

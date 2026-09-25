@@ -104,8 +104,18 @@ fun SettingsScreen(
                 icon = Icons.Default.GraphicEq
             ) {
                 SettingsSwitch(
+                    title = if (viewModel.currentLanguage == "zh") "智能混音（AutoMix）" else "Smart Mix (AutoMix)",
+                    subtitle = if (viewModel.currentLanguage == "zh") {
+                        "分析本地歌曲的静音、节拍与调性，自动选择切歌时机；连续专辑曲目保持原样"
+                    } else {
+                        "Analyzes silence, beats and pitch to time transitions; preserves album continuity"
+                    },
+                    checked = viewModel.autoMixEnabled,
+                    onCheckedChange = { viewModel.autoMixEnabled = it }
+                )
+                SettingsSwitch(
                     title = if (viewModel.currentLanguage == "zh") "自动切歌交叉渐入渐出" else "Auto Track Crossfade",
-                    subtitle = if (viewModel.currentLanguage == "zh") "仅在歌曲自然播放结束后自动切到下一首时生效" else "Only applies when a song naturally advances to the next track",
+                    subtitle = if (viewModel.currentLanguage == "zh") "固定时长渐变；开启后会关闭智能混音" else "Fixed-duration fade; enabling this turns off Smart Mix",
                     checked = viewModel.crossfadeEnabled,
                     onCheckedChange = { viewModel.crossfadeEnabled = it }
                 )

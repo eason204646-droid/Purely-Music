@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -22,6 +23,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Owns playback that must continue after the Activity and its ViewModel disappear. */
@@ -38,6 +40,12 @@ class PlaybackRuntime private constructor(context: Context) {
 
     private var crossfadeEnabled: Boolean
     private var crossfadeDurationMs: Long
+    private var autoMixEnabled: Boolean
+    private val trackAnalyzer = LocalTrackAnalyzer(appContext)
+    private val analysisCache = LinkedHashMap<String, TrackAnalysis?>()
+    private var autoMixPlanKey: String? = null
+    private var autoMixPlan: TransitionPlan? = null
+    private var analysisJob: Job? = null
     private var monitorJob: Job? = null
     private var crossfadeJob: Job? = null
     private var transitionPlayer: ExoPlayer? = null
@@ -65,6 +73,7 @@ class PlaybackRuntime private constructor(context: Context) {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             crossfadeScheduledForItem = false
             if (transitionPlayer != null) cancelCrossfade()
+            resetAutoMixPlan()
         }
 
         override fun onPositionDiscontinuity(
@@ -75,6 +84,7 @@ class PlaybackRuntime private constructor(context: Context) {
             if (reason == Player.DISCONTINUITY_REASON_SEEK) {
                 if (transitionPlayer != null) cancelCrossfade()
                 crossfadeScheduledForItem = false
+                resetAutoMixPlan()
             }
         }
     }
@@ -89,6 +99,7 @@ class PlaybackRuntime private constructor(context: Context) {
         PreferencesManager.init(appContext)
         crossfadeEnabled = PreferencesManager.getCrossfadeEnabled()
         crossfadeDurationMs = PreferencesManager.getCrossfadeDurationSeconds().coerceIn(1, 10) * 1000L
+        autoMixEnabled = PreferencesManager.getAutoMixEnabled()
         currentPlayer = createPlayer().also { it.addListener(playerListener) }
         equalizer.setEnabled(PreferencesManager.getEqualizerEnabled(), currentPlayer)
     }
@@ -120,6 +131,20 @@ class PlaybackRuntime private constructor(context: Context) {
         crossfadeEnabled = enabled
         crossfadeDurationMs = durationSeconds.coerceIn(1, 10) * 1000L
         if (!enabled) cancelCrossfade()
+    }
+
+    fun configureAutoMix(enabled: Boolean) {
+        if (autoMixEnabled == enabled) return
+        autoMixEnabled = enabled
+        cancelCrossfade()
+        resetAutoMixPlan()
+    }
+
+    private fun resetAutoMixPlan() {
+        analysisJob?.cancel()
+        analysisJob = null
+        autoMixPlanKey = null
+        autoMixPlan = null
     }
 
     fun startSleepTimer(minutes: Int) {
@@ -165,25 +190,82 @@ class PlaybackRuntime private constructor(context: Context) {
         if (monitorJob?.isActive == true) return
         monitorJob = scope.launch {
             while (isActive && !released && currentPlayer.isPlaying) {
+                if (autoMixEnabled) prepareAutoMixPlan()
                 startCrossfadeIfNeeded()
                 delay(200L)
             }
         }
     }
 
+    private fun nextIndex(player: ExoPlayer): Int = if (player.repeatMode == Player.REPEAT_MODE_ONE) {
+        player.currentMediaItemIndex
+    } else {
+        player.nextMediaItemIndex
+    }
+
+    private fun isContinuousAlbum(outgoing: ExoPlayer, nextIndex: Int): Boolean {
+        if (outgoing.shuffleModeEnabled || nextIndex != outgoing.currentMediaItemIndex + 1) return false
+        val current = outgoing.currentMediaItem?.mediaMetadata ?: return false
+        val next = outgoing.getMediaItemAt(nextIndex).mediaMetadata
+        val album = current.albumTitle?.toString()?.trim()
+        return !album.isNullOrEmpty() && album == next.albumTitle?.toString()?.trim()
+    }
+
+    private fun prepareAutoMixPlan() {
+        val outgoing = currentPlayer
+        if (outgoing.mediaItemCount < 2 || outgoing.duration < 8_000L ||
+            outgoing.repeatMode == Player.REPEAT_MODE_ONE) return
+        val index = nextIndex(outgoing)
+        if (index !in 0 until outgoing.mediaItemCount || isContinuousAlbum(outgoing, index)) return
+        val current = outgoing.currentMediaItem ?: return
+        val next = outgoing.getMediaItemAt(index)
+        val key = "${current.mediaId}:$index:${next.mediaId}"
+        if (autoMixPlanKey == key) return
+        analysisJob?.cancel()
+        autoMixPlanKey = key
+        autoMixPlan = null
+        analysisJob = scope.launch {
+            val outgoingAnalysis = analyzeCached(current)
+            val incomingAnalysis = analyzeCached(next)
+            if (autoMixEnabled && currentPlayer === outgoing && autoMixPlanKey == key) {
+                autoMixPlan = AutoMixPlanner.plan(outgoing.duration, outgoingAnalysis, incomingAnalysis)
+            }
+        }
+    }
+
+    private suspend fun analyzeCached(item: MediaItem): TrackAnalysis? {
+        val uri = item.localConfiguration?.uri ?: return null
+        val key = uri.toString()
+        if (analysisCache.containsKey(key)) return analysisCache[key]
+        val analysis = withContext(Dispatchers.IO) { trackAnalyzer.analyze(uri) }
+        analysisCache[key] = analysis
+        if (analysisCache.size > 24) analysisCache.remove(analysisCache.keys.first())
+        return analysis
+    }
+
     private fun startCrossfadeIfNeeded() {
         val outgoing = currentPlayer
-        if (!crossfadeEnabled || crossfadeScheduledForItem || crossfadeJob != null) return
+        if ((!autoMixEnabled && !crossfadeEnabled) || crossfadeScheduledForItem || crossfadeJob != null) return
         if (!outgoing.isPlaying || outgoing.mediaItemCount == 0) return
-        val remaining = outgoing.duration - outgoing.currentPosition
-        if (outgoing.duration <= crossfadeDurationMs || remaining !in 400L..(crossfadeDurationMs + 500L)) return
-
-        val nextIndex = if (outgoing.repeatMode == Player.REPEAT_MODE_ONE) {
-            outgoing.currentMediaItemIndex
-        } else {
-            outgoing.nextMediaItemIndex
-        }
+        val nextIndex = nextIndex(outgoing)
         if (nextIndex !in 0 until outgoing.mediaItemCount) return
+        if (autoMixEnabled && (outgoing.repeatMode == Player.REPEAT_MODE_ONE ||
+                    isContinuousAlbum(outgoing, nextIndex))) return
+        val remaining = outgoing.duration - outgoing.currentPosition
+        val plan = if (autoMixEnabled) {
+            autoMixPlan ?: if (remaining <= 4_500L) {
+                AutoMixPlanner.plan(outgoing.duration, null, null)
+            } else null
+        } else {
+            if (outgoing.duration <= crossfadeDurationMs) null else TransitionPlan(
+                outgoing.duration - crossfadeDurationMs,
+                crossfadeDurationMs,
+                0L,
+                1f
+            )
+        }
+        if (plan == null || outgoing.currentPosition !in
+            (plan.startMs - 1_500L).coerceAtLeast(0L)..(plan.startMs + plan.fadeMs - 400L)) return
 
         crossfadeScheduledForItem = true
         val items = (0 until outgoing.mediaItemCount).map(outgoing::getMediaItemAt)
@@ -194,9 +276,12 @@ class PlaybackRuntime private constructor(context: Context) {
             try {
                 incoming = createPlayer(manageAudioFocus = false)
                 transitionPlayer = incoming
-                incoming.setMediaItems(items, nextIndex, 0L)
+                incoming.setMediaItems(items, nextIndex, plan.incomingStartMs)
                 incoming.repeatMode = outgoing.repeatMode
                 incoming.shuffleModeEnabled = outgoing.shuffleModeEnabled
+                if (plan.incomingSpeed != 1f) {
+                    incoming.playbackParameters = PlaybackParameters(plan.incomingSpeed, 1f)
+                }
                 incoming.volume = 0f
                 incoming.prepare()
 
@@ -209,20 +294,29 @@ class PlaybackRuntime private constructor(context: Context) {
                 if (!ready || currentPlayer !== outgoing || !outgoing.isPlaying ||
                     outgoing.currentMediaItem != outgoingItem) return@launch
 
-                val fadeMs = minOf(crossfadeDurationMs, outgoing.duration - outgoing.currentPosition - 250L)
-                if (fadeMs < 300L) return@launch
+                while (outgoing.currentPosition < plan.startMs && outgoing.isPlaying &&
+                    currentPlayer === outgoing) delay(25L)
+                if (!outgoing.isPlaying || currentPlayer !== outgoing) return@launch
+                val fadeMs = minOf(
+                    plan.startMs + plan.fadeMs - outgoing.currentPosition,
+                    outgoing.duration - outgoing.currentPosition - 150L
+                )
+                if (fadeMs < 400L) return@launch
                 equalizer.bindTransition(incoming)
                 incoming.play()
-                val steps = 30
-                repeat(steps) { step ->
-                    val fraction = (step + 1) / steps.toFloat()
+                val fadeStarted = SystemClock.elapsedRealtime()
+                while (isActive) {
+                    val fraction = ((SystemClock.elapsedRealtime() - fadeStarted).toFloat() / fadeMs)
+                        .coerceIn(0f, 1f)
                     outgoing.volume = 1f - fraction
                     incoming.volume = fraction
-                    delay(fadeMs / steps)
+                    if (fraction >= 1f) break
+                    delay(25L)
                 }
 
                 // Give media controls the new player before stopping the old one.
                 transitionPlayer = null
+                if (plan.incomingSpeed != 1f) incoming.playbackParameters = PlaybackParameters(1f)
                 incoming.setAudioAttributes(audioAttributes, true)
                 incoming.setHandleAudioBecomingNoisy(true)
                 equalizer.promoteTransition(incoming)
@@ -255,6 +349,7 @@ class PlaybackRuntime private constructor(context: Context) {
         newPlayer.addListener(playerListener)
         equalizer.bind(newPlayer)
         crossfadeScheduledForItem = false
+        resetAutoMixPlan()
         released = false
         notifyPlayerChanged(newPlayer)
         if (newPlayer.isPlaying) startMonitor()
@@ -279,6 +374,8 @@ class PlaybackRuntime private constructor(context: Context) {
     fun release() {
         if (released) return
         cancelCrossfade()
+        resetAutoMixPlan()
+        analysisCache.clear()
         cancelSleepTimer()
         monitorJob?.cancel()
         monitorJob = null

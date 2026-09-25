@@ -757,7 +757,26 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         set(value) {
             _crossfadeEnabled = value
             com.music.purelymusic.utils.PreferencesManager.saveCrossfadeEnabled(value)
+            if (value && _autoMixEnabled) {
+                _autoMixEnabled = false
+                com.music.purelymusic.utils.PreferencesManager.saveAutoMixEnabled(false)
+                playbackRuntime.configureAutoMix(false)
+            }
             playbackRuntime.configureCrossfade(value, crossfadeDurationSeconds)
+        }
+
+    private var _autoMixEnabled by mutableStateOf(false)
+    var autoMixEnabled: Boolean
+        get() = _autoMixEnabled
+        set(value) {
+            _autoMixEnabled = value
+            com.music.purelymusic.utils.PreferencesManager.saveAutoMixEnabled(value)
+            if (value && _crossfadeEnabled) {
+                _crossfadeEnabled = false
+                com.music.purelymusic.utils.PreferencesManager.saveCrossfadeEnabled(false)
+                playbackRuntime.configureCrossfade(false, crossfadeDurationSeconds)
+            }
+            playbackRuntime.configureAutoMix(value)
         }
 
     private var _crossfadeDurationSeconds by mutableIntStateOf(3)
@@ -799,8 +818,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         _autoFetchMetadata = com.music.purelymusic.utils.PreferencesManager.getAutoFetchMetadata()
         _crossfadeEnabled = com.music.purelymusic.utils.PreferencesManager.getCrossfadeEnabled()
         _crossfadeDurationSeconds = com.music.purelymusic.utils.PreferencesManager.getCrossfadeDurationSeconds()
+        _autoMixEnabled = com.music.purelymusic.utils.PreferencesManager.getAutoMixEnabled()
+        if (_autoMixEnabled && _crossfadeEnabled) {
+            _crossfadeEnabled = false
+            com.music.purelymusic.utils.PreferencesManager.saveCrossfadeEnabled(false)
+        }
         _equalizerEnabled = com.music.purelymusic.utils.PreferencesManager.getEqualizerEnabled()
         playbackRuntime.configureCrossfade(_crossfadeEnabled, _crossfadeDurationSeconds)
+        playbackRuntime.configureAutoMix(_autoMixEnabled)
         sleepTimerMinutes = playbackRuntime.sleepTimerDurationMinutes
         sleepTimerRemainingSeconds = playbackRuntime.sleepTimerRemainingSeconds
         sleepTimerActive = sleepTimerRemainingSeconds > 0
