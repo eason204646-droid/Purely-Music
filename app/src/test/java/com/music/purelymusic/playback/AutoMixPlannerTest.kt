@@ -66,6 +66,32 @@ class AutoMixPlannerTest {
     }
 
     @Test
+    fun usesClosingBeatWhenTempoChangesDuringTrack() {
+        val outgoing = TrackAnalysis(
+            180_000, 0, 180_000, 90f, 400L, 0.15f,
+            closingBpm = 100f, closingBeatMs = 160_120L
+        )
+        val incoming = TrackAnalysis(190_000, 0, 190_000, 100f, 400L, 0.15f)
+
+        val plan = AutoMixPlanner.plan(180_000, outgoing, incoming)
+
+        assertNotNull(plan)
+        assertEquals(1f, plan!!.incomingSpeed, 0.0001f)
+        assertTrue(plan.fadeMs >= 4_500L)
+    }
+
+    @Test
+    fun cuesIncomingAtFirstBeatAfterItsAudibleStart() {
+        val outgoing = TrackAnalysis(180_000, 0, 180_000, 100f, 120L, 0.15f)
+        val incoming = TrackAnalysis(190_000, 2_000L, 190_000, 100f, 400L, 0.15f)
+
+        val plan = AutoMixPlanner.plan(180_000, outgoing, incoming)
+
+        assertNotNull(plan)
+        assertEquals(2_200L, plan!!.incomingStartMs)
+    }
+
+    @Test
     fun shortTracksDoNotOverlap() {
         assertNull(AutoMixPlanner.plan(7_000, null, null))
     }

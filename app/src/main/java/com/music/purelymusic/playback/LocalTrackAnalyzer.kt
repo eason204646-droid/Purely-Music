@@ -10,12 +10,12 @@ import android.net.Uri
 import android.os.SystemClock
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.abs
 import kotlin.math.sqrt
 
 /** Decodes two short windows for silence and beat analysis; never changes the audio file. */
 internal class LocalTrackAnalyzer(private val context: Context) {
-    private data class EnergyPoint(val timeMs: Long, val energy: Float)
-    private data class WindowData(val points: List<EnergyPoint>, val chroma: List<Float>?)
+    private data class WindowData(val points: List<EnergyFrame>, val chroma: List<Float>?)
     private class PcmSamples(maxSamples: Int, val sampleRate: Float) {
         val values = FloatArray(maxSamples)
         var size = 0
@@ -48,19 +48,22 @@ internal class LocalTrackAnalyzer(private val context: Context) {
 
             val firstThreshold = maxOf(0.004f, first.points.maxOf { it.energy } * 0.035f)
             val lastThreshold = maxOf(0.004f, last.points.maxOf { it.energy } * 0.035f)
-            val firstAudible = first.points.firstOrNull { it.energy >= firstThreshold }?.timeMs ?: 0L
-            val lastAudible = last.points.lastOrNull { it.energy >= lastThreshold }?.timeMs
+            val firstAudible = SilenceDetector.firstAudible(first.points, firstThreshold) ?: 0L
+            val lastAudible = SilenceDetector.lastAudible(last.points, lastThreshold)
                 ?.plus(BIN_MS) ?: durationUs / 1_000L
-            val beat = estimateBeat(first.points)
+            val openingBeat = BeatAnalyzer.estimate(first.points)
+            val closingBeat = BeatAnalyzer.estimate(last.points)
             return TrackAnalysis(
                 durationMs = durationUs / 1_000L,
                 firstAudibleMs = (firstAudible - 80L).coerceAtLeast(0L),
                 lastAudibleMs = lastAudible.coerceAtMost(durationUs / 1_000L),
-                bpm = beat?.first,
-                firstBeatMs = beat?.second,
+                bpm = openingBeat?.bpm,
+                firstBeatMs = openingBeat?.anchorMs,
                 averageEnergy = first.points.map { it.energy }.average().toFloat(),
                 openingChroma = first.chroma,
-                closingChroma = last.chroma
+                closingChroma = last.chroma,
+                closingBpm = closingBeat?.bpm,
+                closingBeatMs = closingBeat?.anchorMs
             )
         } catch (_: Exception) {
             // Unsupported local codecs and damaged files use the ordinary fade plan.
@@ -140,7 +143,7 @@ internal class LocalTrackAnalyzer(private val context: Context) {
             if (!outputEnded) return WindowData(emptyList(), null)
             val points = sums.keys.sorted().mapNotNull { bucket ->
                 val count = counts[bucket] ?: return@mapNotNull null
-                EnergyPoint(bucket * BIN_MS, sqrt(sums.getValue(bucket) / count).toFloat())
+                EnergyFrame(bucket * BIN_MS, sqrt(sums.getValue(bucket) / count).toFloat())
             }
             return WindowData(
                 points,
@@ -174,42 +177,25 @@ internal class LocalTrackAnalyzer(private val context: Context) {
             val timeUs = info.presentationTimeUs + frame * 1_000_000L / sampleRate
             if (timeUs < startUs || timeUs >= endUs) continue
             val offset = info.offset + frame * frameBytes
-            if (offset + bytesPerSample > pcm.limit()) break
-            val value = if (encoding == AudioFormat.ENCODING_PCM_FLOAT) {
-                pcm.getFloat(offset).coerceIn(-1f, 1f)
-            } else {
-                pcm.getShort(offset) / 32768f
+            if (offset + frameBytes > pcm.limit()) break
+            var power = 0.0
+            var chromaSample = 0f
+            for (channel in 0 until channels) {
+                val sampleOffset = offset + channel * bytesPerSample
+                val raw = if (encoding == AudioFormat.ENCODING_PCM_FLOAT) {
+                    pcm.getFloat(sampleOffset)
+                } else {
+                    pcm.getShort(sampleOffset) / 32768f
+                }
+                val sample = if (raw.isFinite()) raw.coerceIn(-1f, 1f) else 0f
+                power += sample * sample
+                if (abs(sample) > abs(chromaSample)) chromaSample = sample
             }
             val bucket = timeUs / (BIN_MS * 1_000L)
-            sums[bucket] = (sums[bucket] ?: 0.0) + value * value
+            sums[bucket] = (sums[bucket] ?: 0.0) + power / channels
             counts[bucket] = (counts[bucket] ?: 0) + 1
-            samples.add(value)
+            samples.add(chromaSample)
         }
-    }
-
-    private fun estimateBeat(points: List<EnergyPoint>): Pair<Float, Long>? {
-        if (points.size < 150) return null
-        val energy = points.map { it.energy }
-        val onset = FloatArray(energy.size) { index ->
-            if (index == 0) 0f else (energy[index] - energy[index - 1]).coerceAtLeast(0f)
-        }
-        val total = onset.sum()
-        if (total < 0.5f) return null
-        var bestLag = 0
-        var bestScore = 0.0
-        for (lag in 8..22) { // About 68–188 BPM at 40 ms per bin.
-            var score = 0.0
-            for (i in lag until onset.size) score += onset[i] * onset[i - lag]
-            if (score > bestScore) {
-                bestScore = score
-                bestLag = lag
-            }
-        }
-        if (bestLag == 0 || bestScore < total * total / onset.size * 1.8) return null
-        val maxOnset = onset.maxOrNull() ?: return null
-        val beatIndex = onset.indices.firstOrNull { it < 125 && onset[it] >= maxOnset * 0.65f }
-            ?: return null
-        return (60_000f / (bestLag * BIN_MS)) to points[beatIndex].timeMs
     }
 
     companion object {

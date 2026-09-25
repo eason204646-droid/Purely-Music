@@ -14,6 +14,9 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import com.music.purelymusic.utils.PreferencesManager
 import java.util.concurrent.CopyOnWriteArraySet
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -48,6 +51,7 @@ class PlaybackRuntime private constructor(context: Context) {
     private var analysisJob: Job? = null
     private var monitorJob: Job? = null
     private var crossfadeJob: Job? = null
+    private var speedRecoveryJob: Job? = null
     private var transitionPlayer: ExoPlayer? = null
     private var crossfadeScheduledForItem = false
     private var sleepTimerJob: Job? = null
@@ -67,12 +71,14 @@ class PlaybackRuntime private constructor(context: Context) {
                 monitorJob?.cancel()
                 monitorJob = null
                 if (transitionPlayer != null) cancelCrossfade()
+                cancelSpeedRecovery()
             }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             crossfadeScheduledForItem = false
             if (transitionPlayer != null) cancelCrossfade()
+            cancelSpeedRecovery()
             resetAutoMixPlan()
         }
 
@@ -83,6 +89,7 @@ class PlaybackRuntime private constructor(context: Context) {
         ) {
             if (reason == Player.DISCONTINUITY_REASON_SEEK) {
                 if (transitionPlayer != null) cancelCrossfade()
+                cancelSpeedRecovery()
                 crossfadeScheduledForItem = false
                 resetAutoMixPlan()
             }
@@ -179,11 +186,43 @@ class PlaybackRuntime private constructor(context: Context) {
     fun cancelCrossfade() {
         val runningJob = crossfadeJob
         runningJob?.cancel()
+        cancelSpeedRecovery()
         equalizer.releaseTransition()
         if (runningJob == null) transitionPlayer?.release()
         transitionPlayer = null
         crossfadeScheduledForItem = false
         if (!released) currentPlayer.volume = 1f
+    }
+
+    private fun cancelSpeedRecovery() {
+        speedRecoveryJob?.cancel()
+        speedRecoveryJob = null
+        if (!released && currentPlayer.playbackParameters.speed != 1f) {
+            currentPlayer.playbackParameters = PlaybackParameters(1f)
+        }
+    }
+
+    private fun recoverPlaybackSpeed(player: ExoPlayer, initialSpeed: Float) {
+        if (initialSpeed == 1f) return
+        speedRecoveryJob?.cancel()
+        speedRecoveryJob = scope.launch {
+            val started = SystemClock.elapsedRealtime()
+            while (isActive && currentPlayer === player && player.isPlaying) {
+                val fraction = ((SystemClock.elapsedRealtime() - started) / 3_000f)
+                    .coerceIn(0f, 1f)
+                val eased = fraction * fraction * (3f - 2f * fraction)
+                player.playbackParameters = PlaybackParameters(
+                    initialSpeed + (1f - initialSpeed) * eased,
+                    1f
+                )
+                if (fraction >= 1f) break
+                delay(100L)
+            }
+            if (currentPlayer === player && !released) {
+                player.playbackParameters = PlaybackParameters(1f)
+            }
+            if (speedRecoveryJob === coroutineContext[Job]) speedRecoveryJob = null
+        }
     }
 
     private fun startMonitor() {
@@ -207,8 +246,14 @@ class PlaybackRuntime private constructor(context: Context) {
         if (outgoing.shuffleModeEnabled || nextIndex != outgoing.currentMediaItemIndex + 1) return false
         val current = outgoing.currentMediaItem?.mediaMetadata ?: return false
         val next = outgoing.getMediaItemAt(nextIndex).mediaMetadata
+        val currentAlbumId = current.extras?.getString(EXTRA_ALBUM_ID)
+        val nextAlbumId = next.extras?.getString(EXTRA_ALBUM_ID)
+        if (!currentAlbumId.isNullOrEmpty() && !nextAlbumId.isNullOrEmpty()) {
+            return currentAlbumId == nextAlbumId
+        }
         val album = current.albumTitle?.toString()?.trim()
-        return !album.isNullOrEmpty() && album == next.albumTitle?.toString()?.trim()
+        return !album.isNullOrEmpty() && album == next.albumTitle?.toString()?.trim() &&
+            current.artist?.toString() == next.artist?.toString()
     }
 
     private fun prepareAutoMixPlan() {
@@ -270,6 +315,7 @@ class PlaybackRuntime private constructor(context: Context) {
         crossfadeScheduledForItem = true
         val items = (0 until outgoing.mediaItemCount).map(outgoing::getMediaItemAt)
         val outgoingItem = outgoing.currentMediaItem
+        val useEqualPowerFade = autoMixEnabled
         val job = scope.launch(start = CoroutineStart.LAZY) {
             var incoming: ExoPlayer? = null
             var committed = false
@@ -306,24 +352,37 @@ class PlaybackRuntime private constructor(context: Context) {
                 incoming.play()
                 val fadeStarted = SystemClock.elapsedRealtime()
                 while (isActive) {
-                    val fraction = ((SystemClock.elapsedRealtime() - fadeStarted).toFloat() / fadeMs)
+                    val elapsed = SystemClock.elapsedRealtime() - fadeStarted
+                    if (incoming.playerError != null ||
+                        (elapsed > 750L && !incoming.isPlaying) ||
+                        !outgoing.isPlaying || currentPlayer !== outgoing) {
+                        throw IllegalStateException("Transition playback interrupted")
+                    }
+                    val fraction = (elapsed.toFloat() / fadeMs)
                         .coerceIn(0f, 1f)
-                    outgoing.volume = 1f - fraction
-                    incoming.volume = fraction
+                    if (useEqualPowerFade) {
+                        val angle = fraction * PI / 2.0
+                        val headroom = 1f - 0.08f * sin(fraction * PI).toFloat()
+                        outgoing.volume = (cos(angle) * headroom).toFloat()
+                        incoming.volume = (sin(angle) * headroom).toFloat()
+                    } else {
+                        outgoing.volume = 1f - fraction
+                        incoming.volume = fraction
+                    }
                     if (fraction >= 1f) break
                     delay(25L)
                 }
 
                 // Give media controls the new player before stopping the old one.
                 transitionPlayer = null
-                if (plan.incomingSpeed != 1f) incoming.playbackParameters = PlaybackParameters(1f)
-                incoming.setAudioAttributes(audioAttributes, true)
-                incoming.setHandleAudioBecomingNoisy(true)
                 equalizer.promoteTransition(incoming)
                 replacePlayer(incoming)
                 committed = true
                 outgoing.stop()
                 outgoing.release()
+                incoming.setAudioAttributes(audioAttributes, true)
+                incoming.setHandleAudioBecomingNoisy(true)
+                recoverPlaybackSpeed(incoming, plan.incomingSpeed)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -386,6 +445,8 @@ class PlaybackRuntime private constructor(context: Context) {
     }
 
     companion object {
+        const val EXTRA_ALBUM_ID = "com.music.purelymusic.album_id"
+
         @Volatile
         private var instance: PlaybackRuntime? = null
 

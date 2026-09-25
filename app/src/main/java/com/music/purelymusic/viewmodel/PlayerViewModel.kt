@@ -25,6 +25,7 @@ import android.media.MediaMetadataRetriever
 import android.media.Spatializer
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
 import androidx.compose.runtime.*
@@ -928,6 +929,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .setArtist(song?.artist)
             .setAlbumTitle(song?.album)
             .apply {
+                song?.albumId?.let { albumId ->
+                    setExtras(Bundle().apply {
+                        putString(PlaybackRuntime.EXTRA_ALBUM_ID, albumId)
+                    })
+                }
                 song?.coverUri
                     ?.takeIf { File(it).exists() }
                     ?.let { setArtworkUri(Uri.fromFile(File(it))) }
