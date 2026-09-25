@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,6 +61,7 @@ import com.music.purelymusic.ui.*
 import com.music.purelymusic.ui.theme.*
 import com.music.purelymusic.viewmodel.PlayerViewModel
 import com.music.purelymusic.ui.utils.AppDimensions
+import com.music.purelymusic.utils.PreferencesManager
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 
@@ -131,8 +133,20 @@ fun MainScreen(viewModel: PlayerViewModel) {
 
     val isPrimaryRoute = currentRoute == "home" || currentRoute == "library" || currentRoute == "settings"
     var showWhatsNew by remember { mutableStateOf(com.music.purelymusic.utils.PreferencesManager.shouldShowReleaseNotes(ReleaseNotes.version)) }
+    val context = LocalContext.current
+    var showOnboarding by remember { mutableStateOf(PreferencesManager.shouldShowOnboarding(context)) }
     val navigationHazeState = remember { HazeState() }
     val glassMenuHost = remember { GlassMenuHostState() }
+
+    if (showOnboarding) {
+        OnboardingScreen(language = viewModel.currentLanguage) {
+            PreferencesManager.markOnboardingCompleted()
+            PreferencesManager.markReleaseNotesSeen(ReleaseNotes.version)
+            showWhatsNew = false
+            showOnboarding = false
+        }
+        return
+    }
 
     CompositionLocalProvider(
         LocalLiquidGlassHazeState provides navigationHazeState,

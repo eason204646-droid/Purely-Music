@@ -52,6 +52,7 @@ object PreferencesManager {
     // 均衡器开关
     private const val KEY_EQUALIZER_ENABLED = "equalizer_enabled"
     private const val KEY_LAST_SEEN_RELEASE_NOTES = "last_seen_release_notes"
+    private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
     
     private var prefs: SharedPreferences? = null
     
@@ -191,6 +192,25 @@ object PreferencesManager {
 
     fun markReleaseNotesSeen(version: String) {
         prefs?.edit()?.putString(KEY_LAST_SEEN_RELEASE_NOTES, version)?.apply()
+    }
+
+    /** Only a fresh installation needs the introduction; existing users keep their usual startup. */
+    fun shouldShowOnboarding(context: Context): Boolean {
+        val preferences = prefs ?: context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (preferences.contains(KEY_ONBOARDING_COMPLETED)) {
+            return !preferences.getBoolean(KEY_ONBOARDING_COMPLETED, false)
+        }
+
+        val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+        if (packageInfo.lastUpdateTime > packageInfo.firstInstallTime) {
+            preferences.edit().putBoolean(KEY_ONBOARDING_COMPLETED, true).apply()
+            return false
+        }
+        return true
+    }
+
+    fun markOnboardingCompleted() {
+        prefs?.edit()?.putBoolean(KEY_ONBOARDING_COMPLETED, true)?.apply()
     }
 
     // 均衡器频段增益持久化
