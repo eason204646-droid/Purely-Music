@@ -60,6 +60,9 @@ interface SongDao {
     @Query("UPDATE songs SET albumId = NULL, album = NULL WHERE albumId = :albumId")
     suspend fun clearAlbum(albumId: String)
 
+    @Query("UPDATE songs SET albumId = :albumId, album = :newName WHERE albumId = :albumId OR (albumId IS NULL AND album = :oldName)")
+    suspend fun renameAlbumReferences(albumId: String, oldName: String, newName: String)
+
     @Query("SELECT COUNT(*) FROM songs WHERE musicUri = :path OR coverUri = :path OR lrcPath = :path")
     suspend fun countPathReferences(path: String): Int
 

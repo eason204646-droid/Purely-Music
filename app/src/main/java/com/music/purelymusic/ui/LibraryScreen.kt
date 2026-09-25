@@ -15,12 +15,14 @@
 //
 //January 2020 http://license.coscl.org.cn/MulanPSL2
 package com.music.purelymusic.ui
+import androidx.activity.compose.BackHandler
 import android.util.Log
 import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -54,6 +56,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -69,6 +73,8 @@ import androidx.compose.runtime.Composable
 import androidx.media3.common.util.UnstableApi
 import com.music.purelymusic.ui.utils.AppDimensions
 import com.music.purelymusic.ui.utils.rememberWindowSizeClass
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalFoundationApi::class)
@@ -183,7 +189,7 @@ fun LibraryScreen(
     }
 
     viewModel.batchImportSummary?.let { summary ->
-        AlertDialog(
+        GlassAlertDialog(
             onDismissRequest = { viewModel.clearBatchImportSummary() },
             title = { Text(if (viewModel.currentLanguage == "zh") "批量导入完成" else "Batch import complete") },
             text = { Text(summary) },
@@ -213,23 +219,29 @@ fun LibraryScreen(
     }
 
     var showMenu by remember { mutableStateOf(false) }
+    BackHandler(showMenu) { showMenu = false }
     var showSortMenu by remember { mutableStateOf(false) }
     var sortMode by remember { mutableStateOf("recent") }
+    val importHazeState = remember { HazeState() }
+    var headerHeightPx by remember { mutableIntStateOf(0) }
+    val headerHeight = with(LocalDensity.current) { headerHeightPx.toDp() }
     // 🚩 v2.5: 收藏/全部 切换
     var showFavoritesOnly by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .hazeSource(importHazeState)
                 .padding(horizontal = AppDimensions.paddingScreen())
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .onSizeChanged { headerHeightPx = it.height }
                     .padding(top = AppDimensions.paddingScreen(), bottom = AppDimensions.paddingCard()),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -247,52 +259,7 @@ fun LibraryScreen(
                         fontSize = AppDimensions.textS().value.sp
                     )
                 }
-                Box {
-                    GlassControl(
-                        onClick = { showMenu = !showMenu },
-                        modifier = Modifier.size(AppDimensions.iconButtonSizeM()),
-                        shape = androidx.compose.foundation.shape.CircleShape,
-                        dark = false
-                    ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = if (viewModel.currentLanguage == "zh") "添加" else "Add",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(AppDimensions.iconM())
-                        )
-                    }
-                    
-                    GlassDropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false },
-                        offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)
-                    ) {
-                        GlassMenuItem(
-                            label = if (viewModel.currentLanguage == "zh") "导入歌曲" else "Import Song",
-                            icon = Icons.Default.MusicNote,
-                            onClick = {
-                                showMenu = false
-                                onPickFile()
-                            }
-                        )
-                        GlassMenuItem(
-                            label = if (viewModel.currentLanguage == "zh") "批量导入" else "Batch Import",
-                            icon = Icons.Default.LibraryMusic,
-                            onClick = {
-                                showMenu = false
-                                onBatchPickFile()
-                            }
-                        )
-                        GlassMenuItem(
-                            label = if (viewModel.currentLanguage == "zh") "创建播放列表" else "Create Playlist",
-                            icon = Icons.AutoMirrored.Filled.PlaylistAdd,
-                            onClick = {
-                                showMenu = false
-                                onNavigateToCreatePlaylist()
-                            }
-                        )
-                    }
-                }
+                Spacer(modifier = Modifier.size(AppDimensions.iconButtonSizeM()))
             }
 
             // 🚩 v2.5: 搜索栏
@@ -302,53 +269,6 @@ fun LibraryScreen(
                     viewModel.performSearch(viewModel.searchQuery, onlyFavorites = showFavoritesOnly)
                 }
             }
-            LiquidGlass(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = AppDimensions.spacingM()),
-                shape = RoundedCornerShape(AppDimensions.cornerRadiusL()),
-                opacity = 0.82f,
-                highlightAlpha = 0.42f,
-                edgeAlpha = 0.40f,
-                shadowElevation = 0.dp
-            ) {
-            TextField(
-                value = viewModel.searchQuery,
-                onValueChange = { viewModel.performSearch(it, onlyFavorites = showFavoritesOnly) },
-                placeholder = {
-                    Text(
-                        if (viewModel.currentLanguage == "zh") "搜索歌曲或歌手..." else "Search songs or artists...",
-                        color = Color.Gray
-                    )
-                },
-                leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray)
-                },
-                trailingIcon = {
-                    if (viewModel.searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.performSearch("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = null, tint = Color.Gray)
-                        }
-                    }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(AppDimensions.cornerRadiusL()),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent,
-                    focusedTextColor = Color.Black,
-                    unfocusedTextColor = Color.Black,
-                    cursorColor = Color(0xFFE53935)
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(AppDimensions.cornerRadiusL()))
-            )
-            }
-
             // 🚩 v2.5: 自适应列数 — 手机固定2列，大屏自动更多
             val gridColumns = when (rememberWindowSizeClass().widthSize) {
                 com.music.purelymusic.ui.utils.WindowSize.EXPANDED -> GridCells.Adaptive(200.dp)
@@ -358,9 +278,12 @@ fun LibraryScreen(
             LazyVerticalGrid(
                 columns = gridColumns,
                 modifier = Modifier.fillMaxSize(),
-                // The mini player is an overlay. Reserve its exact footprint so the final
-                // row remains reachable instead of disappearing behind it.
-                contentPadding = PaddingValues(bottom = bottomContentPadding + AppDimensions.paddingScreen()),
+                // The initial inset clears the floating search field. Scrolled content may
+                // pass behind it; the bottom inset keeps rows reachable above the mini player.
+                contentPadding = PaddingValues(
+                    top = 56.dp + AppDimensions.spacingM(),
+                    bottom = bottomContentPadding + AppDimensions.paddingScreen()
+                ),
                 horizontalArrangement = Arrangement.spacedBy(AppDimensions.libraryGridSpacing()),
                 verticalArrangement = Arrangement.spacedBy(AppDimensions.libraryGridSpacing())
             ) {
@@ -440,16 +363,24 @@ fun LibraryScreen(
                                     fontSize = AppDimensions.textS().value.sp
                                 )
                             }
-                            DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
+                            GlassDropdownMenu(
+                                expanded = showSortMenu,
+                                onDismissRequest = { showSortMenu = false },
+                                modifier = Modifier.align(Alignment.BottomStart)
+                            ) {
                                 listOf(
                                     "recent" to if (viewModel.currentLanguage == "zh") "最近添加" else "Recent",
                                     "title" to if (viewModel.currentLanguage == "zh") "歌名" else "Title",
                                     "duration" to if (viewModel.currentLanguage == "zh") "时长" else "Duration"
                                 ).forEach { (key, label) ->
-                                    DropdownMenuItem(text = { Text(label) }, onClick = {
-                                        sortMode = key
-                                        showSortMenu = false
-                                    })
+                                    GlassMenuItem(
+                                        label = label,
+                                        icon = Icons.Default.KeyboardArrowDown,
+                                        onClick = {
+                                            sortMode = key
+                                            showSortMenu = false
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -535,6 +466,107 @@ fun LibraryScreen(
                 }
             }
         }
+        if (headerHeightPx > 0) {
+            CompositionLocalProvider(LocalLiquidGlassHazeState provides importHazeState) {
+                LiquidGlass(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = headerHeight, start = AppDimensions.paddingScreen(), end = AppDimensions.paddingScreen())
+                        .fillMaxWidth(),
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    opacity = 0.72f,
+                    highlightAlpha = 0.22f,
+                    edgeAlpha = 0.36f
+                ) {
+                    TextField(
+                        value = viewModel.searchQuery,
+                        onValueChange = { viewModel.performSearch(it, onlyFavorites = showFavoritesOnly) },
+                        placeholder = {
+                            Text(
+                                if (viewModel.currentLanguage == "zh") "搜索歌曲或歌手..." else "Search songs or artists...",
+                                color = Color(0xFF49515B)
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF49515B))
+                        },
+                        trailingIcon = {
+                            if (viewModel.searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { viewModel.performSearch("") }) {
+                                    Icon(Icons.Default.Clear, contentDescription = null, tint = Color(0xFF49515B))
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent,
+                            focusedTextColor = Color.Black,
+                            unfocusedTextColor = Color.Black,
+                            cursorColor = Color(0xFFE53935)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+        if (showMenu) {
+            Box(
+                modifier = Modifier.matchParentSize().clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { showMenu = false }
+                )
+            )
+        }
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(horizontal = AppDimensions.paddingScreen())
+                .padding(top = AppDimensions.paddingScreen())
+        ) {
+            CompositionLocalProvider(LocalLiquidGlassHazeState provides importHazeState) {
+                Column(horizontalAlignment = Alignment.End) {
+                    GlassControl(
+                        onClick = { showMenu = !showMenu },
+                        modifier = Modifier.size(AppDimensions.iconButtonSizeM()),
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        dark = false,
+                        opacity = 0.60f
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = if (viewModel.currentLanguage == "zh") "添加" else "Add",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(AppDimensions.iconM())
+                        )
+                    }
+                    if (showMenu) Spacer(modifier = Modifier.height(8.dp))
+                    GlassInlineMenu(expanded = showMenu) {
+                        GlassMenuItem(
+                            label = if (viewModel.currentLanguage == "zh") "导入歌曲" else "Import Song",
+                            icon = Icons.Default.MusicNote,
+                            onClick = { showMenu = false; onPickFile() }
+                        )
+                        GlassMenuItem(
+                            label = if (viewModel.currentLanguage == "zh") "批量导入" else "Batch Import",
+                            icon = Icons.Default.LibraryMusic,
+                            onClick = { showMenu = false; onBatchPickFile() }
+                        )
+                        GlassMenuItem(
+                            label = if (viewModel.currentLanguage == "zh") "创建播放列表" else "Create Playlist",
+                            icon = Icons.AutoMirrored.Filled.PlaylistAdd,
+                            onClick = { showMenu = false; onNavigateToCreatePlaylist() }
+                        )
+                    }
+                }
+            }
+        }
+        }
     }
 }
 
@@ -600,7 +632,7 @@ fun ImportMusicDialog(
         }
     }
 
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = {
             if (!isSaving) {
                 viewModel.tempMusicUri = null
@@ -612,37 +644,15 @@ fun ImportMusicDialog(
         title = { Text(if (viewModel.currentLanguage == "zh") "补充歌曲信息" else "Add Song Info", color = Color.Black) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(AppDimensions.spacingS())) {
-                TextField(
+                GlassDialogTextField(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text(if (viewModel.currentLanguage == "zh") "歌曲名称" else "Song Title") },
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedTextColor = Color.Black,
-                        unfocusedTextColor = Color.Black,
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
-                        focusedIndicatorColor = Color(0xFFE53935),
-                        unfocusedIndicatorColor = Color.Gray,
-                        focusedLabelColor = Color(0xFFE53935),
-                        unfocusedLabelColor = Color.Gray
-                    )
                 )
-                TextField(
+                GlassDialogTextField(
                     value = artist,
                     onValueChange = { artist = it },
                     label = { Text(if (viewModel.currentLanguage == "zh") "歌手" else "Artist") },
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedTextColor = Color.Black,
-                        unfocusedTextColor = Color.Black,
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
-                        focusedIndicatorColor = Color(0xFFE53935),
-                        unfocusedIndicatorColor = Color.Gray,
-                        focusedLabelColor = Color(0xFFE53935),
-                        unfocusedLabelColor = Color.Gray
-                    )
                 )
                 
                 Spacer(modifier = Modifier.height(AppDimensions.paddingCard()))
@@ -801,7 +811,7 @@ fun ImportMusicDialog(
 
     // 自动获取失败弹窗
     if (showFetchErrorDialog) {
-        AlertDialog(
+        GlassAlertDialog(
             onDismissRequest = {
                 showFetchErrorDialog = false
                 isSaving = false
@@ -866,7 +876,7 @@ fun EditSongDialog(
 ) {
     val coroutineScope = rememberCoroutineScope()
 
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = {
             viewModel.cancelEditSong()
         },
@@ -874,37 +884,15 @@ fun EditSongDialog(
         title = { Text(if (viewModel.currentLanguage == "zh") "编辑歌曲信息" else "Edit Song Info", fontWeight = FontWeight.Bold, color = Color.Black) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(AppDimensions.paddingCard())) {
-                TextField(
+                GlassDialogTextField(
                     value = viewModel.editTitle,
                     onValueChange = { viewModel.editTitle = it },
                     label = { Text(if (viewModel.currentLanguage == "zh") "歌曲名称" else "Song Title") },
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedTextColor = Color.Black,
-                        unfocusedTextColor = Color.Black,
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
-                        focusedIndicatorColor = Color(0xFFE53935),
-                        unfocusedIndicatorColor = Color.Gray,
-                        focusedLabelColor = Color(0xFFE53935),
-                        unfocusedLabelColor = Color.Gray
-                    )
                 )
-                TextField(
+                GlassDialogTextField(
                     value = viewModel.editArtist,
                     onValueChange = { viewModel.editArtist = it },
                     label = { Text(if (viewModel.currentLanguage == "zh") "歌手" else "Artist") },
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedTextColor = Color.Black,
-                        unfocusedTextColor = Color.Black,
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
-                        focusedIndicatorColor = Color(0xFFE53935),
-                        unfocusedIndicatorColor = Color.Gray,
-                        focusedLabelColor = Color(0xFFE53935),
-                        unfocusedLabelColor = Color.Gray
-                    )
                 )
                 Spacer(modifier = Modifier.height(AppDimensions.spacingS()))
 
@@ -1062,6 +1050,7 @@ fun PlaylistItem(playlist: Playlist, viewModel: PlayerViewModel, onClick: () -> 
         GlassDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
+            modifier = Modifier.align(Alignment.BottomStart),
             offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)
         ) {
             GlassMenuItem(
@@ -1075,7 +1064,7 @@ fun PlaylistItem(playlist: Playlist, viewModel: PlayerViewModel, onClick: () -> 
             )
         }
         if (playlistToDelete != null) {
-            AlertDialog(
+            GlassAlertDialog(
                 onDismissRequest = { playlistToDelete = null },
                 title = { Text(if (viewModel.currentLanguage == "zh") "确认删除" else "Confirm Delete") },
                 text = { Text(if (viewModel.currentLanguage == "zh") "确定要删除歌单「${playlistToDelete?.name}」吗？" else "Delete playlist «${playlistToDelete?.name}»?") },
@@ -1130,6 +1119,7 @@ fun SongGridItem(song: Song, viewModel: PlayerViewModel, onNavigateToPlayer: () 
         GlassDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
+            modifier = Modifier.align(Alignment.BottomStart),
             offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)
         ) {
             GlassMenuItem(
@@ -1170,7 +1160,7 @@ fun SongGridItem(song: Song, viewModel: PlayerViewModel, onNavigateToPlayer: () 
             )
         }
         if (songToDelete != null) {
-            AlertDialog(
+            GlassAlertDialog(
                 onDismissRequest = { songToDelete = null },
                 title = { Text(if (viewModel.currentLanguage == "zh") "确认删除" else "Confirm Delete") },
                 text = { Text(if (viewModel.currentLanguage == "zh") "确定要删除「${songToDelete?.title}」吗？此操作不可撤销。" else "Delete «${songToDelete?.title}»? This cannot be undone.") },
@@ -1193,10 +1183,15 @@ fun SongGridItem(song: Song, viewModel: PlayerViewModel, onNavigateToPlayer: () 
 fun AlbumItem(album: com.music.purelymusic.model.Album, viewModel: PlayerViewModel, onClick: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     var albumToDelete by remember { mutableStateOf<com.music.purelymusic.model.Album?>(null) }
+    var albumToRename by remember { mutableStateOf<com.music.purelymusic.model.Album?>(null) }
+    var editedAlbumName by remember { mutableStateOf("") }
+    var renameError by remember { mutableStateOf(false) }
+    var isRenaming by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     // 计算该专辑的歌曲数量
-    val albumSongCount = remember(album.name, viewModel.libraryList) {
-        viewModel.libraryList.count { it.album == album.name }
+    val albumSongCount = remember(album.id, album.name, viewModel.libraryList) {
+        viewModel.libraryList.count { it.albumId == album.id || (it.albumId == null && it.album == album.name) }
     }
 
     Box {
@@ -1278,8 +1273,19 @@ fun AlbumItem(album: com.music.purelymusic.model.Album, viewModel: PlayerViewMod
         GlassDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
+            modifier = Modifier.align(Alignment.BottomStart),
             offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)
         ) {
+            GlassMenuItem(
+                label = if (viewModel.currentLanguage == "zh") "重命名专辑" else "Rename Album",
+                icon = Icons.Default.Edit,
+                onClick = {
+                    editedAlbumName = album.name
+                    renameError = false
+                    albumToRename = album
+                    expanded = false
+                }
+            )
             GlassMenuItem(
                 label = if (viewModel.currentLanguage == "zh") "删除专辑" else "Delete Album",
                 icon = Icons.Default.Delete,
@@ -1290,8 +1296,54 @@ fun AlbumItem(album: com.music.purelymusic.model.Album, viewModel: PlayerViewMod
                 }
             )
         }
+        if (albumToRename != null) {
+            GlassAlertDialog(
+                onDismissRequest = { if (!isRenaming) albumToRename = null },
+                title = { Text(if (viewModel.currentLanguage == "zh") "重命名专辑" else "Rename Album") },
+                text = {
+                    Column {
+                        GlassDialogTextField(
+                            value = editedAlbumName,
+                            onValueChange = {
+                                editedAlbumName = it
+                                renameError = false
+                            },
+                            label = { Text(if (viewModel.currentLanguage == "zh") "专辑名称" else "Album name") },
+                            isError = renameError,
+                            enabled = !isRenaming,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        if (renameError) {
+                            Text(
+                                text = if (viewModel.currentLanguage == "zh") "重命名失败，请检查名称是否已被使用" else "Could not rename. This name may already be in use.",
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = !isRenaming && editedAlbumName.isNotBlank(),
+                        onClick = {
+                            val targetAlbum = albumToRename ?: return@TextButton
+                            isRenaming = true
+                            scope.launch {
+                                val renamed = viewModel.renameAlbum(targetAlbum.id, editedAlbumName)
+                                isRenaming = false
+                                if (renamed) albumToRename = null else renameError = true
+                            }
+                        }
+                    ) { Text(if (viewModel.currentLanguage == "zh") "保存" else "Save") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { albumToRename = null }, enabled = !isRenaming) {
+                        Text(if (viewModel.currentLanguage == "zh") "取消" else "Cancel")
+                    }
+                }
+            )
+        }
         if (albumToDelete != null) {
-            AlertDialog(
+            GlassAlertDialog(
                 onDismissRequest = { albumToDelete = null },
                 title = { Text(if (viewModel.currentLanguage == "zh") "确认删除" else "Confirm Delete") },
                 text = { Text(if (viewModel.currentLanguage == "zh") "确定要删除专辑「${albumToDelete?.name}」吗？" else "Delete album «${albumToDelete?.name}»?") },
@@ -1314,7 +1366,7 @@ fun AlbumItem(album: com.music.purelymusic.model.Album, viewModel: PlayerViewMod
 fun ImportProcessingDialog(
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFFF5F5F5),
         title = {
@@ -1360,7 +1412,7 @@ fun BatchImportPausedDialog(
     var title by remember { mutableStateOf("") }
     var artist by remember { mutableStateOf("") }
 
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = { /* 不允许手动关闭 */ },
         containerColor = Color.White,
         title = {
@@ -1383,19 +1435,17 @@ fun BatchImportPausedDialog(
                     overflow = TextOverflow.Ellipsis
                 )
                 
-                OutlinedTextField(
+                GlassDialogTextField(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text(if (currentLanguage == "zh") "歌名" else "Title") },
-                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 
-                OutlinedTextField(
+                GlassDialogTextField(
                     value = artist,
                     onValueChange = { artist = it },
                     label = { Text(if (currentLanguage == "zh") "歌手" else "Artist") },
-                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
             }

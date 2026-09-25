@@ -242,10 +242,10 @@ fun PlayerScreen(
                             Icon(Icons.Default.SkipPrevious, null, tint = Color.White, modifier = Modifier.size(AppDimensions.playerControlIconSize()))
                         }
 
-                        GlassControl(
-                            modifier = Modifier.size(AppDimensions.playerPlayButtonSize()),
-                            shape = CircleShape,
-                            dark = true,
+                        IconButton(
+                            modifier = Modifier
+                                .size(AppDimensions.playerPlayButtonSize())
+                                .background(Color.White.copy(alpha = 0.12f), CircleShape),
                             onClick = { viewModel.togglePlayPause() }
                         ) {
                             Icon(
@@ -501,10 +501,10 @@ fun PlayerScreen(
                             Icon(Icons.Default.SkipPrevious, null, tint = Color.White, modifier = Modifier.size(AppDimensions.playerControlIconSize()))
                         }
 
-                        GlassControl(
-                            modifier = Modifier.size(AppDimensions.playerPlayButtonSize()),
-                            shape = CircleShape,
-                            dark = true,
+                        IconButton(
+                            modifier = Modifier
+                                .size(AppDimensions.playerPlayButtonSize())
+                                .background(Color.White.copy(alpha = 0.12f), CircleShape),
                             onClick = { viewModel.togglePlayPause() }
                         ) {
                             Icon(
@@ -682,20 +682,14 @@ fun PlaylistItem(
             modifier = Modifier.padding(horizontal = AppDimensions.paddingCard())
         )
 
-        DropdownMenu(
+        GlassDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.background(Color.Black.copy(alpha = 0.9f))
+            onDismissRequest = { expanded = false }
         ) {
-            DropdownMenuItem(
-                text = { Text(viewModel.textDelete, color = Color.White) },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = null,
-                        tint = Color.White
-                    )
-                },
+            GlassMenuItem(
+                label = viewModel.textDelete,
+                icon = Icons.Default.Delete,
+                destructive = true,
                 onClick = {
                     onLongClick()
                     expanded = false

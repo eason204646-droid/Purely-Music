@@ -31,7 +31,6 @@ import android.util.Log
 import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.core.content.ContextCompat
 import androidx.room.withTransaction
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
@@ -1201,7 +1200,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
         try {
             val musicPath = song.musicUri ?: return
-            ContextCompat.startForegroundService(context, Intent(context, PlaybackService::class.java))
+            // MediaSessionService promotes itself when playback starts. Starting it as a
+            // foreground service here can time out before Media3 posts its notification.
+            context.startService(Intent(context, PlaybackService::class.java))
             val player = getOrCreatePlayer()
             val queueItems = buildQueueMediaItems()
             val selectedIndex = queueItems.indexOfFirst { it.mediaId == song.id.toString() }
@@ -1271,6 +1272,29 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
             deleteFileIfUnreferenced(album.coverUri)
             refreshData()
+        }
+    }
+
+    suspend fun renameAlbum(albumId: String, newName: String): Boolean = withContext(Dispatchers.IO) {
+        val trimmedName = newName.trim()
+        if (trimmedName.isEmpty()) return@withContext false
+
+        try {
+            val renamed = database.withTransaction {
+                val album = albumDao.getAlbumById(albumId) ?: return@withTransaction false
+                if (album.name == trimmedName) return@withTransaction true
+                val duplicate = albumDao.getAlbumByNameAndArtist(trimmedName, album.artist)
+                if (duplicate != null && duplicate.id != albumId) return@withTransaction false
+
+                albumDao.updateAlbum(album.copy(name = trimmedName))
+                songDao.renameAlbumReferences(albumId, album.name, trimmedName)
+                true
+            }
+            if (renamed) refreshData()
+            renamed
+        } catch (error: Exception) {
+            Log.e("Album", "重命名专辑失败", error)
+            false
         }
     }
 

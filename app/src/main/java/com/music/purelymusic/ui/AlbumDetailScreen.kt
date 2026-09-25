@@ -46,6 +46,8 @@ import com.music.purelymusic.model.Album
 import com.music.purelymusic.model.Song
 import com.music.purelymusic.viewmodel.PlayerViewModel
 import com.music.purelymusic.ui.utils.AppDimensions
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,6 +66,7 @@ fun AlbumDetailScreen(
 
     val totalSongs = albumSongs.size
     val isChinese = viewModel.currentLanguage == "zh"
+    val detailHazeState = remember { HazeState() }
 
     fun playAlbum(random: Boolean) {
         if (albumSongs.isNotEmpty()) {
@@ -86,8 +89,9 @@ fun AlbumDetailScreen(
     Scaffold(
         containerColor = Color.Transparent
     ) { padding ->
+        CompositionLocalProvider(LocalLiquidGlassHazeState provides detailHazeState) {
         Box(modifier = Modifier.fillMaxSize()) {
-            CollectionAtmosphere(cover = album.coverUri, modifier = Modifier.fillMaxSize())
+            CollectionAtmosphere(cover = album.coverUri, modifier = Modifier.fillMaxSize().hazeSource(detailHazeState))
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(bottom = 100.dp)
@@ -148,6 +152,7 @@ fun AlbumDetailScreen(
                     modifier = Modifier.size(23.dp)
                 )
             }
+        }
         }
     }
 }

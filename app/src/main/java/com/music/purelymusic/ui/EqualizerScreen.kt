@@ -18,19 +18,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -45,6 +45,8 @@ import com.music.purelymusic.ui.theme.RedPrimary
 import com.music.purelymusic.ui.utils.AppDimensions
 import com.music.purelymusic.viewmodel.PlayerViewModel
 import kotlin.math.roundToInt
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 
 @Composable
 fun EqualizerScreen(
@@ -54,6 +56,7 @@ fun EqualizerScreen(
     val bandLevels = viewModel.equalizerBandLevels
     val bandRanges = viewModel.equalizerBandFrequencies
     val levelRange = viewModel.equalizerLevelRange
+    val equalizerHazeState = remember { HazeState() }
 
     Box(
         modifier = Modifier
@@ -68,6 +71,7 @@ fun EqualizerScreen(
                 )
             )
     ) {
+        Box(modifier = Modifier.matchParentSize().hazeSource(equalizerHazeState)) {
         val blurredBackground = viewModel.blurredBackground
         if (blurredBackground != null) {
             Image(
@@ -90,6 +94,9 @@ fun EqualizerScreen(
                 )
         )
 
+        }
+
+        CompositionLocalProvider(LocalLiquidGlassHazeState provides equalizerHazeState) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -102,7 +109,7 @@ fun EqualizerScreen(
                     .padding(horizontal = AppDimensions.paddingScreen(), vertical = AppDimensions.spacingM()),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBack) {
+                GlassControl(modifier = Modifier.size(42.dp), shape = CircleShape, dark = true, onClick = onBack) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = if (viewModel.currentLanguage == "zh") "返回" else "Back",
@@ -118,7 +125,7 @@ fun EqualizerScreen(
                     modifier = Modifier.weight(1f)
                 )
                 if (bandLevels.isNotEmpty()) {
-                    IconButton(onClick = viewModel::resetEqualizerBands) {
+                    GlassControl(modifier = Modifier.size(42.dp), shape = CircleShape, dark = true, onClick = viewModel::resetEqualizerBands) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = if (viewModel.currentLanguage == "zh") "重置" else "Reset",
@@ -135,10 +142,12 @@ fun EqualizerScreen(
                     .padding(horizontal = AppDimensions.paddingScreen()),
                 verticalArrangement = Arrangement.spacedBy(AppDimensions.spacingM())
             ) {
-                Card(
+                LiquidGlass(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(AppDimensions.cornerRadiusL()),
-                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f))
+                    dark = true,
+                    opacity = 0.28f,
+                    highlightAlpha = 0.08f
                 ) {
                     Row(
                         modifier = Modifier
@@ -211,10 +220,12 @@ fun EqualizerScreen(
                 }
 
                 if (bandLevels.isEmpty() || bandRanges.isEmpty()) {
-                    Card(
+                    LiquidGlass(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(AppDimensions.cornerRadiusL()),
-                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f))
+                        dark = true,
+                        opacity = 0.28f,
+                        highlightAlpha = 0.08f
                     ) {
                         Text(
                             text = if (viewModel.currentLanguage == "zh") {
@@ -238,10 +249,12 @@ fun EqualizerScreen(
                         val subtitle = frequencies?.let { formatBandSubtitle(it.first, it.second, viewModel.currentLanguage) }
                         val levelDb = level / 100f
 
-                        Card(
+                        LiquidGlass(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(AppDimensions.cornerRadiusL()),
-                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f))
+                            dark = true,
+                            opacity = 0.28f,
+                            highlightAlpha = 0.08f
                         ) {
                             Column(
                                 modifier = Modifier.padding(AppDimensions.paddingCard()),
@@ -285,6 +298,7 @@ fun EqualizerScreen(
 
                 Spacer(modifier = Modifier.width(1.dp))
             }
+        }
         }
     }
 }

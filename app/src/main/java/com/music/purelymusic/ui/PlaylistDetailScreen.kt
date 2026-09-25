@@ -61,6 +61,8 @@ import com.music.purelymusic.ui.utils.AppDimensions
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -80,6 +82,7 @@ fun PlaylistDetailScreen(
     val totalSongs = playlistSongs.size
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+    val detailHazeState = remember { HazeState() }
 
     // 拖拽状态
     var draggedIndex by remember { mutableStateOf<Int?>(null) }
@@ -112,8 +115,9 @@ fun PlaylistDetailScreen(
     Scaffold(
         containerColor = Color.Transparent
     ) { padding ->
+        CompositionLocalProvider(LocalLiquidGlassHazeState provides detailHazeState) {
         Box(modifier = Modifier.fillMaxSize()) {
-            CollectionAtmosphere(cover = playlist.coverUri, modifier = Modifier.fillMaxSize())
+            CollectionAtmosphere(cover = playlist.coverUri, modifier = Modifier.fillMaxSize().hazeSource(detailHazeState))
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(bottom = 100.dp),
@@ -289,6 +293,7 @@ fun PlaylistDetailScreen(
                 )
             }
         }
+        }
     }
 
     // 添加歌曲对话框
@@ -385,7 +390,7 @@ fun AddSongsToPlaylistDialog(
     // 用于记录选择顺序
     var selectedSongsInOrder by remember { mutableStateOf<List<Long>>(emptyList()) }
     
-    androidx.compose.ui.window.Dialog(
+    GlassDialog(
         onDismissRequest = onDismiss,
         properties = androidx.compose.ui.window.DialogProperties(
             dismissOnBackPress = true,
@@ -393,13 +398,14 @@ fun AddSongsToPlaylistDialog(
             usePlatformDefaultWidth = false
         )
     ) {
-        Surface(
+        LiquidGlass(
             modifier = Modifier
                 .fillMaxWidth(0.9f)
                 .fillMaxHeight(0.8f),
             shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-            color = Color.White,
-            tonalElevation = 8.dp
+            opacity = 0.74f,
+            highlightAlpha = 0.26f,
+            edgeAlpha = 0.34f
         ) {
             Column(
                 modifier = Modifier

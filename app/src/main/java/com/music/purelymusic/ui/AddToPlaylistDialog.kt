@@ -23,7 +23,7 @@ fun AddToPlaylistDialog(
 ) {
     val playlists = viewModel.playlists
 
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFFF5F5F5),
         title = {

@@ -17,8 +17,10 @@
 package com.music.purelymusic.ui // 1. 确保包名一致
 
 import androidx.annotation.OptIn
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -65,6 +67,8 @@ import com.music.purelymusic.R
 import com.music.purelymusic.ui.theme.*
 import com.music.purelymusic.ui.utils.AppDimensions
 import com.music.purelymusic.ui.utils.rememberWindowSizeClass
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -78,6 +82,8 @@ fun HomeScreen(
     onNavigateToCreatePlaylist: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    BackHandler(showMenu) { showMenu = false }
+    val importHazeState = remember { HazeState() }
     // 🚩 v2.5: 大屏限制内容宽度
     val windowClass = rememberWindowSizeClass()
 
@@ -91,6 +97,7 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .then(if (windowClass.isExpanded) Modifier.widthIn(max = 720.dp) else Modifier)
+                .hazeSource(importHazeState)
                 .padding(horizontal = AppDimensions.paddingScreen())
         ) {
         Row(
@@ -114,67 +121,13 @@ fun HomeScreen(
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
-            Box {
-                GlassControl(
-                    onClick = { showMenu = !showMenu },
-                    modifier = Modifier.size(AppDimensions.iconButtonSizeM()),
-                    shape = CircleShape,
-                    dark = false
-                ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = if (viewModel.currentLanguage == "zh") "添加" else "Add",
-                        tint = RedPrimary,
-                        modifier = Modifier.size(AppDimensions.iconM())
-                    )
-                }
-
-                GlassDropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false },
-                    offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)
-                ) {
-                    GlassMenuItem(
-                        label = if (viewModel.currentLanguage == "zh") "导入歌曲" else "Import Song",
-                        icon = Icons.Default.MusicNote,
-                        onClick = {
-                            showMenu = false
-                            onPickFile()
-                        }
-                    )
-                    GlassMenuItem(
-                        label = if (viewModel.currentLanguage == "zh") "批量导入" else "Batch Import",
-                        icon = Icons.Default.LibraryMusic,
-                        onClick = {
-                            showMenu = false
-                            onBatchPickFile()
-                        }
-                    )
-                    GlassMenuItem(
-                        label = if (viewModel.currentLanguage == "zh") "创建播放列表" else "Create Playlist",
-                        icon = Icons.AutoMirrored.Filled.PlaylistAdd,
-                        onClick = {
-                            showMenu = false
-                            onNavigateToCreatePlaylist()
-                        }
-                    )
-                }
-            }
+            Spacer(modifier = Modifier.size(AppDimensions.iconButtonSizeM()))
         }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = AppDimensions.miniPlayerHeight() + 96.dp)
         ) {
-            viewModel.currentSong?.let { song ->
-                item {
-                    HomeNowPlayingCard(
-                        song = song,
-                        isPlaying = viewModel.isActuallyPlaying,
-                        onClick = onNavigateToPlayer
-                    )
-                }
-            }
             if (viewModel.recentSongs.isNotEmpty()) {
                 item {
                     Column(modifier = Modifier.padding(vertical = AppDimensions.spacingS())) {
@@ -248,6 +201,65 @@ fun HomeScreen(
         }
         } // 🚩 v2.5: 关闭外层 Box
 
+        if (showMenu) {
+            Box(
+                modifier = Modifier.matchParentSize().clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { showMenu = false }
+                )
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (windowClass.isExpanded) Modifier.widthIn(max = 720.dp) else Modifier)
+                .align(Alignment.TopCenter)
+                .padding(horizontal = AppDimensions.paddingScreen())
+                .padding(top = AppDimensions.paddingScreen()),
+            contentAlignment = Alignment.TopEnd
+        ) {
+            CompositionLocalProvider(LocalLiquidGlassHazeState provides importHazeState) {
+                Column(horizontalAlignment = Alignment.End) {
+                    GlassControl(
+                        onClick = { showMenu = !showMenu },
+                        modifier = Modifier.size(AppDimensions.iconButtonSizeM()),
+                        shape = CircleShape,
+                        dark = false,
+                        opacity = 0.60f
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = if (viewModel.currentLanguage == "zh") "添加" else "Add",
+                            tint = RedPrimary,
+                            modifier = Modifier.size(AppDimensions.iconM())
+                        )
+                    }
+                    if (showMenu) Spacer(modifier = Modifier.height(8.dp))
+                    GlassInlineMenu(
+                        expanded = showMenu
+                    ) {
+                        GlassMenuItem(
+                            label = if (viewModel.currentLanguage == "zh") "导入歌曲" else "Import Song",
+                            icon = Icons.Default.MusicNote,
+                            onClick = { showMenu = false; onPickFile() }
+                        )
+                        GlassMenuItem(
+                            label = if (viewModel.currentLanguage == "zh") "批量导入" else "Batch Import",
+                            icon = Icons.Default.LibraryMusic,
+                            onClick = { showMenu = false; onBatchPickFile() }
+                        )
+                        GlassMenuItem(
+                            label = if (viewModel.currentLanguage == "zh") "创建播放列表" else "Create Playlist",
+                            icon = Icons.AutoMirrored.Filled.PlaylistAdd,
+                            onClick = { showMenu = false; onNavigateToCreatePlaylist() }
+                        )
+                    }
+                }
+            }
+        }
+
         LaunchedEffect(viewModel.tempMusicUri) {
             val uri = viewModel.tempMusicUri
             if (uri != null && viewModel.autoFetchMetadata) {
@@ -303,44 +315,6 @@ fun HomeScreen(
                     viewModel.cancelBatchImport()
                 }
             )
-        }
-    }
-}
-
-@Composable
-private fun HomeNowPlayingCard(song: Song, isPlaying: Boolean, onClick: () -> Unit) {
-    GlassPressable(
-        modifier = Modifier.fillMaxWidth().padding(top = AppDimensions.spacingS(), bottom = AppDimensions.spacingM()),
-        onClick = onClick
-    ) {
-        LiquidGlass(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            contentPadding = PaddingValues(12.dp),
-            opacity = 0.90f,
-            highlightAlpha = 0.42f,
-            edgeAlpha = 0.40f,
-            shadowElevation = 0.dp
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                AsyncImage(
-                    model = song.coverUri ?: R.drawable.default_cover,
-                    contentDescription = null,
-                    modifier = Modifier.size(58.dp).clip(RoundedCornerShape(16.dp)),
-                    contentScale = ContentScale.Crop
-                )
-                Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                    Text(if (isPlaying) "正在播放" else "继续聆听", color = AppleRed, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Text(song.title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(song.artist, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, maxLines = 1)
-                }
-                Icon(
-                    if (isPlaying) Icons.Default.PauseCircleFilled else Icons.Default.PlayCircleFilled,
-                    null,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(34.dp)
-                )
-            }
         }
     }
 }
@@ -463,7 +437,12 @@ fun MiniPlayer(viewModel: PlayerViewModel, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth().height(AppDimensions.miniPlayerHeight()).padding(horizontal = AppDimensions.miniPlayerPaddingH()),
         onClick = onClick
     ) {
-        LiquidGlass(modifier = Modifier.fillMaxSize(), shape = RoundedCornerShape(28.dp))
+        LiquidGlass(
+            modifier = Modifier.fillMaxSize(),
+            shape = RoundedCornerShape(28.dp),
+            opacity = 0.62f,
+            highlightAlpha = 0.22f
+        )
         Row(
             modifier = Modifier.fillMaxSize().padding(horizontal = AppDimensions.miniPlayerPaddingH()),
             verticalAlignment = Alignment.CenterVertically
@@ -556,7 +535,7 @@ fun HomeImportMusicDialog(
         }
     }
 
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = {
             if (!isSaving) {
                 viewModel.tempMusicUri = null
@@ -568,37 +547,15 @@ fun HomeImportMusicDialog(
         title = { Text(if (viewModel.currentLanguage == "zh") "补充歌曲信息" else "Add Song Info", color = Color.Black) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(AppDimensions.spacingS())) {
-                TextField(
+                GlassDialogTextField(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text(if (viewModel.currentLanguage == "zh") "歌曲名称" else "Song Title") },
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedTextColor = Color.Black,
-                        unfocusedTextColor = Color.Black,
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
-                        focusedIndicatorColor = RedPrimary,
-                        unfocusedIndicatorColor = Color.Gray,
-                        focusedLabelColor = RedPrimary,
-                        unfocusedLabelColor = Color.Gray
-                    )
                 )
-                TextField(
+                GlassDialogTextField(
                     value = artist,
                     onValueChange = { artist = it },
                     label = { Text(if (viewModel.currentLanguage == "zh") "歌手" else "Artist") },
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedTextColor = Color.Black,
-                        unfocusedTextColor = Color.Black,
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
-                        focusedIndicatorColor = RedPrimary,
-                        unfocusedIndicatorColor = Color.Gray,
-                        focusedLabelColor = RedPrimary,
-                        unfocusedLabelColor = Color.Gray
-                    )
                 )
                 
                 Spacer(modifier = Modifier.height(AppDimensions.paddingCard()))
@@ -757,7 +714,7 @@ fun HomeImportMusicDialog(
 
     // 自动获取失败弹窗
     if (showFetchErrorDialog) {
-        AlertDialog(
+        GlassAlertDialog(
             onDismissRequest = {
                 showFetchErrorDialog = false
                 isSaving = false
@@ -820,7 +777,7 @@ fun BatchImportProgressDialog(
     currentSong: String?,
     currentLanguage: String
 ) {
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = { /* 不允许手动关闭 */ },
         containerColor = Color.White,
         title = {

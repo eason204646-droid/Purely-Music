@@ -45,11 +45,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -134,23 +131,23 @@ fun MainScreen(viewModel: PlayerViewModel) {
 
     val isPrimaryRoute = currentRoute == "home" || currentRoute == "library" || currentRoute == "settings"
     var showWhatsNew by remember { mutableStateOf(com.music.purelymusic.utils.PreferencesManager.shouldShowReleaseNotes(ReleaseNotes.version)) }
-    val liquidGlassHazeState = remember { HazeState() }
+    val navigationHazeState = remember { HazeState() }
+    val glassMenuHost = remember { GlassMenuHostState() }
 
+    CompositionLocalProvider(
+        LocalLiquidGlassHazeState provides navigationHazeState,
+        LocalGlassDialogHazeState provides navigationHazeState,
+        LocalGlassMenuHost provides glassMenuHost
+    ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        // Haze effects must be siblings of their source. Keeping the source in a dedicated
-        // backdrop layer lets every glass control sample a live backdrop without becoming a
-        // descendant of Modifier.haze (which Haze rejects at draw time).
-        LiquidGlassBackdrop(
-            hazeState = liquidGlassHazeState,
-            blurredBackground = viewModel.blurredBackground,
-            modifier = Modifier.matchParentSize()
-        )
-
-        CompositionLocalProvider(LocalLiquidGlassHazeState provides liquidGlassHazeState) {
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
 
-            NavHost(navController = navController, startDestination = "home") {
+            NavHost(
+                navController = navController,
+                startDestination = "home",
+                modifier = Modifier.hazeSource(navigationHazeState)
+            ) {
                 composable("home") {
                     HomeScreen(
                         viewModel = viewModel,
@@ -282,18 +279,20 @@ fun MainScreen(viewModel: PlayerViewModel) {
                     .align(Alignment.BottomCenter)
                     .padding(bottom = if (isPrimaryRoute) 76.dp else AppDimensions.paddingSmall())
             ) {
-                MiniPlayer(
-                    viewModel = viewModel,
-                    onClick = { navController.navigate("player") }
-                )
+                CompositionLocalProvider(LocalLiquidGlassHazeState provides navigationHazeState) {
+                    MiniPlayer(
+                        viewModel = viewModel,
+                        onClick = { navController.navigate("player") }
+                    )
+                }
             }
 
             if (showWhatsNew) {
-                androidx.compose.ui.window.Dialog(onDismissRequest = {
+                GlassDialog(onDismissRequest = {
                     com.music.purelymusic.utils.PreferencesManager.markReleaseNotesSeen(ReleaseNotes.version)
                     showWhatsNew = false
                 }) {
-                    // Haze 1.7 synchronizes dialog effects with the activity source.
+                    // The dialog shares the activity page source for live glass blur.
                     WhatsNewSheet(language = viewModel.currentLanguage, onDismiss = {
                         com.music.purelymusic.utils.PreferencesManager.markReleaseNotesSeen(ReleaseNotes.version)
                         showWhatsNew = false
@@ -303,58 +302,26 @@ fun MainScreen(viewModel: PlayerViewModel) {
         }
     }
     if (isPrimaryRoute) {
-        LiquidGlassNavigationBar(
-            currentRoute = currentRoute,
-            language = viewModel.currentLanguage,
-            onNavigate = { route ->
-                if (currentRoute != route) {
-                    navController.navigate(route) { popUpTo("home") { inclusive = true } }
-                }
-            },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 10.dp)
-        )
-    }
-    }
-    }
-}
-
-/**
- * The sole Haze source for the app shell. It deliberately has no glass controls as children:
- * Haze only supports source/effect nodes as siblings, not ancestors/descendants. The bitmap is
- * updated whenever the current track's cover changes, so the blur remains a live music backdrop.
- */
-@Composable
-private fun LiquidGlassBackdrop(
-    hazeState: HazeState,
-    blurredBackground: android.graphics.Bitmap?,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .hazeSource(hazeState)
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.background,
-                        MaterialTheme.colorScheme.surfaceVariant,
-                        MaterialTheme.colorScheme.background
-                    )
-                )
-            )
-    ) {
-        blurredBackground?.let { bitmap ->
-            androidx.compose.foundation.Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
+        CompositionLocalProvider(LocalLiquidGlassHazeState provides navigationHazeState) {
+            LiquidGlassNavigationBar(
+                currentRoute = currentRoute,
+                language = viewModel.currentLanguage,
+                onNavigate = { route ->
+                    if (currentRoute != route) {
+                        navController.navigate(route) { popUpTo("home") { inclusive = true } }
+                    }
+                },
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.18f))
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
             )
         }
+    }
+    CompositionLocalProvider(LocalLiquidGlassHazeState provides navigationHazeState) {
+        GlassMenuHost(glassMenuHost)
+    }
+    }
     }
 }
 
@@ -373,8 +340,8 @@ private fun LiquidGlassNavigationBar(
     LiquidGlass(
         modifier = modifier.fillMaxWidth().height(60.dp),
         shape = RoundedCornerShape(28.dp),
-        opacity = 0.90f,
-        highlightAlpha = 0.28f,
+        opacity = 0.60f,
+        highlightAlpha = 0.20f,
         edgeAlpha = 0.32f,
         shadowElevation = 0.dp
     ) {

@@ -335,7 +335,7 @@ fun SettingsScreen(
 
     // 歌词样式选择弹窗
     if (showLyricStyleDialog) {
-        AlertDialog(
+        GlassAlertDialog(
             onDismissRequest = { showLyricStyleDialog = false },
             title = {
                 Text(
@@ -447,7 +447,7 @@ fun SettingsScreen(
             60 to if (viewModel.currentLanguage == "zh") "60 分钟" else "60 min"
         )
 
-        androidx.compose.ui.window.Dialog(
+        GlassDialog(
             onDismissRequest = { showSleepTimerDialog = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
         ) {
@@ -547,7 +547,7 @@ fun SettingsScreen(
         val annotatedString = androidx.compose.ui.text.AnnotatedString(viewModel.translateLogs)
         val scrollState = androidx.compose.foundation.rememberScrollState()
 
-        AlertDialog(
+        GlassAlertDialog(
             onDismissRequest = { showTranslateLogDialog = false },
             title = {
                 Text(
@@ -610,7 +610,7 @@ fun SettingsScreen(
     // 帮助文档全屏弹窗（Markdown 渲染）
     if (showHelpDialog) {
         val markwon = remember { Markwon.create(context) }
-        androidx.compose.ui.window.Dialog(
+        GlassDialog(
             onDismissRequest = { showHelpDialog = false },
             properties = androidx.compose.ui.window.DialogProperties(
                 dismissOnBackPress = true,

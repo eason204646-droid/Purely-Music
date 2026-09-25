@@ -21,7 +21,11 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         runtime = PlaybackRuntime.get(this)
-        mediaSession = MediaSession.Builder(this, runtime.player).build()
+        val session = MediaSession.Builder(this, runtime.player).build()
+        mediaSession = session
+        // Playback starts through the in-process player, without a MediaController binding.
+        // Register the session so MediaSessionService observes playback and owns its notification.
+        addSession(session)
         runtime.addPlayerChangeListener(playerChangeListener)
     }
 

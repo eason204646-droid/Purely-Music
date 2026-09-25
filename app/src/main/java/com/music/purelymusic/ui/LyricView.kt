@@ -366,7 +366,7 @@ fun LyricView(
         if (translateError != null) {
             var showDetails by remember { mutableStateOf(false) }
 
-            AlertDialog(
+            GlassAlertDialog(
                 onDismissRequest = { viewModel.translateError = null },
                 title = {
                     Text(

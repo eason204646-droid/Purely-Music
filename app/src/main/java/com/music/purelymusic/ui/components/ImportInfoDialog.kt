@@ -20,6 +20,8 @@ import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.*
+import com.music.purelymusic.ui.GlassAlertDialog
+import com.music.purelymusic.ui.GlassDialogTextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.unit.dp
 
@@ -32,22 +34,20 @@ fun ImportInfoDialog(
     var title by remember { mutableStateOf("") }
     var artist by remember { mutableStateOf("") }
 
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(text = "完善歌曲信息") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
+                GlassDialogTextField(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("歌名") },
-                    singleLine = true
                 )
-                OutlinedTextField(
+                GlassDialogTextField(
                     value = artist,
                     onValueChange = { artist = it },
                     label = { Text("歌手") },
-                    singleLine = true
                 )
             }
         },

@@ -70,7 +70,9 @@ fun CollectionHeader(
                     highlightAlpha = 0.30f,
                     edgeAlpha = 0.34f
                 ) {
-                    Text(shuffleLabel, modifier = Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                    Box(modifier = Modifier.fillMaxHeight(), contentAlignment = Alignment.Center) {
+                        Text(shuffleLabel, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
