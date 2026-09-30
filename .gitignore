@@ -19,3 +19,6 @@ keystore.properties
 
 .kotlin/
 /app/release/
+
+# Local reference source for upgrade compatibility checks
+/2.7/
