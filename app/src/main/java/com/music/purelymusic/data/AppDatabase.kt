@@ -22,8 +22,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import com.google.gson.JsonParser
 
 // 🚩 1. 必须在 entities 中加入 PlaylistEntity::class
 @Database(
@@ -105,27 +104,95 @@ abstract class AppDatabase : RoomDatabase() {
             database.execSQL("CREATE TABLE albums (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, artist TEXT NOT NULL, coverUri TEXT, createdAt INTEGER NOT NULL DEFAULT 0)")
         }
 
-        private val MIGRATION_9_10 = Migration(9, 10) { database: SupportSQLiteDatabase ->
+        internal val MIGRATION_9_10 = Migration(9, 10) { database: SupportSQLiteDatabase ->
             val playlistSongs = mutableListOf<Triple<String, Long, Int>>()
-            val idListType = object : TypeToken<List<Long>>() {}.type
             database.query("SELECT id, songIdsJson FROM playlists").use { cursor ->
                 while (cursor.moveToNext()) {
                     val playlistId = cursor.getString(0)
-                    val ids = runCatching {
-                        Gson().fromJson<List<Long>>(cursor.getString(1), idListType)
-                    }.getOrDefault(emptyList())
+                    // Parse without a reflective TypeToken and keep valid IDs in damaged arrays.
+                    val ids = runCatching { JsonParser.parseString(cursor.getString(1)) }
+                        .getOrNull()
+                        ?.takeIf { it.isJsonArray }
+                        ?.asJsonArray
+                        ?.mapNotNull { id ->
+                            id.takeIf { it.isJsonPrimitive }
+                                ?.asJsonPrimitive
+                                ?.takeIf { it.isNumber || it.isString }
+                                ?.asString
+                                ?.toLongOrNull()
+                        }
+                        .orEmpty()
                     ids.forEachIndexed { index, songId ->
                         playlistSongs += Triple(playlistId, songId, index)
                     }
                 }
             }
 
-            database.execSQL("ALTER TABLE songs ADD COLUMN albumId TEXT")
+            // 2.7 fresh installs and older upgrade paths have different defaults/indices.
+            // Rebuild before creating foreign keys so every path matches Room's v10 schema.
+            val songSequence = database.query("SELECT seq FROM sqlite_sequence WHERE name = 'songs'").use { cursor ->
+                if (cursor.moveToFirst()) cursor.getLong(0) else 0L
+            }
             database.execSQL(
-                "UPDATE songs SET albumId = (SELECT albums.id FROM albums WHERE albums.name = songs.album LIMIT 1) WHERE album IS NOT NULL"
+                """
+                CREATE TABLE songs_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    title TEXT NOT NULL,
+                    artist TEXT NOT NULL,
+                    coverUri TEXT,
+                    musicUri TEXT,
+                    lrcPath TEXT DEFAULT null,
+                    lastPlayedTime INTEGER NOT NULL DEFAULT 0,
+                    playCount INTEGER NOT NULL DEFAULT 0,
+                    createdTime INTEGER NOT NULL DEFAULT 0,
+                    isFavorite INTEGER NOT NULL DEFAULT 0,
+                    duration INTEGER NOT NULL DEFAULT 0,
+                    album TEXT DEFAULT null,
+                    albumId TEXT DEFAULT null
+                )
+                """.trimIndent()
             )
+            database.execSQL(
+                """
+                INSERT INTO songs_new (
+                    id, title, artist, coverUri, musicUri, lrcPath, lastPlayedTime,
+                    playCount, createdTime, isFavorite, duration, album, albumId
+                )
+                SELECT id, title, artist, coverUri, musicUri, lrcPath, lastPlayedTime,
+                    playCount, createdTime, isFavorite, duration, album,
+                    (SELECT albums.id FROM albums WHERE albums.name = songs.album LIMIT 1)
+                FROM songs
+                """.trimIndent()
+            )
+            database.execSQL("DROP TABLE songs")
+            database.execSQL("ALTER TABLE songs_new RENAME TO songs")
+            // Preserve IDs allocated to deleted songs as well as IDs of surviving songs.
+            database.execSQL("UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 'songs'", arrayOf<Any>(songSequence))
+            database.execSQL(
+                "INSERT INTO sqlite_sequence (name, seq) SELECT 'songs', ? WHERE NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = 'songs')",
+                arrayOf<Any>(songSequence)
+            )
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_songs_lastPlayedTime ON songs(lastPlayedTime)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_songs_isFavorite ON songs(isFavorite)")
             database.execSQL("CREATE INDEX IF NOT EXISTS index_songs_createdTime ON songs(createdTime)")
             database.execSQL("CREATE INDEX IF NOT EXISTS index_songs_albumId ON songs(albumId)")
+
+            database.execSQL(
+                """
+                CREATE TABLE albums_new (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    name TEXT NOT NULL,
+                    artist TEXT NOT NULL,
+                    coverUri TEXT,
+                    createdAt INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            database.execSQL(
+                "INSERT INTO albums_new (id, name, artist, coverUri, createdAt) SELECT id, name, artist, coverUri, createdAt FROM albums"
+            )
+            database.execSQL("DROP TABLE albums")
+            database.execSQL("ALTER TABLE albums_new RENAME TO albums")
 
             database.execSQL(
                 """
@@ -165,7 +232,7 @@ abstract class AppDatabase : RoomDatabase() {
                 database.execSQL(
                     "INSERT OR IGNORE INTO playlist_song_cross_ref (playlistId, songId, position) " +
                         "SELECT ?, id, ? FROM songs WHERE id = ?",
-                    arrayOf(playlistId, position, songId)
+                    arrayOf<Any>(playlistId, position, songId)
                 )
             }
         }
