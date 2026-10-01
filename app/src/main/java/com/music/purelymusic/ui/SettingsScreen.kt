@@ -107,9 +107,9 @@ fun SettingsScreen(
                 SettingsSwitch(
                     title = if (viewModel.currentLanguage == "zh") "智能混音（AutoMix）" else "Smart Mix (AutoMix)",
                     subtitle = if (viewModel.currentLanguage == "zh") {
-                        "按静音、节拍与调性选择节拍混音、短接续或柔和过渡"
+                        "分析首尾段落，同步节拍，按小节交接低频与主旋律；同一专辑保留自然衔接"
                     } else {
-                        "Chooses beat mixes, quick handoffs or gentle blends for local tracks"
+                        "Match beats and phrases, exchange bass and melody; preserve continuous albums"
                     },
                     checked = viewModel.autoMixEnabled,
                     onCheckedChange = { viewModel.autoMixEnabled = it }

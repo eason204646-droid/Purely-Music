@@ -1,161 +1,102 @@
 package com.music.purelymusic.playback
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
+import kotlin.math.abs
+import kotlin.math.round
+import org.junit.Assert.*
 import org.junit.Test
 
 class AutoMixPlannerTest {
-    @Test
-    fun trailingSilenceGetsAFullBlendBeforeMusicalEnd() {
-        val outgoing = TrackAnalysis(180_000, 0, 177_000, null, null, 0.14f)
-        val incoming = TrackAnalysis(200_000, 1_400, 200_000, null, null, 0.12f)
+    private fun track(bpm: Float? = null, anchor: Long? = null) = TrackAnalysis(
+        180_000L, 0L, 178_000L, bpm, anchor, 0.16f, beatConfidence = if (bpm == null) 0f else 0.95f
+    )
 
-        val plan = AutoMixPlanner.plan(180_000, outgoing, incoming)
-
-        assertNotNull(plan)
-        assertEquals(900L, plan!!.incomingStartMs)
-        assertEquals(177_100L, plan.startMs + plan.fadeMs)
-        assertEquals(TransitionStyle.SOFT_BLEND, plan.style)
-        assertEquals(10_500L, plan.fadeMs)
-        assertTrue(180_000L - plan.startMs in 10_000L..15_000L)
-    }
-
-    @Test
-    fun matchesCompatibleBeatsWithSmallSpeedCorrection() {
-        val outgoing = TrackAnalysis(180_000, 0, 180_000, 120f, 500L, 0.16f)
-        val incoming = TrackAnalysis(190_000, 600, 190_000, 118f, 1_000L, 0.17f)
-
-        val plan = AutoMixPlanner.plan(180_000, outgoing, incoming)
-
-        assertNotNull(plan)
-        assertTrue(plan!!.incomingStartMs < 600L)
-        assertTrue(plan.incomingSpeed > 1f && plan.incomingSpeed < 1.06f)
-        assertTrue(plan.fadeMs >= 9_500L)
+    @Test fun alignsBothPassagesAndRendersOnIncomingNativeClock() {
+        val plan = AutoMixPlanner.plan(180_000, track(123.4f, 163_127), track(120.7f, 371))!!
         assertEquals(TransitionStyle.BEAT_MIX, plan.style)
+        assertEquals(1f, plan.incomingSpeed, 0f)
+        assertEquals(120.7f / 123.4f, plan.outgoingSpeed, 0.00001f)
+        val outPhase = (plan.outgoingSourceMs - 163_127) / (60_000.0 / 123.4 / 0.25)
+        val inPhase = (plan.incomingStartMs - 371) / (60_000.0 / 120.7 / 0.25)
+        assertEquals(round(outPhase), outPhase, 0.001)
+        assertEquals(round(inPhase), inPhase, 0.001)
+        assertEquals(16.0, plan.fadeMs / plan.beatMs, 0.002)
+        assertTrue(plan.startMs + plan.fadeMs < 178_000)
     }
 
-    @Test
-    fun incompatibleTempoUsesLongStagedBlend() {
-        val outgoing = TrackAnalysis(180_000, 0, 180_000, 80f, 400L, 0.2f)
-        val incoming = TrackAnalysis(180_000, 0, 180_000, 140f, 400L, 0.2f)
-
-        val plan = AutoMixPlanner.plan(180_000, outgoing, incoming)
-
-        assertNotNull(plan)
-        assertEquals(1f, plan!!.incomingSpeed, 0.0001f)
-        assertEquals(10_500L, plan.fadeMs)
-        assertEquals(TransitionStyle.SOFT_BLEND, plan.style)
+    @Test fun moderateTempoDifferenceIsActuallyMatched() {
+        val plan = AutoMixPlanner.plan(180_000, track(120f, 0), track(128f, 0))!!
+        assertEquals(TransitionStyle.BEAT_MIX, plan.style)
+        assertEquals(128f / 120f, plan.outgoingSpeed, 0.0001f)
+        assertTrue(plan.outgoingSourceMs + plan.fadeMs * plan.outgoingSpeed <= 178_000)
     }
 
-    @Test
-    fun conflictingPitchClassesAvoidBeatMix() {
-        val firstChroma = List(12) { if (it == 0) 1f else 0f }
-        val secondChroma = List(12) { if (it == 6) 1f else 0f }
-        val outgoing = TrackAnalysis(
-            180_000, 0, 180_000, 120f, 500L, 0.16f,
-            closingChroma = firstChroma
-        )
-        val incoming = TrackAnalysis(
-            190_000, 600, 190_000, 118f, 1_000L, 0.17f,
-            openingChroma = secondChroma
-        )
-
-        val plan = AutoMixPlanner.plan(180_000, outgoing, incoming)
-
-        assertNotNull(plan)
-        assertEquals(1f, plan!!.incomingSpeed, 0.0001f)
-        assertEquals(10_500L, plan.fadeMs)
+    @Test fun halfAndDoubleTempoKeepPlaybackNearNativeSpeed() {
+        for ((outBpm, inBpm) in listOf(70f to 140f, 140f to 70f)) {
+            val plan = AutoMixPlanner.plan(180_000, track(outBpm, 0), track(inBpm, 0))!!
+            assertEquals(TransitionStyle.BEAT_MIX, plan.style)
+            assertEquals(1f, plan.outgoingSpeed, 0f)
+        }
     }
 
-    @Test
-    fun usesClosingBeatWhenTempoChangesDuringTrack() {
-        val outgoing = TrackAnalysis(
-            180_000, 0, 180_000, 90f, 400L, 0.15f,
-            closingBpm = 100f, closingBeatMs = 160_120L
-        )
-        val incoming = TrackAnalysis(190_000, 0, 190_000, 100f, 400L, 0.15f)
-
-        val plan = AutoMixPlanner.plan(180_000, outgoing, incoming)
-
-        assertNotNull(plan)
-        assertEquals(1f, plan!!.incomingSpeed, 0.0001f)
-        assertTrue(plan.fadeMs >= 9_500L)
+    @Test fun choosesSparsePassageInsteadOfAlwaysTheFirstAudibleFrame() {
+        val incoming = track(120f, 0).copy(openingSections = listOf(
+            MixSection(6_000, 0.16f, 0.05f, 0.95f), MixSection(8_000, 0.16f, 0.8f, 0.25f),
+            MixSection(10_000, 0.16f, 0.05f, 0.95f), MixSection(12_000, 0.16f, 0.05f, 0.95f)
+        ))
+        val plan = AutoMixPlanner.plan(180_000, track(120f, 0), incoming)!!
+        assertEquals(4_000, plan.incomingStartMs)
     }
 
-    @Test
-    fun keepsALeadInBeforeTheIncomingFirstAudibleBeat() {
-        val outgoing = TrackAnalysis(180_000, 0, 180_000, 100f, 120L, 0.15f)
-        val incoming = TrackAnalysis(190_000, 2_000L, 190_000, 100f, 400L, 0.15f)
-
-        val plan = AutoMixPlanner.plan(180_000, outgoing, incoming)
-
-        assertNotNull(plan)
-        assertEquals(1_000L, plan!!.incomingStartMs)
+    @Test fun sparseRhythmHasALongerMusicalMixThanDenseMelodies() {
+        val sparse = track(120f, 0).copy(openingDensity = 0.4f, closingDensity = 0.4f)
+        val dense = track(120f, 0).copy(openingDensity = 0.9f, closingDensity = 0.9f)
+        assertEquals(16_000, AutoMixPlanner.plan(180_000, sparse, sparse)!!.fadeMs)
+        assertEquals(4_000, AutoMixPlanner.plan(180_000, dense, dense)!!.fadeMs)
     }
 
-    @Test
-    fun shortTracksDoNotOverlap() {
-        assertNull(AutoMixPlanner.plan(7_000, null, null))
-        assertNull(AutoMixPlanner.plan(15_000, null, null))
+    @Test fun slowTempoStillUsesWholeBarsWithinTheRenderingBudget() {
+        val sparse = track(70f, 0).copy(openingDensity = 0.4f, closingDensity = 0.4f)
+        val plan = AutoMixPlanner.plan(180_000, sparse, sparse)!!
+        val bars = plan.fadeMs / plan.beatMs / 4
+        assertEquals(round(bars), bars, 0.001)
+        assertTrue(plan.fadeMs <= 20_000)
+        val handoffBar = bars * plan.handoffFraction
+        assertEquals(round(handoffBar), handoffBar, 0.001)
     }
 
-    @Test
-    fun alignedDropUsesAnalyzedEarlyExitAndStrongEntry() {
-        val outgoing = TrackAnalysis(
-            180_000L, 0L, 180_000L, 120f, 0L, 0.16f,
-            closingBpm = 120f, closingBeatMs = 160_000L, earlyExitMs = 165_000L
-        )
-        val incoming = TrackAnalysis(
-            190_000L, 0L, 190_000L, 120f, 0L, 0.16f,
-            strongEntryMs = 8_000L
-        )
-
-        val plan = AutoMixPlanner.plan(180_000L, outgoing, incoming)
-
-        assertNotNull(plan)
-        assertEquals(TransitionStyle.DROP_MIX, plan!!.style)
-        assertEquals(2_500L, plan.incomingStartMs)
-        assertTrue(plan.startMs in 165_000L..165_500L)
-        assertTrue(plan.fadeMs >= 9_500L)
-        assertTrue(plan.startMs + plan.fadeMs <= 175_500L)
+    @Test fun foregroundHandoffFallsOnABarBoundary() {
+        val plan = AutoMixPlanner.plan(180_000, track(120f, 0).copy(earlyExitMs = 165_000),
+            track(120f, 0).copy(strongEntryMs = 8_000))!!
+        assertEquals(TransitionStyle.DROP_MIX, plan.style)
+        val bars = plan.fadeMs / plan.beatMs * plan.handoffFraction / 4
+        assertEquals(round(bars), bars, 0.001)
     }
 
-    @Test
-    fun incompatibleTempoDoesNotUseEarlyExit() {
-        val outgoing = TrackAnalysis(
-            180_000L, 0L, 180_000L, 120f, 0L, 0.16f,
-            earlyExitMs = 165_000L
-        )
-        val incoming = TrackAnalysis(190_000L, 0L, 190_000L, 90f, 0L, 0.16f)
-
-        val plan = AutoMixPlanner.plan(180_000L, outgoing, incoming)
-
-        assertNotNull(plan)
-        assertEquals(TransitionStyle.SOFT_BLEND, plan!!.style)
-        assertTrue(plan.startMs in 168_000L..172_000L)
-        assertTrue(plan.fadeMs >= 10_000L)
+    @Test fun weakOrIncompatibleRhythmDoesNotStretchAudio() {
+        val weak = AutoMixPlanner.plan(180_000, track(120f, 0).copy(beatConfidence = 0.3f), track(118f, 0))!!
+        assertEquals(TransitionStyle.SOFT_BLEND, weak.style)
+        assertEquals(1f, weak.outgoingSpeed, 0f)
+        val incompatible = AutoMixPlanner.plan(180_000, track(80f, 0), track(140f, 0))!!
+        assertEquals(TransitionStyle.QUICK_HANDOFF, incompatible.style)
+        assertEquals(1f, incompatible.outgoingSpeed, 0f)
     }
 
-    @Test
-    fun missingAnalysisStillPlansTenSecondBlend() {
-        val plan = AutoMixPlanner.plan(180_000L, null, null)
-
-        assertNotNull(plan)
-        assertEquals(TransitionStyle.SOFT_BLEND, plan!!.style)
-        assertEquals(10_500L, plan.fadeMs)
-        assertEquals(169_250L, plan.startMs)
+    @Test fun conflictingHarmonyAvoidsExtendedMelodyOverlap() {
+        val outgoing = track(120f, 0).copy(closingChroma = List(12) { if (it == 0) 1f else 0f })
+        val incoming = track(120f, 0).copy(openingChroma = List(12) { if (it == 6) 1f else 0f })
+        assertEquals(TransitionStyle.QUICK_HANDOFF, AutoMixPlanner.plan(180_000, outgoing, incoming)!!.style)
     }
 
-    @Test
-    fun longSilentTailIsExcludedFromBlend() {
-        val outgoing = TrackAnalysis(180_000L, 0L, 166_000L, null, null, 0.12f)
+    @Test fun missingAnalysisAndShortTracksKeepNaturalPlayback() {
+        assertNull(AutoMixPlanner.plan(180_000, null, null))
+        assertNull(AutoMixPlanner.plan(15_000, track(), track()))
+        assertNull(AutoMixPlanner.plan(180_000, track(), track().copy(durationMs = 8_000)))
+    }
 
-        val plan = AutoMixPlanner.plan(180_000L, outgoing, null)
-
-        assertNotNull(plan)
-        assertEquals(166_100L, plan!!.startMs + plan.fadeMs)
-        assertTrue(plan.fadeMs >= AutoMixPlanner.MIN_BLEND_MS)
+    @Test fun invalidFeaturesDoNotPoisonTheSignal() {
+        val plan = AutoMixPlanner.plan(180_000, track(Float.NaN, 0).copy(averageEnergy = Float.NaN), track(0f, 0))!!
+        assertTrue(plan.outgoingTrim.isFinite())
+        assertTrue(plan.incomingTrim.isFinite())
+        assertTrue(abs(plan.outgoingSpeed - 1f) < 0.0001f)
     }
 }

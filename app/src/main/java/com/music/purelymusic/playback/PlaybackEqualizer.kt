@@ -24,9 +24,6 @@ class PlaybackEqualizer {
     private var effect: Equalizer? = null
     private var sessionId: Int? = null
     private var transitionEffect: BoundEffect? = null
-    private var autoMixOutgoingEffect: BoundEffect? = null
-    private var transitionSculpting = false
-    private var transitionStyle = TransitionStyle.BEAT_MIX
     private var enabled = false
     var state = State()
         private set
@@ -41,7 +38,7 @@ class PlaybackEqualizer {
     }
 
     fun setEnabled(value: Boolean, player: ExoPlayer) {
-        if (transitionSculpting) releaseTransition()
+        releaseTransition()
         enabled = value
         PreferencesManager.saveEqualizerEnabled(value)
         if (value) bind(player) else release()
@@ -63,77 +60,15 @@ class PlaybackEqualizer {
         }
     }
 
-    fun bindTransition(player: ExoPlayer, forAutoMix: Boolean = false) {
+    fun bindTransition(player: ExoPlayer) {
         releaseTransition()
-        if ((!enabled && !forAutoMix) || player.audioSessionId <= 0) return
-        runCatching { createEffect(player.audioSessionId, respectSavedLevels = enabled) }
+        if (!enabled || player.audioSessionId <= 0) return
+        runCatching { createEffect(player.audioSessionId) }
             .onSuccess { transitionEffect = it }
             .onFailure { Log.e("PlaybackEqualizer", "Unable to bind transition effect", it) }
     }
 
-    fun beginAutoMixTransition(outgoing: ExoPlayer, style: TransitionStyle) {
-        transitionStyle = style
-        if (transitionEffect == null || outgoing.audioSessionId <= 0) return
-        if (enabled) {
-            bind(outgoing)
-            if (effect == null) return
-        } else {
-            val temporary = runCatching {
-                createEffect(outgoing.audioSessionId, respectSavedLevels = false)
-            }.onFailure { Log.w("PlaybackEqualizer", "AutoMix EQ unavailable", it) }.getOrNull()
-                ?: return
-            autoMixOutgoingEffect = temporary
-        }
-        transitionSculpting = true
-        shapeAutoMixTransition(0f)
-    }
-
-    fun shapeAutoMixTransition(progress: Float) {
-        if (!transitionSculpting) return
-        val outgoingEffect = if (enabled) effect else autoMixOutgoingEffect?.effect
-        val outgoingState = if (enabled) state else autoMixOutgoingEffect?.state
-        val incoming = transitionEffect ?: return
-        if (outgoingEffect != null && outgoingState != null) {
-            shapeBands(outgoingEffect, outgoingState, progress, outgoing = true)
-        }
-        if (!transitionSculpting) return
-        shapeBands(incoming.effect, incoming.state, progress, outgoing = false)
-    }
-
-    private fun shapeBands(effect: Equalizer, base: State, progress: Float, outgoing: Boolean) {
-        val t = progress.coerceIn(0f, 1f)
-        runCatching {
-            base.levels.forEachIndexed { index, level ->
-                val range = base.frequencies[index]
-                val centerHz = (range.first + range.second) / 2
-                val attenuation = AutoMixSpectrum.attenuationMillibels(centerHz, t, outgoing, transitionStyle)
-                val shaped = (level + attenuation)
-                    .coerceIn(base.levelRange.first.toInt(), base.levelRange.second.toInt())
-                effect.setBandLevel(index.toShort(), shaped.toShort())
-            }
-        }.onFailure {
-            Log.w("PlaybackEqualizer", "AutoMix band adjustment unavailable", it)
-            restoreAutoMixTransition()
-        }
-    }
-
-    private fun restoreAutoMixTransition() {
-        if (!transitionSculpting && autoMixOutgoingEffect == null) return
-        transitionSculpting = false
-        if (enabled) effect?.let { active -> restoreLevels(active, state.levels) }
-        autoMixOutgoingEffect?.effect?.let { runCatching { it.release() } }
-        autoMixOutgoingEffect = null
-        transitionEffect?.let { pending -> restoreLevels(pending.effect, pending.state.levels) }
-    }
-
-    private fun restoreLevels(effect: Equalizer, levels: List<Short>) {
-        runCatching {
-            levels.forEachIndexed { index, level -> effect.setBandLevel(index.toShort(), level) }
-        }
-    }
-
     fun promoteTransition(player: ExoPlayer) {
-        restoreAutoMixTransition()
         val pending = transitionEffect
         transitionEffect = null
         if (pending?.sessionId == player.audioSessionId && enabled) {
@@ -157,7 +92,6 @@ class PlaybackEqualizer {
     }
 
     fun releaseTransition() {
-        restoreAutoMixTransition()
         runCatching { transitionEffect?.effect?.release() }
         transitionEffect = null
     }

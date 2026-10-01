@@ -4,14 +4,14 @@ package com.music.purelymusic.playback
 /** Finds clear changes in the decoded intro and outro, leaving ambiguous passages intact. */
 internal object TransitionOpportunities {
     fun earlyExit(frames: List<EnergyFrame>, durationMs: Long): Long? {
-        if (durationMs < 60_000L || frames.size < 150) return null
+        if (durationMs < 60_000L || frames.isEmpty() || frames.last().timeMs - frames.first().timeMs < 6_000L) return null
         for (index in frames.indices step 5) {
             val time = frames[index].timeMs
             if (time !in (durationMs - 16_000L)..(durationMs - 9_000L)) continue
             val before = mean(frames, time - 2_400L, time - 400L) ?: continue
             val after = mean(frames, time + 400L, time + 3_400L) ?: continue
             val tail = frames.filter { it.timeMs >= time + 1_000L }
-            if (tail.size < 120 || before < 0.07f || after > 0.09f ||
+            if (tail.isEmpty() || tail.last().timeMs - tail.first().timeMs < 4_800L || before < 0.07f || after > 0.09f ||
                 after > before * 0.46f || tail.count { it.energy > before * 0.68f } > tail.size / 20 ||
                 tail.map { it.energy }.average() > before * 0.46f) continue
             return time
