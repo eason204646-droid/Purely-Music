@@ -109,7 +109,7 @@ fun LibraryScreen(
                         val (coverPath, lrcPath) = viewModel.fetchAllFromNetwork(title, artist)
                         
                         // 检查是否成功获取到信息
-                        if (coverPath != null || lrcPath != null) {
+                        if (coverPath != null || lrcPath != null || viewModel.offlineMode) {
                             // 至少获取到了封面或歌词，保存歌曲
                             if (coverPath != null) {
                                 viewModel.tempCoverUri = android.net.Uri.parse(coverPath)
@@ -608,7 +608,7 @@ fun ImportMusicDialog(
             // 先尝试自动获取信息
             coroutineScope.launch {
                 try {
-                    if (title.isNotBlank() && artist.isNotBlank()) {
+                    if (title.isNotBlank() && artist.isNotBlank() && !viewModel.offlineMode) {
                         val (coverPath, lrcPath) = viewModel.fetchAllFromNetwork(title, artist)
                         if (coverPath != null) {
                             viewModel.tempCoverUri = android.net.Uri.parse(coverPath)
@@ -762,7 +762,7 @@ fun ImportMusicDialog(
                                 onClick = { offset ->
                                     annotatedString.getStringAnnotations(tag = "URL", start = offset, end = offset)
                                         .firstOrNull()?.let { annotation ->
-                                            uriHandler.openUri(annotation.item)
+                                            if (!viewModel.offlineMode) uriHandler.openUri(annotation.item)
                                         }
                                 }
                             )
@@ -950,7 +950,7 @@ fun EditSongDialog(
                         onClick = { offset ->
                             annotatedString.getStringAnnotations(tag = "URL", start = offset, end = offset)
                                 .firstOrNull()?.let { annotation ->
-                                    uriHandler.openUri(annotation.item)
+                                    if (!viewModel.offlineMode) uriHandler.openUri(annotation.item)
                                 }
                         }
                     )

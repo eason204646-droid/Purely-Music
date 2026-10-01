@@ -6,15 +6,19 @@ import com.music.purelymusic.model.LrcJsonResponse
 import com.music.purelymusic.model.MiguDetailResponse
 import com.music.purelymusic.model.QqApiResponse
 import com.music.purelymusic.model.WyApiResponse
+import com.music.purelymusic.utils.NetworkAccess
+import com.music.purelymusic.utils.OfflineModeException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import java.net.URLEncoder
+import java.util.concurrent.TimeUnit
+import okhttp3.Request
+import okhttp3.Response
 
 data class MetadataFetchResult(
     val coverPath: String? = null,
@@ -28,10 +32,17 @@ data class MetadataFetchResult(
 class MetadataRepository(
     private val apiKey: String,
     private val fileStore: AppFileStore,
-    private val gson: Gson = Gson()
+    private val gson: Gson = Gson(),
+    private val networkAccess: NetworkAccess = NetworkAccess.shared
 ) {
+    private val client = networkAccess.client.newBuilder()
+        .connectTimeout(TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
+        .readTimeout(TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
+        .build()
+
     suspend fun fetch(title: String, artist: String, source: String): MetadataFetchResult =
         withContext(Dispatchers.IO) {
+            if (networkAccess.isOffline) return@withContext MetadataFetchResult()
             if (apiKey.isBlank()) {
                 return@withContext MetadataFetchResult(error = "未配置 MUSIC_API_KEY")
             }
@@ -39,6 +50,8 @@ class MetadataRepository(
             runCatching {
                 if (source == "mixed") fetchMixed(keywords) else fetchNetease(keywords)
             }.getOrElse { error ->
+                if (error is CancellationException) throw error
+                if (networkAccess.isOffline) return@getOrElse MetadataFetchResult()
                 MetadataFetchResult(error = "获取歌曲信息失败：${error.message ?: error.javaClass.simpleName}")
             }
         }
@@ -95,18 +108,16 @@ class MetadataRepository(
     }
 
     private suspend fun downloadCover(url: String): String? {
-        val connection = openConnection(url)
-        return try {
-            checkSuccessful(connection)
-            val contentLength = connection.contentLengthLong
+        return executeRequest(url).use { response ->
+            checkSuccessful(response)
+            val body = response.body ?: return null
+            val contentLength = body.contentLength()
             require(contentLength <= MAX_COVER_BYTES || contentLength < 0) { "封面文件过大" }
             fileStore.saveStream(
-                connection.inputStream,
+                body.byteStream(),
                 "cover_${System.currentTimeMillis()}.jpg",
                 MAX_COVER_BYTES
             )
-        } finally {
-            connection.disconnect()
         }
     }
 
@@ -122,35 +133,28 @@ class MetadataRepository(
     }
 
     private fun requestText(url: String, maxBytes: Long = MAX_RESPONSE_BYTES): String {
-        val connection = openConnection(url)
-        return try {
-            checkSuccessful(connection)
-            val contentLength = connection.contentLengthLong
+        return executeRequest(url).use { response ->
+            checkSuccessful(response)
+            val body = response.body ?: error("响应内容为空")
+            val contentLength = body.contentLength()
             require(contentLength <= maxBytes || contentLength < 0) { "响应内容过大" }
-            String(readLimitedBytes(connection.inputStream, maxBytes), Charsets.UTF_8)
-        } finally {
-            connection.disconnect()
+            String(readLimitedBytes(body.byteStream(), maxBytes), Charsets.UTF_8)
         }
     }
 
-    private fun openConnection(rawUrl: String): HttpURLConnection {
+    private fun executeRequest(rawUrl: String): Response {
+        if (networkAccess.isOffline) throw OfflineModeException()
         val secureUrl = if (rawUrl.startsWith("http://", ignoreCase = true)) {
             "https://${rawUrl.substring(7)}"
         } else {
             rawUrl
         }
         require(secureUrl.startsWith("https://", ignoreCase = true)) { "仅允许 HTTPS 地址" }
-        return (URL(secureUrl).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = TIMEOUT_MS
-            readTimeout = TIMEOUT_MS
-            instanceFollowRedirects = true
-        }
+        return client.newCall(Request.Builder().url(secureUrl).build()).execute()
     }
 
-    private fun checkSuccessful(connection: HttpURLConnection) {
-        val code = connection.responseCode
-        require(code in 200..299) { "HTTP $code" }
+    private fun checkSuccessful(response: Response) {
+        require(response.isSuccessful) { "HTTP ${response.code}" }
     }
 
     private fun readLimitedBytes(input: InputStream, maxBytes: Long): ByteArray {

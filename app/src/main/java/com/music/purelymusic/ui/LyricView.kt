@@ -68,6 +68,8 @@ fun LyricView(
     val showTranslation = viewModel.showTranslation
     val isTranslating = viewModel.isTranslating
     val canTranslate = viewModel.canTranslate
+    val hasTranslation = lyrics.any { !it.translation.isNullOrBlank() }
+    val translationEnabled = !viewModel.offlineMode || showTranslation || hasTranslation
     val translateError = viewModel.translateError
     val translateLogs = viewModel.translateLogs
     val listState = rememberLazyListState()
@@ -180,14 +182,14 @@ fun LyricView(
                     IconButton(
                         onClick = {
                             Log.d("LyricView", "翻译按钮被点击")
-                            if (showTranslation) {
-                                // 取消翻译
-                                viewModel.showTranslation = false
+                            if (showTranslation || hasTranslation) {
+                                viewModel.toggleTranslation()
                             } else {
                                 // 开始翻译
                                 viewModel.translateLyrics()
                             }
                         },
+                        enabled = translationEnabled,
                         modifier = Modifier
                             .background(
                                 Color.White.copy(alpha = 0.15f),
@@ -196,8 +198,16 @@ fun LyricView(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Translate,
-                            contentDescription = "翻译",
-                            tint = if (showTranslation) Color(0xFF4FC3F7) else Color.White,
+                            contentDescription = if (!translationEnabled) {
+                                if (viewModel.currentLanguage == "zh") "离线模式下歌词翻译已暂停" else "Translation paused in offline mode"
+                            } else {
+                                if (viewModel.currentLanguage == "zh") "翻译" else "Translate"
+                            },
+                            tint = when {
+                                !translationEnabled -> Color.White.copy(alpha = 0.35f)
+                                showTranslation -> Color(0xFF4FC3F7)
+                                else -> Color.White
+                            },
                             modifier = Modifier.size(24.dp)
                         )
                     }

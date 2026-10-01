@@ -52,6 +52,8 @@ import com.music.purelymusic.data.toAlbum
 import com.music.purelymusic.model.*
 import com.music.purelymusic.utils.LrcParser
 import com.music.purelymusic.utils.LyricTranslationParser
+import com.music.purelymusic.utils.NetworkAccess
+import com.music.purelymusic.utils.OfflineModeException
 import com.music.purelymusic.ui.utils.BlurUtil
 import com.music.purelymusic.playback.PlaybackRuntime
 import com.music.purelymusic.playback.PlaybackService
@@ -686,6 +688,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     var canTranslate by mutableStateOf(false)
     var translateError by mutableStateOf<String?>(null)
     var translateLogs by mutableStateOf<String>("")
+    private var translationJob: Job? = null
 
     // 语言设置状态（带持久化）
     private var _currentLanguage by mutableStateOf("zh")
@@ -756,6 +759,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             com.music.purelymusic.utils.PreferencesManager.saveAutoFetchMetadata(value)
         }
 
+    // 离线模式独立保存，不改写用户原来的联网功能偏好。
+    private var _offlineMode by mutableStateOf(false)
+    var offlineMode: Boolean
+        get() = _offlineMode
+        set(value) {
+            _offlineMode = value
+            com.music.purelymusic.utils.PreferencesManager.saveOfflineMode(value)
+            if (value) {
+                translationJob?.cancel()
+                translateError = null
+                fetchAllError = null
+            }
+        }
+
     // 自动切歌交叉渐入渐出开关（带持久化）
     private var _crossfadeEnabled by mutableStateOf(false)
     var crossfadeEnabled: Boolean
@@ -806,6 +823,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val translateService: TranslateApiService by lazy {
         retrofit2.Retrofit.Builder()
             .baseUrl("https://api.yaohud.cn/api/")
+            .client(NetworkAccess.shared.client)
             .addConverterFactory(retrofit2.converter.gson.GsonConverterFactory.create())
             .build()
             .create(TranslateApiService::class.java)
@@ -822,6 +840,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         _lyricStyle = com.music.purelymusic.utils.PreferencesManager.getLyricStyle()
         _autoFetchSource = com.music.purelymusic.utils.PreferencesManager.getAutoFetchSource()
         _autoFetchMetadata = com.music.purelymusic.utils.PreferencesManager.getAutoFetchMetadata()
+        _offlineMode = com.music.purelymusic.utils.PreferencesManager.getOfflineMode()
         _crossfadeEnabled = com.music.purelymusic.utils.PreferencesManager.getCrossfadeEnabled()
         _crossfadeDurationSeconds = com.music.purelymusic.utils.PreferencesManager.getCrossfadeDurationSeconds()
         _autoMixEnabled = com.music.purelymusic.utils.PreferencesManager.getAutoMixEnabled()
@@ -1845,7 +1864,7 @@ private fun stop3DSurroundEffect() {
         var albumArtist: String? = null
 
         // 如果开启了自动获取元数据，则获取封面和歌词
-        if (_autoFetchMetadata) {
+        if (_autoFetchMetadata && !offlineMode) {
             // 每首歌间隔1秒，避免API速率限制
             if (index > 0) {
                 delay(1000)
@@ -1886,7 +1905,7 @@ private fun stop3DSurroundEffect() {
 
     /**
      * 用户输入歌曲信息后继续批量导入
-     * 注意：用户手动输入后，总是尝试从网络获取封面和歌词（不受 autoFetchMetadata 设置影响）
+     * 用户手动输入后，非离线模式下尝试联网补全（不受 autoFetchMetadata 设置影响）。
      */
     fun continueBatchImport(title: String, artist: String) {
         val musicPath = batchImportPendingMusicPath
@@ -1918,15 +1937,16 @@ private fun stop3DSurroundEffect() {
                 var albumName: String? = null
                 var albumArtist: String? = null
 
-                // 用户手动输入后，总是尝试从网络获取封面和歌词
-                try {
-                    val (coverPath, lrcPath) = fetchAllFromNetwork(title, artist)
-                    pCover = coverPath
-                    pLrc = lrcPath
-                    albumName = tempAlbumName
-                    albumArtist = tempAlbumArtist
-                } catch (e: Exception) {
-                    Log.e("BatchImport", "获取歌曲 $title 的封面和歌词失败: ${e.message}")
+                if (!offlineMode) {
+                    try {
+                        val (coverPath, lrcPath) = fetchAllFromNetwork(title, artist)
+                        pCover = coverPath
+                        pLrc = lrcPath
+                        albumName = tempAlbumName
+                        albumArtist = tempAlbumArtist
+                    } catch (e: Exception) {
+                        Log.e("BatchImport", "获取歌曲 $title 的封面和歌词失败: ${e.message}")
+                    }
                 }
 
                 try {
@@ -2008,15 +2028,21 @@ private fun stop3DSurroundEffect() {
 
     // --- 自动获取所有信息（封面+歌词）---
     suspend fun fetchAllFromNetwork(title: String, artist: String): Pair<String?, String?> {
-        isFetchingAll = true
         fetchAllError = null
+        tempAlbumName = null
+        tempAlbumArtist = null
+        if (offlineMode) return null to null
+        isFetchingAll = true
         return try {
             val result = metadataRepository.fetch(title, artist, _autoFetchSource)
             tempAlbumName = result.albumName
             tempAlbumArtist = result.albumArtist
-            fetchAllError = result.error
+            fetchAllError = result.error.takeUnless { offlineMode }
             result.coverPath to result.lyricPath
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Exception) {
+            if (offlineMode) return null to null
             val message = "获取歌曲信息失败：${error.message ?: error.javaClass.simpleName}"
             Log.e("FetchAll", message, error)
             fetchAllError = message
@@ -2031,8 +2057,16 @@ private fun stop3DSurroundEffect() {
      * 翻译当前歌词
      */
     fun translateLyrics() {
+        if (offlineMode) {
+            translateError = if (currentLanguage == "zh") {
+                "离线模式已开启，歌词翻译已暂停"
+            } else {
+                "Lyric translation is paused in offline mode"
+            }
+            return
+        }
         if (isTranslating) return
-        viewModelScope.launch {
+        translationJob = viewModelScope.launch {
             try {
                 isTranslating = true
                 translateError = null
@@ -2048,6 +2082,9 @@ private fun stop3DSurroundEffect() {
 
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: OfflineModeException) {
+                // 切换离线模式属于主动暂停，不显示网络故障弹窗。
+                addLog("离线模式已开启，翻译已暂停")
             } catch (e: retrofit2.HttpException) {
                 val errorMsg = "网络请求失败: ${e.code()} - ${e.message()}"
                 addLog("❌ $errorMsg")
@@ -2128,6 +2165,8 @@ private fun stop3DSurroundEffect() {
     }
 
     private suspend fun requestTranslation(text: String): String? {
+        currentCoroutineContext().ensureActive()
+        if (offlineMode) throw OfflineModeException()
         if (text.isBlank()) return null
         val response = translateService.translateText(
             apiKey = BuildConfig.MUSIC_API_KEY,

@@ -511,7 +511,7 @@ fun HomeImportMusicDialog(
             // 先尝试自动获取信息
             coroutineScope.launch {
                 try {
-                    if (title.isNotBlank() && artist.isNotBlank()) {
+                    if (title.isNotBlank() && artist.isNotBlank() && !viewModel.offlineMode) {
                         val (coverPath, lrcPath) = viewModel.fetchAllFromNetwork(title, artist)
                         if (coverPath != null) {
                             viewModel.tempCoverUri = android.net.Uri.parse(coverPath)
@@ -665,7 +665,7 @@ fun HomeImportMusicDialog(
                                 onClick = { offset ->
                                     annotatedString.getStringAnnotations(tag = "URL", start = offset, end = offset)
                                         .firstOrNull()?.let { annotation ->
-                                            uriHandler.openUri(annotation.item)
+                                            if (!viewModel.offlineMode) uriHandler.openUri(annotation.item)
                                         }
                                 }
                             )

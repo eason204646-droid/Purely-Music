@@ -43,6 +43,7 @@ object PreferencesManager {
     
     // 自动从元数据获取封面和歌词开关
     private const val KEY_AUTO_FETCH_METADATA = "auto_fetch_metadata"
+    private const val KEY_OFFLINE_MODE = "offline_mode"
 
     // 自动切歌交叉渐入渐出开关
     private const val KEY_CROSSFADE_ENABLED = "crossfade_enabled"
@@ -62,6 +63,7 @@ object PreferencesManager {
      */
     fun init(context: Context) {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        NetworkAccess.shared.setOfflineMode(getOfflineMode())
     }
     
     /**
@@ -147,6 +149,15 @@ object PreferencesManager {
      */
     fun saveAutoFetchMetadata(enabled: Boolean) {
         prefs?.edit()?.putBoolean(KEY_AUTO_FETCH_METADATA, enabled)?.apply()
+    }
+
+    fun getOfflineMode(): Boolean {
+        return prefs?.getBoolean(KEY_OFFLINE_MODE, false) ?: false
+    }
+
+    fun saveOfflineMode(enabled: Boolean) {
+        NetworkAccess.shared.setOfflineMode(enabled)
+        prefs?.edit()?.putBoolean(KEY_OFFLINE_MODE, enabled)?.apply()
     }
 
     /**

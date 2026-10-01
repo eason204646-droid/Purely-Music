@@ -27,6 +27,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -99,6 +100,22 @@ fun SettingsScreen(
                 .padding(bottom = 92.dp),
             verticalArrangement = Arrangement.spacedBy(AppDimensions.spacingM())
         ) {
+            SettingsSection(
+                title = if (viewModel.currentLanguage == "zh") "网络" else "Network",
+                icon = Icons.Default.WifiOff
+            ) {
+                SettingsSwitch(
+                    title = if (viewModel.currentLanguage == "zh") "离线模式" else "Offline Mode",
+                    subtitle = if (viewModel.currentLanguage == "zh") {
+                        "暂停所有联网功能，包括自动获取和歌词翻译；关闭后恢复原有设置"
+                    } else {
+                        "Pause all network features, including auto-fetch and lyric translation; turn off to restore your preferences"
+                    },
+                    checked = viewModel.offlineMode,
+                    onCheckedChange = { viewModel.offlineMode = it }
+                )
+            }
+
             // 播放设置
             SettingsSection(
                 title = if (viewModel.currentLanguage == "zh") "播放" else "Playback",
@@ -201,8 +218,13 @@ fun SettingsScreen(
                 // 自动从元数据获取封面和歌词开关
                 SettingsSwitch(
                     title = if (viewModel.currentLanguage == "zh") "从元数据自动获取封面和歌词" else "Auto Fetch Cover & Lyrics",
-                    subtitle = if (viewModel.currentLanguage == "zh") "尝试从元数据自动获取封面和歌词" else "Try to fetch cover and lyrics from metadata",
+                    subtitle = if (viewModel.offlineMode) {
+                        if (viewModel.currentLanguage == "zh") "离线模式下已暂停" else "Paused in offline mode"
+                    } else {
+                        if (viewModel.currentLanguage == "zh") "尝试从元数据自动获取封面和歌词" else "Try to fetch cover and lyrics from metadata"
+                    },
                     checked = viewModel.autoFetchMetadata,
+                    enabled = !viewModel.offlineMode,
                     onCheckedChange = { viewModel.autoFetchMetadata = it }
                 )
             }
@@ -216,12 +238,14 @@ fun SettingsScreen(
                     title = if (viewModel.currentLanguage == "zh") "网易云" else "Netease",
                     subtitle = if (viewModel.currentLanguage == "zh") "最稳定，支持大部分歌曲" else "Most stable, supports most songs",
                     isSelected = viewModel.autoFetchSource == "netease",
+                    enabled = !viewModel.offlineMode,
                     onClick = { viewModel.autoFetchSource = "netease" }
                 )
                 SettingsOption(
                     title = if (viewModel.currentLanguage == "zh") "混合" else "Mixed",
                     subtitle = if (viewModel.currentLanguage == "zh") "如果遇到网易云曲库没有的歌，可以尝试这个选项" else "Try this if songs are missing from Netease library",
                     isSelected = viewModel.autoFetchSource == "mixed",
+                    enabled = !viewModel.offlineMode,
                     onClick = { viewModel.autoFetchSource = "mixed" }
                 )
             }
@@ -305,6 +329,7 @@ fun SettingsScreen(
                     title = if (viewModel.currentLanguage == "zh") "爱发电" else "Afdian",
                     subtitle = "ifdian.net/a/purelymusic",
                     showChevron = true,
+                    enabled = !viewModel.offlineMode,
                     onClick = {
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://ifdian.net/a/purelymusic"))
                         context.startActivity(intent)
@@ -314,6 +339,7 @@ fun SettingsScreen(
                     title = if (viewModel.currentLanguage == "zh") "GitHub" else "GitHub",
                     subtitle = "github.com/eason204646-droid/Purely-Music",
                     showChevron = true,
+                    enabled = !viewModel.offlineMode,
                     onClick = {
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/eason204646-droid/Purely-Music"))
                         context.startActivity(intent)
@@ -683,6 +709,8 @@ fun SettingsScreen(
                         },
                         update = { scrollView ->
                             val textView = scrollView.tag as TextView
+                            textView.movementMethod = if (viewModel.offlineMode) null else LinkMovementMethod.getInstance()
+                            textView.linksClickable = !viewModel.offlineMode
                             textView.setTextColor(helpTextColor)
                             textView.setLinkTextColor(helpLinkColor)
                             markwon.setMarkdown(textView, helpDialogContent)
@@ -741,14 +769,16 @@ fun SettingsOption(
     subtitle: String? = null,
     isSelected: Boolean = false,
     showChevron: Boolean = false,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.5f)
             .clip(RoundedCornerShape(AppDimensions.cornerRadiusS()))
             .background(if (isSelected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent)
-            .clickable { onClick() }
+            .clickable(enabled = enabled) { onClick() }
             .padding(vertical = AppDimensions.paddingCard(), horizontal = AppDimensions.paddingCard()),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -790,11 +820,13 @@ fun SettingsSwitch(
     title: String,
     subtitle: String? = null,
     checked: Boolean,
+    enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.5f)
             .padding(vertical = AppDimensions.paddingCard(), horizontal = AppDimensions.paddingCard()),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -815,6 +847,7 @@ fun SettingsSwitch(
         }
         Switch(
             checked = checked,
+            enabled = enabled,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = MaterialTheme.colorScheme.primary,

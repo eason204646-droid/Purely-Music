@@ -66,6 +66,7 @@ import com.music.purelymusic.ui.theme.*
 import com.music.purelymusic.viewmodel.PlayerViewModel
 import com.music.purelymusic.ui.utils.AppDimensions
 import com.music.purelymusic.utils.PreferencesManager
+import com.music.purelymusic.utils.NetworkAccess
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 
@@ -73,6 +74,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        PreferencesManager.init(applicationContext)
 
         // 配置 Coil 图片加载器（带缓存）
         val imageLoader = ImageLoader.Builder(this)
@@ -88,8 +90,7 @@ class MainActivity : ComponentActivity() {
                     .build()
             }
             .okHttpClient {
-                okhttp3.OkHttpClient.Builder()
-                    .build()
+                NetworkAccess.shared.client
             }
             .build()
         coil.Coil.setImageLoader(imageLoader)
