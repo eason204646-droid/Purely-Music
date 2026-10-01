@@ -1,145 +1,97 @@
 # Purely Music
 
-[GitHub 仓库](https://github.com/eason204646-droid/purely-music)
+[![Android CI](https://github.com/eason204646-droid/Purely-Music/actions/workflows/android.yml/badge.svg)](https://github.com/eason204646-droid/Purely-Music/actions/workflows/android.yml)
+[![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/about/versions/oreo)
+[![License: Mulan PSL v2](https://img.shields.io/badge/License-Mulan%20PSL%20v2-blue.svg)](LICENSE)
 
-Purely Music 是一款开源 Android 本地音乐播放器，使用 Kotlin、Jetpack Compose 和 Material 3 构建，围绕本地导入、自动补全信息、歌词体验和播放质感持续打磨。
+Purely Music 是一款开源 Android 本地音乐播放器。导入设备中的音乐，整理专辑与播放列表，跟随同步歌词聆听；也可以按自己的喜好调整播放衔接和声音效果。
 
-## 当前功能概览
+## 功能
 
-### 1. 本地音乐导入
+- **本地音乐库**：导入单曲或多个音频文件；按歌曲、专辑和自建播放列表浏览与管理。导入的音频、封面和歌词保存在应用私有存储中。
+- **播放器与系统控制**：后台播放、播放队列、最近播放、通知栏和锁屏媒体控制，以及可设置停止时间的睡眠定时器。
+- **歌词**：解析并同步显示 LRC 歌词，点击歌词跳转到对应进度；支持单行/多行样式、敏感词过滤和非中文歌词翻译。
+- **自动补全**：联网获取歌曲封面与歌词，可在设置中选择获取源。网络补全需要配置 `MUSIC_API_KEY`；本地播放不依赖网络。
+- **播放与声音设置**：智能混音（AutoMix）分析曲目片段并尝试匹配节拍与调性；也可选择固定时长交叉渐变。另有均衡器、环绕音效和歌词显示选项。
+- **个性化**：中文和 English 界面，并根据系统外观适配明暗主题。
 
-- 支持单曲导入
-- 支持批量导入音频文件
-- 导入后会将音乐、封面、歌词复制到应用私有目录，避免系统清理或权限失效后丢失
-- 如果音频元数据不完整，会弹出补充信息界面手动完善
+智能混音与固定时长交叉渐变是两种可选的自动切歌方式。若歌曲不适合分析或设备无法处理，应用会继续普通播放。
 
-### 2. 自动获取信息
+## 获取应用
 
-这是当前版本最突出的能力之一。
+前往 [GitHub Releases](https://github.com/eason204646-droid/Purely-Music/releases) 下载已发布的安装包。应用要求 **Android 8.0（API 26）或更高版本**。
 
-- 可根据音频元数据中的歌名、歌手自动联网补全信息
-- 可自动获取歌曲封面
-- 可自动获取歌词文件并关联到歌曲
-- 设置页可切换自动获取源：
-  - `网易云`：默认方案，优先稳定性
-  - `混合`：用于曲库覆盖补充
-- 设置页可开启或关闭“从元数据自动获取封面和歌词”
-- 在单曲导入和资料库导入入口中都接入了自动获取流程
-- 手动保存歌曲时，如果歌名和歌手完整，也会优先尝试自动获取封面与歌词
+## 从源码构建
 
-### 3. 播放与播放器体验
+### 环境要求
 
-- 使用 Media3 / ExoPlayer 播放本地音频
-- 智能混音（AutoMix）：分析歌曲首尾的节奏、调性和频段活动，选择接入段落，将两段音频提前渲染为同一条 PCM 混音
-- 节拍可靠时保留音高匹配速度，按小节交换低频，先引入下一首的高频节奏，再交接主旋律，并对混合信号统一限制峰值；稀疏节奏可混合 32 拍，密集段落缩短交接
-- 下一首保持原始速度与时间轴，混音后续使用原始解码音频；拖动进度或重新播放恢复原曲。同一专辑顺序播放保留自然衔接
-- 混音缓存采用 48 kHz / 16-bit 立体声 PCM，只保存在应用缓存目录，不修改音乐文件；不支持的编码、超过 10 分钟的录音、分析或渲染未及时完成时保留普通播放。固定时长 crossfade 是独立选项
-- 支持播放 / 暂停 / 上一首 / 下一首
-- 支持顺序播放与单曲循环
-- 支持系统媒体会话控制
-- 支持通知栏 / 系统侧的播放控制与进度拖动
-- Mini Player 常驻底部，支持快速进入播放器
-- 播放详情页支持下滑返回
-- 播放页支持封面视图、歌词视图、播放队列视图切换
-- 背景会根据封面生成模糊沉浸效果
+- JDK 17
+- Android SDK 36
+- Git
 
-### 4. 歌词能力
-
-- 支持 LRC 歌词解析与同步滚动
-- 支持点击歌词跳转播放进度
-- 支持多行歌词样式
-- 支持单行歌词样式
-- 支持当前歌词发光效果开关
-- 支持歌词敏感词过滤
-- 非中文歌词支持翻译功能
-- 提供翻译日志查看入口
-
-### 5. 资料库与内容管理
-
-- 首页展示最近播放与全部歌曲
-- 资料库页展示歌曲、播放列表、专辑
-- 支持创建自定义播放列表
-- 支持为播放列表设置封面
-- 支持在播放列表详情页添加歌曲
-- 支持从播放列表中删除歌曲
-- 支持拖拽排序播放列表内歌曲
-- 支持专辑详情页查看与整张播放
-- 导入歌曲时会根据专辑信息自动归档专辑
-
-### 6. 设置与个性化
-
-- 支持中文 / English 双语言切换
-- 支持自动获取源切换
-- 支持自动获取开关持久化保存
-- 支持歌词样式、歌词发光、歌词过滤等偏好持久化保存
-- 内置帮助文档查看
-
-## 界面特性
-
-- 红色主视觉主题
-- 深浅主题适配
-- Material 3 风格界面
-- 封面大卡片与沉浸式播放器布局
-- 资料库歌单 / 专辑横向卡片展示
-- 更现代的底部导航与 Mini Player 组合
-
-## 技术栈
-
-- **语言**：Kotlin
-- **UI**：Jetpack Compose
-- **设计系统**：Material 3
-- **播放引擎**：Media3 / ExoPlayer
-- **数据库**：Room
-- **图片加载**：Coil
-- **网络请求**：Retrofit
-- **Markdown 渲染**：Markwon
-- **构建系统**：Gradle Kotlin DSL
-
-## 当前版本信息
-
-- **applicationId**：`com.music.purelymusic`
-- **minSdk**：26
-- **targetSdk / compileSdk**：36
-- **versionName**：`2.8`
-- **versionCode**：29
-
-## 构建
+### 构建 Debug APK
 
 ```bash
-git clone https://github.com/eason204646-droid/purely-music.git
-cd purely-music
+git clone https://github.com/eason204646-droid/Purely-Music.git
+cd Purely-Music
+```
+
+macOS / Linux：
+
+```bash
 ./gradlew assembleDebug
 ```
 
-联网补全和歌词翻译需要在本机 `local.properties` 中配置：
+Windows PowerShell：
+
+```powershell
+.\gradlew.bat assembleDebug
+```
+
+APK 输出到 `app/build/outputs/apk/debug/purelymusic.apk`。也可以用 Android Studio 打开仓库并运行 `app` 配置。
+
+### 可选：配置联网服务
+
+歌曲信息补全和歌词翻译使用 `MUSIC_API_KEY`。在项目根目录的 `local.properties` 中添加你自己的服务密钥，然后重新构建：
 
 ```properties
 MUSIC_API_KEY=your_api_key
 ```
 
-API Key 不应提交到仓库。移动端安装包无法安全保存服务端密钥；正式分发时建议通过自有后端代理请求，并对密钥设置额度和来源限制。
+没有配置密钥时，应用仍可用于本地播放。请勿将密钥提交到 Git，也不要在公开分发的 APK 中复用个人密钥：该值会被打包进客户端，无法作为服务端机密保管。
 
-## 工程结构
+## 项目结构
 
-- `playback/`：由 `MediaSessionService` 托管的后台播放器与系统媒体会话
-- `data/AppDatabase.kt`：Room 数据库、版本迁移与 schema 导出
-- `data/AppFileStore.kt`：音乐、封面和歌词的原子写入与安全清理
-- `data/MetadataRepository.kt`：联网元数据获取、HTTPS 与响应大小限制
-- `viewmodel/`：界面状态与业务编排
+```text
+app/src/main/java/com/music/purelymusic/
+├── data/       Room 数据库、文件存储与在线元数据获取
+├── playback/   后台播放、音频分析与过渡渲染
+├── ui/         Jetpack Compose 界面
+├── utils/      歌词解析、语言检测与偏好设置
+└── viewmodel/  界面状态和应用逻辑
+```
 
-提交前建议运行完整验证：
+## 开发
+
+项目使用 Kotlin、Jetpack Compose、Material 3、AndroidX Media3、Room、Retrofit 和 Gradle Kotlin DSL。GitHub Actions 会在推送到 `main` 或创建 Pull Request 时运行单元测试、Android Lint 和 Debug 构建，并编译 Android 测试。
 
 ```bash
 ./gradlew testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
 ```
 
-同一组检查也会由 GitHub Actions 自动执行。
+Windows PowerShell：
 
-## 下载
+```powershell
+.\gradlew.bat testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
+```
 
-- 仓库主页：https://github.com/eason204646-droid/purely-music
-- Releases：https://github.com/eason204646-droid/purely-music/releases
+## 文档
+
+- [使用说明](help/使用说明.md)
+- [功能特性](help/功能特性.md)
+- [疑难解答](help/疑难解答.md)
+- [歌词翻译说明](help/歌词翻译说明.md)
 
 ## 许可证
 
-本项目采用 [Mulan PSL v2](http://license.coscl.org.cn/MulanPSL2) 开源许可证。
+本项目采用 [木兰宽松许可证，第 2 版（Mulan PSL v2）](LICENSE)。
