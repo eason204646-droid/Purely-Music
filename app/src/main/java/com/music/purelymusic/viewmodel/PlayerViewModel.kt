@@ -2031,6 +2031,7 @@ private fun stop3DSurroundEffect() {
      * 翻译当前歌词
      */
     fun translateLyrics() {
+        if (isTranslating) return
         viewModelScope.launch {
             try {
                 isTranslating = true
@@ -2045,6 +2046,8 @@ private fun stop3DSurroundEffect() {
 
                 translateLyricsWithRecovery()
 
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: retrofit2.HttpException) {
                 val errorMsg = "网络请求失败: ${e.code()} - ${e.message()}"
                 addLog("❌ $errorMsg")
@@ -2072,11 +2075,13 @@ private fun stop3DSurroundEffect() {
     }
 
     /**
-     * Translates tagged, small batches first, then retries only the missing lines. This avoids
-     * the timestamp rewriting and silent response truncation caused by one huge LRC request.
+     * Translates small batches first. Incomplete or ambiguous tagged responses are retried
+     * line by line, since a lost marker can silently merge its text into the preceding line.
      */
     private suspend fun translateLyricsWithRecovery() {
-        val translatable = lyricLines.mapIndexedNotNull { index, line ->
+        val originalLines = lyricLines
+        val originalSongId = currentSong?.id
+        val translatable = originalLines.mapIndexedNotNull { index, line ->
             index.takeIf { line.content.isNotBlank() }?.let { it to line }
         }
         val resolved = mutableMapOf<Int, String>()
@@ -2087,18 +2092,9 @@ private fun stop3DSurroundEffect() {
                 "[[PMT_${index.toString().padStart(4, '0')}]] ${line.content}"
             }
             requestTranslation(payload)?.let { response ->
-                val marked = LyricTranslationParser.parseMarked(response)
-                resolved.putAll(marked)
-                // Only use positional matching when no marker survived at all. Mixing the two
-                // paths is what previously put a whole tagged response onto one lyric line.
-                if (marked.isEmpty() && !LyricTranslationParser.containsTranslationMarker(response)) {
-                    val ordered = LyricTranslationParser.parse(response, batch.map { it.second })
-                    batch.forEachIndexed { localIndex, (sourceIndex, _) ->
-                        ordered.getOrNull(localIndex)?.let {
-                            resolved.putIfAbsent(sourceIndex, it)
-                        }
-                    }
-                }
+                val parsed = LyricTranslationParser.parseBatch(response, batch.toMap())
+                resolved.putAll(parsed)
+                if (parsed.isEmpty()) addLog("批次 ${batchIndex + 1} 分行不可靠，将逐句补翻")
             }
             addLog("批次 ${batchIndex + 1} 完成，已匹配 ${resolved.size}/${translatable.size} 行")
         }
@@ -2106,18 +2102,24 @@ private fun stop3DSurroundEffect() {
         val missing = translatable.filter { (index, _) -> resolved[index].isNullOrBlank() }
         if (missing.isNotEmpty()) addLog("正在补翻 ${missing.size} 个遗漏句子")
         missing.forEach { (index, line) ->
-            requestTranslation(line.content)?.let { response ->
-                LyricTranslationParser.sanitizeTranslation(response)
-                    ?.let { resolved[index] = it }
-            }
+            requestTranslation(line.content)
+                ?.takeUnless(LyricTranslationParser::containsTranslationMarker)
+                ?.let { response ->
+                    LyricTranslationParser.sanitizeTranslation(response)
+                        ?.let { resolved[index] = it }
+                }
         }
 
+        if (lyricLines !== originalLines || currentSong?.id != originalSongId) {
+            addLog("歌曲或歌词已切换，忽略旧的翻译结果")
+            return
+        }
         if (resolved.isEmpty()) {
             translateError = "未能解析出翻译内容，请稍后重试"
             addLog("❌ 未获得有效翻译")
             return
         }
-        lyricLines = lyricLines.mapIndexed { index, line ->
+        lyricLines = originalLines.mapIndexed { index, line ->
             line.copy(translation = resolved[index]?.let(LyricTranslationParser::sanitizeTranslation))
         }
         showTranslation = true
