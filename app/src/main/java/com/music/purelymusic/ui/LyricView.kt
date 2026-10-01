@@ -92,6 +92,7 @@ fun LyricView(
     // 检测用户是否在手动滑动
     var isUserScrolling by remember { mutableStateOf(false) }
     var scrollInProgress by remember { mutableStateOf(false) }
+    var previousShowTranslation by remember { mutableStateOf(showTranslation) }
 
     // 监听列表的交互状态和滚动状态
     LaunchedEffect(listState) {
@@ -139,6 +140,20 @@ fun LyricView(
         val translationLineHeight = (translationFontSizeBase * 1.4f).sp
         val fixedLineHeightPx = with(density) { fixedLineHeight.toPx() }
         val itemSpacingPx = with(density) { 8.dp.toPx() }
+
+        // 在新布局测量前保留当前原文的位置，避免前面歌词的翻译改变行高后把它挤走
+        if (showTranslation != previousShowTranslation) {
+            val layoutInfo = listState.layoutInfo
+            val currentItem = layoutInfo.visibleItemsInfo.firstOrNull { it.index == currentIndex }
+            val scrollOffset = currentItem?.let { -it.offset }
+                ?: (-targetLinePx + (fixedLineHeightPx / 2)).toInt()
+            SideEffect {
+                previousShowTranslation = showTranslation
+                if (lyricStyle != "single" && currentIndex in lyrics.indices && !isUserScrolling) {
+                    listState.requestScrollToItem(index = currentIndex, scrollOffset = scrollOffset)
+                }
+            }
+        }
 
         // 使用丝滑的滚动动画 - 改进版本
         LaunchedEffect(currentIndex) {
