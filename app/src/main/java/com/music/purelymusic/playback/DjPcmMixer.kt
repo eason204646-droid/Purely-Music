@@ -45,6 +45,7 @@ internal object DjPcmMixer {
         // A beat around the chosen bar boundary, instead of bass fading for the whole mix.
         val bassWidth = (plan.beatMs * rate / 1_000.0).toFloat().coerceAtMost(frames * 0.35f)
         val collisionRelease = exp(-1.0 / (rate * 0.12)).toFloat()
+        val midCorrelation = BlendCorrelation(rate)
         var outActivity = 0f
         var inActivity = 0f
         for (frame in 0 until frames) {
@@ -58,17 +59,32 @@ internal object DjPcmMixer {
             val inTrim = plan.incomingTrim + (1 - plan.incomingTrim) * ramp(t, 0.8f, 1f)
             var outMidPower = 0f
             var inMidPower = 0f
+            var outSquare = 0f
+            var inSquare = 0f
+            var cross = 0f
             for (channel in 0..1) {
                 val index = frame * 2 + channel
-                outMidPower += abs(outUpper[index] - outLow[index])
-                inMidPower += abs(inUpper[index] - inLow[index])
+                val outMid = outUpper[index] - outLow[index]
+                val inMid = inUpper[index] - inLow[index]
+                outMidPower += abs(outMid)
+                inMidPower += abs(inMid)
+                outSquare += outMid * outMid
+                inSquare += inMid * inMid
+                cross += outMid * inMid
             }
             outActivity = maxOf(outMidPower, outActivity * collisionRelease)
             inActivity = maxOf(inMidPower, inActivity * collisionRelease)
             val bothActive = minOf(outActivity, inActivity) / maxOf(outActivity, inActivity, 0.015f)
             // Suppress the background midrange when both passages have a sustained foreground.
-            val outMidGain = (1 - melody) * (1 - bothActive * melody * 0.65f)
-            val inMidGain = melody * (1 - bothActive * (1 - melody) * 0.65f)
+            val outMidWeight = (1 - melody) * (1 - bothActive * melody * 0.65f)
+            val inMidWeight = melody * (1 - bothActive * (1 - melody) * 0.65f)
+            // Keep foreground/background proportions, but avoid a hole when both decks fade.
+            // Correlated passages need less compensation than unrelated melodies.
+            val correlation = midCorrelation.update(outSquare, inSquare, cross)
+            val midScale = 1f / sqrt(outMidWeight * outMidWeight + inMidWeight * inMidWeight +
+                2 * correlation * outMidWeight * inMidWeight).coerceAtLeast(0.0001f)
+            val outMidGain = outMidWeight * midScale
+            val inMidGain = inMidWeight * midScale
             val outBass = if (rhythmic) 1 - bass else 1 - melody
             val inBass = if (rhythmic) bass else melody
             for (channel in 0..1) {
@@ -80,6 +96,23 @@ internal object DjPcmMixer {
         }
         limit(result, rate, check)
         return result
+    }
+
+    /** Average both channels together so compensation never shifts the stereo image. */
+    private class BlendCorrelation(rate: Int) {
+        private val smoothing = 1 - exp(-1.0 / (rate * 0.08))
+        private var outPower = 0.0
+        private var inPower = 0.0
+        private var crossPower = 0.0
+
+        fun update(outSquare: Float, inSquare: Float, cross: Float): Float {
+            outPower += smoothing * (outSquare - outPower)
+            inPower += smoothing * (inSquare - inPower)
+            crossPower += smoothing * (cross - crossPower)
+            val power = sqrt(outPower * inPower)
+            // Do not boost cancellation between opposite-phase passages.
+            return if (power < 1e-12) 0f else (crossPower / power).toFloat().coerceIn(0f, 1f)
+        }
     }
 
     private fun ramp(value: Float, from: Float, until: Float): Float {
@@ -119,21 +152,24 @@ internal object DjPcmMixer {
     internal fun limit(samples: FloatArray, rate: Int, check: () -> Unit = {}) {
         val frames = samples.size / 2
         val lookahead = maxOf(1, rate / 200)
-        val maxima = IntArray(frames)
-        val peaks = FloatArray(frames) { maxOf(abs(samples[it * 2]), abs(samples[it * 2 + 1])) }
-        var head = 0
-        var tail = 0
-        var gain = 1f
-        val release = (1 - exp(-1.0 / (rate * 0.08))).toFloat()
-        var inserted = 0
+        val envelope = FloatArray(frames)
         for (frame in 0 until frames) {
             if (frame % 4_096 == 0) check()
-            while (inserted < minOf(frames, frame + lookahead + 1)) {
-                while (tail > head && peaks[maxima[tail - 1]] <= peaks[inserted]) tail--
-                maxima[tail++] = inserted++
-            }
-            while (tail > head && maxima[head] < frame) head++
-            val target = minOf(1f, 0.98f / peaks[maxima[head]].coerceAtLeast(0.00001f))
+            val peak = maxOf(abs(samples[frame * 2]), abs(samples[frame * 2 + 1]))
+            envelope[frame] = minOf(1f, 0.98f / peak.coerceAtLeast(0.00001f))
+        }
+        // Ramp into a peak within the existing 5 ms lookahead instead of stepping down.
+        // The envelope remains below each frame's safe gain, including adjacent peaks.
+        val attackStep = 1f / lookahead
+        for (frame in frames - 2 downTo 0) {
+            if (frame % 4_096 == 0) check()
+            envelope[frame] = minOf(envelope[frame], envelope[frame + 1] + attackStep)
+        }
+        var gain = 1f
+        val release = (1 - exp(-1.0 / (rate * 0.08))).toFloat()
+        for (frame in 0 until frames) {
+            if (frame % 4_096 == 0) check()
+            val target = envelope[frame]
             gain = if (target < gain) target else gain + release * (target - gain)
             samples[frame * 2] *= gain
             samples[frame * 2 + 1] *= gain

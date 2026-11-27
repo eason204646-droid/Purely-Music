@@ -433,20 +433,26 @@ class PlaybackRuntime private constructor(context: Context) {
 
     private suspend fun playRenderedMix(outgoing: ExoPlayer, incoming: ExoPlayer, mix: RenderedMix) {
         val plan = mix.plan
-        val guardStart = plan.startMs - plan.prerollMs
-        val warmupMs = minOf(500L, plan.incomingStartMs - plan.prerollMs)
-        val warmupStart = guardStart - warmupMs
-        while (outgoing.currentPosition < warmupStart && outgoing.isPlaying) delay(5L)
+        val initialPosition = incoming.currentPosition
+        // Start the silent AudioTrack early, then park its already-warm decoder at a known sample.
+        // Resuming buffered PCM avoids making a cold AudioTrack start on the handover deadline.
         check(outgoing.isPlaying && currentPlayer === outgoing)
-        check(outgoing.currentPosition - warmupStart < 100L) { "Late AutoMix preroll" }
         incoming.play()
         val ready = withTimeoutOrNull(700L) {
-            while (!incoming.isPlaying || incoming.currentPosition <= plan.incomingStartMs - plan.prerollMs - warmupMs + 20L) delay(5L)
+            while (!incoming.isPlaying || incoming.currentPosition <= initialPosition + 20L) delay(5L)
             true
         } == true
         check(ready) { "Rendered AutoMix did not start" }
-        // AudioTrack's initial media-clock estimate settles after actual audio starts flowing.
-        delay(250L)
+        delay(500L)
+        incoming.pause()
+        delay(50L)
+        val resumeAt = plan.startMs + incoming.currentPosition - plan.incomingStartMs
+        check(outgoing.currentPosition - resumeAt < 100L) { "Late AutoMix preroll" }
+        while (outgoing.currentPosition < resumeAt && outgoing.isPlaying) delay(5L)
+        check(outgoing.isPlaying && currentPlayer === outgoing)
+        incoming.play()
+        // AudioTrack changes timestamp mode after resuming; do not chase its temporary estimate.
+        delay(750L)
         // Both players reproduce the SAME outgoing PCM during preroll. Synchronize while muted.
         var corrections = 0
         var seekLeadMs = 35L
@@ -455,24 +461,27 @@ class PlaybackRuntime private constructor(context: Context) {
             ensureTransitionPlaying(outgoing, incoming)
             val expected = plan.incomingStartMs + outgoing.currentPosition - plan.startMs
             val error = incoming.currentPosition - expected
-            if (kotlin.math.abs(error) > 40L && corrections < 3 && outgoing.currentPosition < handoverAt - 350L) {
+            val remainingMs = handoverAt - outgoing.currentPosition
+            if (AutoMixHandover.needsCorrection(error, remainingMs, corrections)) {
+                Log.d("PlaybackRuntime", "AutoMix correcting preroll: slip=$error ms, remaining=$remainingMs ms")
                 // A seek stalls the muted decoder briefly. Compensate using measured recovery lag.
                 incoming.seekTo(expected + seekLeadMs)
                 corrections++
-                delay(300L)
+                delay(AutoMixHandover.SEEK_SETTLE_MS)
                 val residual = incoming.currentPosition - (plan.incomingStartMs + outgoing.currentPosition - plan.startMs)
-                seekLeadMs = (seekLeadMs - residual).coerceIn(0L, 250L)
+                Log.d("PlaybackRuntime", "AutoMix preroll: residual=$residual ms, lead=$seekLeadMs ms, remaining=${handoverAt - outgoing.currentPosition} ms")
+                seekLeadMs = AutoMixHandover.seekLeadAfterRecovery(seekLeadMs, residual)
             } else delay(5L)
         }
         val error = incoming.currentPosition - (plan.incomingStartMs + outgoing.currentPosition - plan.startMs)
+        Log.d("PlaybackRuntime", "AutoMix handover: slip=$error ms, corrections=$corrections")
         // This quiet bridge is separate from the beat-locked mix, which has one PCM clock.
-        val maximumSlipMs = minOf(180L, (plan.beatMs * 0.3).toLong())
-        check(kotlin.math.abs(error) <= maximumSlipMs) { "Rendered AutoMix preroll failed to synchronize: $error ms" }
+        check(kotlin.math.abs(error) <= AutoMixHandover.MAX_SLIP_MS) { "Rendered AutoMix preroll failed to synchronize: $error ms" }
         // A brief handover in a quiet part of the same passage; musical mixing is in one file.
         val handover = incoming.currentPosition
-        while (incoming.currentPosition < handover + 60L) {
+        while (incoming.currentPosition < handover + AutoMixHandover.DURATION_MS) {
             ensureTransitionPlaying(outgoing, incoming)
-            val t = ((incoming.currentPosition - handover) / 60f).coerceIn(0f, 1f)
+            val t = AutoMixHandover.fraction(incoming.currentPosition - handover)
             outgoing.volume = 1 - t
             incoming.volume = t
             delay(5L)
