@@ -18,6 +18,7 @@ package com.music.purelymusic.viewmodel
 import android.app.Application
 import android.content.res.Configuration
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -54,6 +55,7 @@ import com.music.purelymusic.utils.LrcParser
 import com.music.purelymusic.utils.LyricTranslationParser
 import com.music.purelymusic.utils.NetworkAccess
 import com.music.purelymusic.utils.OfflineModeException
+import com.music.purelymusic.utils.PreferencesManager
 import com.music.purelymusic.ui.utils.BlurUtil
 import com.music.purelymusic.playback.PlaybackRuntime
 import com.music.purelymusic.playback.PlaybackService
@@ -65,6 +67,7 @@ import java.io.File
 import java.nio.charset.Charset
 import kotlin.math.sin
 import java.util.Locale
+import java.util.UUID
 
 @androidx.annotation.OptIn(UnstableApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
@@ -75,10 +78,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val latestPlaylist = playlists.firstOrNull { it.id == playlist.id } ?: playlist
         val songMap = libraryList.associateBy { it.id.toLong() }
         val songs = latestPlaylist.songIds.mapNotNull { songId -> songMap[songId] }
+        playCollection(songs, isRandom)
+    }
+
+    fun playCollection(songs: List<Song>, isRandom: Boolean = false, startingSong: Song? = null) {
         if (songs.isEmpty()) return
         currentPlayingList.clear()
         currentPlayingList.addAll(if (isRandom) songs.shuffled() else songs)
-        playSongFromList(currentPlayingList[0])
+        playSongFromList(startingSong ?: currentPlayingList[0])
     }
 
     private suspend fun findOrCreateAlbumId(
@@ -581,6 +588,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     var recentSongs = mutableStateListOf<Song>()
     var playlists = mutableStateListOf<Playlist>()
     var albums = mutableStateListOf<Album>()
+
+    var albumTitleArtworkEnabled by mutableStateOf(PreferencesManager.getAlbumTitleArtworkEnabled())
+        private set
+
+    fun setAlbumTitleArtworkPreference(enabled: Boolean) {
+        albumTitleArtworkEnabled = enabled
+        PreferencesManager.saveAlbumTitleArtworkEnabled(enabled)
+    }
     private var currentPlayingList = mutableStateListOf<Song>()
     var selectedSongsForPlaylist = mutableStateListOf<Song>()
     var showPlaylist by mutableStateOf(false)
@@ -1113,12 +1128,61 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun deleteAlbum(album: Album) {
         viewModelScope.launch(Dispatchers.IO) {
-            database.withTransaction {
+            val deleted = database.withTransaction {
+                val stored = albumDao.getAlbumById(album.id) ?: return@withTransaction null
                 songDao.clearAlbum(album.id)
-                albumDao.deleteAlbum(album.toEntity())
-            }
-            deleteFileIfUnreferenced(album.coverUri)
+                albumDao.deleteAlbum(stored)
+                stored
+            } ?: return@launch
+            fileStore.deleteOwnedFile(deleted.titleArtworkPath)
+            fileStore.deleteOwnedFile(deleted.titleArtworkCoverPath)
+            deleteFileIfUnreferenced(deleted.coverUri)
             refreshData()
+        }
+    }
+
+    suspend fun setAlbumTitleArtworkEnabled(albumId: String, enabled: Boolean): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                albumDao.setTitleArtworkEnabled(albumId, enabled) == 1
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.e("Album", "更新艺术字显示失败", error)
+                false
+            }
+        }
+
+    suspend fun saveAlbumTitleArtwork(
+        albumId: String,
+        title: Bitmap?,
+        cleanCover: Bitmap? = null
+    ): Boolean = withContext(Dispatchers.IO + NonCancellable) {
+        var titlePath: String? = null
+        var coverPath: String? = null
+        try {
+            val fileId = UUID.randomUUID()
+            titlePath = title?.let { fileStore.savePng(it, "album_title_${fileId}.png") }
+            coverPath = cleanCover?.let { fileStore.savePng(it, "album_hero_${fileId}.png") }
+            val previous = database.withTransaction {
+                val stored = albumDao.getAlbumById(albumId) ?: error("Album was removed")
+                albumDao.updateAlbum(
+                    stored.copy(
+                        titleArtworkPath = titlePath,
+                        titleArtworkCoverPath = coverPath,
+                        titleArtworkEnabled = titlePath != null
+                    )
+                )
+                stored
+            }
+            fileStore.deleteOwnedFile(previous.titleArtworkPath)
+            fileStore.deleteOwnedFile(previous.titleArtworkCoverPath)
+            true
+        } catch (error: Exception) {
+            fileStore.deleteOwnedFile(titlePath)
+            fileStore.deleteOwnedFile(coverPath)
+            Log.e("Album", "保存专辑艺术字失败", error)
+            false
         }
     }
 

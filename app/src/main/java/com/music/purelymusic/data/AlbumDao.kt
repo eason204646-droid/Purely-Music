@@ -41,6 +41,9 @@ interface AlbumDao {
     @Update
     suspend fun updateAlbum(album: AlbumEntity)
 
+    @Query("UPDATE albums SET titleArtworkEnabled = :enabled WHERE id = :albumId AND titleArtworkPath IS NOT NULL")
+    suspend fun setTitleArtworkEnabled(albumId: String, enabled: Boolean): Int
+
     @Delete
     suspend fun deleteAlbum(album: AlbumEntity)
 

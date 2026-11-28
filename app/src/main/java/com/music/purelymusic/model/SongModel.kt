@@ -149,7 +149,10 @@ data class Album(
     val name: String,
     val artist: String,
     val coverUri: String?,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val titleArtworkPath: String? = null,
+    val titleArtworkCoverPath: String? = null,
+    val titleArtworkEnabled: Boolean = false
 )
 
 /**

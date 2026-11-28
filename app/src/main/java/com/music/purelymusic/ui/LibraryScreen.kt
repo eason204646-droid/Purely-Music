@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Favorite // 🚩 v2.5
 import androidx.compose.material.icons.filled.Search // 🚩 v2.5
@@ -51,6 +52,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.music.purelymusic.R
+import com.music.purelymusic.model.Album
 import com.music.purelymusic.model.Playlist
 import com.music.purelymusic.model.Song
 import com.music.purelymusic.viewmodel.PlayerViewModel
@@ -218,6 +221,20 @@ fun LibraryScreen(
         )
     }
 
+    var artworkAlbumId by rememberSaveable { mutableStateOf<String?>(null) }
+    if (viewModel.albumTitleArtworkEnabled && artworkAlbumId != null) {
+        val album = viewModel.albums.firstOrNull { it.id == artworkAlbumId }
+        if (album != null) {
+            val cover = album.coverUri ?: remember(album.id, album.name, viewModel.libraryList) {
+                viewModel.libraryList.asSequence()
+                    .filter { it.coverUri != null && (it.albumId == album.id || (it.albumId == null && it.album == album.name)) }
+                    .minWithOrNull(compareBy<Song> { it.createdTime }.thenBy { it.id })
+                    ?.coverUri
+            }
+            AlbumTitleArtworkEditor(album, cover, viewModel) { artworkAlbumId = null }
+        }
+    }
+
     var showMenu by remember { mutableStateOf(false) }
     BackHandler(showMenu) { showMenu = false }
     var showSortMenu by remember { mutableStateOf(false) }
@@ -326,10 +343,13 @@ fun LibraryScreen(
                                 horizontalArrangement = Arrangement.spacedBy(AppDimensions.spacingM()),
                                 contentPadding = PaddingValues(end = AppDimensions.paddingCard())
                             ) {
-                                items(viewModel.albums) { album ->
+                                items(viewModel.albums, key = { it.id }) { album ->
                                     AlbumItem(
                                         album = album,
                                         viewModel = viewModel,
+                                        onEditArtwork = if (viewModel.albumTitleArtworkEnabled) {
+                                            { artworkAlbumId = album.id }
+                                        } else null,
                                         onClick = { onNavigateToAlbumDetail(album.id) }
                                     )
                                 }
@@ -1180,10 +1200,15 @@ fun SongGridItem(song: Song, viewModel: PlayerViewModel, onNavigateToPlayer: () 
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun AlbumItem(album: com.music.purelymusic.model.Album, viewModel: PlayerViewModel, onClick: () -> Unit) {
+fun AlbumItem(
+    album: Album,
+    viewModel: PlayerViewModel,
+    onEditArtwork: (() -> Unit)?,
+    onClick: () -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
-    var albumToDelete by remember { mutableStateOf<com.music.purelymusic.model.Album?>(null) }
-    var albumToRename by remember { mutableStateOf<com.music.purelymusic.model.Album?>(null) }
+    var albumToDelete by remember { mutableStateOf<Album?>(null) }
+    var albumToRename by remember { mutableStateOf<Album?>(null) }
     var editedAlbumName by remember { mutableStateOf("") }
     var renameError by remember { mutableStateOf(false) }
     var isRenaming by remember { mutableStateOf(false) }
@@ -1286,6 +1311,16 @@ fun AlbumItem(album: com.music.purelymusic.model.Album, viewModel: PlayerViewMod
                     expanded = false
                 }
             )
+            if (onEditArtwork != null) {
+                GlassMenuItem(
+                    label = if (viewModel.currentLanguage == "zh") "专辑艺术字" else "Album title artwork",
+                    icon = Icons.Default.TextFields,
+                    onClick = {
+                        expanded = false
+                        onEditArtwork()
+                    }
+                )
+            }
             GlassMenuItem(
                 label = if (viewModel.currentLanguage == "zh") "删除专辑" else "Delete Album",
                 icon = Icons.Default.Delete,

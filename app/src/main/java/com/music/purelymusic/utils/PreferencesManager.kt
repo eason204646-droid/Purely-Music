@@ -44,6 +44,7 @@ object PreferencesManager {
     // 自动从元数据获取封面和歌词开关
     private const val KEY_AUTO_FETCH_METADATA = "auto_fetch_metadata"
     private const val KEY_OFFLINE_MODE = "offline_mode"
+    private const val KEY_ALBUM_TITLE_ARTWORK = "album_title_artwork"
 
     // 自动切歌交叉渐入渐出开关
     private const val KEY_CROSSFADE_ENABLED = "crossfade_enabled"
@@ -149,6 +150,12 @@ object PreferencesManager {
      */
     fun saveAutoFetchMetadata(enabled: Boolean) {
         prefs?.edit()?.putBoolean(KEY_AUTO_FETCH_METADATA, enabled)?.apply()
+    }
+
+    fun getAlbumTitleArtworkEnabled(): Boolean = prefs?.getBoolean(KEY_ALBUM_TITLE_ARTWORK, false) ?: false
+
+    fun saveAlbumTitleArtworkEnabled(enabled: Boolean) {
+        prefs?.edit()?.putBoolean(KEY_ALBUM_TITLE_ARTWORK, enabled)?.apply()
     }
 
     fun getOfflineMode(): Boolean {

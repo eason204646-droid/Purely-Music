@@ -2,6 +2,7 @@
 package com.music.purelymusic.data
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
@@ -92,6 +93,21 @@ class AppFileStore(context: Context) {
     suspend fun saveText(text: String, fileName: String): String? {
         val bytes = text.toByteArray(Charsets.UTF_8)
         return saveStream(ByteArrayInputStream(bytes), fileName, bytes.size.toLong())
+    }
+
+    /** Call on the IO dispatcher with a unique filename. */
+    fun savePng(bitmap: Bitmap, fileName: String): String {
+        val destination = File(root, fileName)
+        val temporary = File(root, ".$fileName.part")
+        try {
+            temporary.outputStream().buffered().use { output ->
+                check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
+            }
+            check(temporary.renameTo(destination))
+            return destination.absolutePath
+        } finally {
+            temporary.delete()
+        }
     }
 
     private fun resolveExtension(uri: Uri): String {

@@ -19,6 +19,7 @@ import com.music.purelymusic.ui.utils.AppDimensions
 @Composable
 fun AddToPlaylistDialog(
     viewModel: PlayerViewModel,
+    songIds: List<Long> = viewModel.selectedSongsForAdd.toList(),
     onDismiss: () -> Unit
 ) {
     val playlists = viewModel.playlists
@@ -51,7 +52,7 @@ fun AddToPlaylistDialog(
                                 .clickable {
                                     viewModel.addSongsToPlaylist(
                                         playlist.id.toString(),
-                                        viewModel.selectedSongsForAdd.toList()
+                                        songIds
                                     )
                                     onDismiss()
                                 },

@@ -110,7 +110,8 @@ fun MainScreen(viewModel: PlayerViewModel, window: Window) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val useDarkSystemBars = isSystemInDarkTheme() || currentRoute == "player" || currentRoute == "equalizer"
+    val isAlbumRoute = currentRoute == "album_detail/{albumId}"
+    val useDarkSystemBars = isSystemInDarkTheme() || currentRoute == "player" || currentRoute == "equalizer" || isAlbumRoute
     SideEffect {
         WindowCompat.getInsetsController(window, window.decorView).apply {
             isAppearanceLightStatusBars = !useDarkSystemBars
@@ -167,7 +168,14 @@ fun MainScreen(viewModel: PlayerViewModel, window: Window) {
         LocalGlassMenuHost provides glassMenuHost
     ) {
     Box(modifier = Modifier.fillMaxSize()) {
-    Scaffold(containerColor = MaterialTheme.colorScheme.background) { innerPadding ->
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = if (isAlbumRoute) {
+            WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
+        } else {
+            ScaffoldDefaults.contentWindowInsets
+        }
+    ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
 
             NavHost(
@@ -304,11 +312,13 @@ fun MainScreen(viewModel: PlayerViewModel, window: Window) {
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .then(if (isAlbumRoute) Modifier.widthIn(max = 710.dp).navigationBarsPadding() else Modifier)
                     .padding(bottom = if (isPrimaryRoute) 76.dp else AppDimensions.paddingSmall())
             ) {
                 CompositionLocalProvider(LocalLiquidGlassHazeState provides navigationHazeState) {
                     MiniPlayer(
                         viewModel = viewModel,
+                        overDarkContent = isAlbumRoute,
                         onClick = { navController.navigate("player") }
                     )
                 }

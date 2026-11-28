@@ -27,7 +27,7 @@ import com.google.gson.JsonParser
 // 🚩 1. 必须在 entities 中加入 PlaylistEntity::class
 @Database(
     entities = [SongEntity::class, PlaylistEntity::class, PlaylistSongCrossRef::class, AlbumEntity::class],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -237,6 +237,12 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        internal val MIGRATION_10_11 = Migration(10, 11) { database: SupportSQLiteDatabase ->
+            database.execSQL("ALTER TABLE albums ADD COLUMN titleArtworkPath TEXT")
+            database.execSQL("ALTER TABLE albums ADD COLUMN titleArtworkCoverPath TEXT")
+            database.execSQL("ALTER TABLE albums ADD COLUMN titleArtworkEnabled INTEGER NOT NULL DEFAULT 0")
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -245,7 +251,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "am_player_db"
                 )
                     // 🚩 使用 addMigrations 添加迁移策略，确保数据不会丢失
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                     // 🚩 设置 WAL 模式以提高性能并确保数据持久化
                     .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                     // 🚩 允许主线程查询（仅用于调试，生产环境应该移除）

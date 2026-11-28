@@ -431,8 +431,11 @@ fun SongItem(
 
 @OptIn(UnstableApi::class)
 @Composable
-fun MiniPlayer(viewModel: PlayerViewModel, onClick: () -> Unit) {
+fun MiniPlayer(viewModel: PlayerViewModel, overDarkContent: Boolean = false, onClick: () -> Unit) {
     val currentSong = viewModel.currentSong ?: return
+    val dark = overDarkContent || androidx.compose.foundation.isSystemInDarkTheme()
+    val foreground = if (overDarkContent) Color(0xFFF5F8F8) else MaterialTheme.colorScheme.onSurface
+    val secondary = if (overDarkContent) Color(0xFFBDC8CC) else MaterialTheme.colorScheme.onSurfaceVariant
     GlassPressable(
         modifier = Modifier.fillMaxWidth().height(AppDimensions.miniPlayerHeight()).padding(horizontal = AppDimensions.miniPlayerPaddingH()),
         onClick = onClick
@@ -440,6 +443,7 @@ fun MiniPlayer(viewModel: PlayerViewModel, onClick: () -> Unit) {
         LiquidGlass(
             modifier = Modifier.fillMaxSize(),
             shape = RoundedCornerShape(28.dp),
+            dark = dark,
             opacity = 0.62f,
             highlightAlpha = 0.22f
         )
@@ -454,19 +458,19 @@ fun MiniPlayer(viewModel: PlayerViewModel, onClick: () -> Unit) {
                 contentScale = ContentScale.Crop
             )
             Column(modifier = Modifier.weight(1f).padding(start = AppDimensions.paddingCard())) {
-                Text(currentSong.title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = AppDimensions.textM().value.sp, maxLines = 1)
-                Text(currentSong.artist, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = AppDimensions.textS().value.sp, maxLines = 1)
+                Text(currentSong.title, color = foreground, fontWeight = FontWeight.Bold, fontSize = AppDimensions.textM().value.sp, maxLines = 1)
+                Text(currentSong.artist, color = secondary, fontSize = AppDimensions.textS().value.sp, maxLines = 1)
             }
             GlassControl(
                 modifier = Modifier.size(AppDimensions.iconButtonSizeM()),
                 shape = CircleShape,
-                dark = androidx.compose.foundation.isSystemInDarkTheme(),
+                dark = dark,
                 onClick = { viewModel.togglePlayPause() }
             ) {
                 Icon(
                     imageVector = if (viewModel.isActuallyPlaying) Icons.Default.PauseCircleFilled else Icons.Default.PlayCircleFilled,
                     contentDescription = if (viewModel.isActuallyPlaying) "Pause" else "Play",
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    tint = foreground,
                     modifier = Modifier.size(AppDimensions.iconXL())
                 )
             }

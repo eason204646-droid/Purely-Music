@@ -84,13 +84,13 @@ class AppDatabaseMigrationTest {
     }
 
     private fun openCurrentDatabase(): AppDatabase = Room.databaseBuilder(context, AppDatabase::class.java, databaseName)
-        .addMigrations(AppDatabase.MIGRATION_9_10)
+        .addMigrations(AppDatabase.MIGRATION_9_10, AppDatabase.MIGRATION_10_11)
         .allowMainThreadQueries()
         .build()
         .also {
             database = it
             // Force migration and Room validation; build() alone does not open the database.
-            assertEquals(10, it.openHelper.writableDatabase.version)
+            assertEquals(11, it.openHelper.writableDatabase.version)
             it.openHelper.writableDatabase.query("PRAGMA foreign_key_check").use { cursor -> assertFalse(cursor.moveToFirst()) }
         }
 

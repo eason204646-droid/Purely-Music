@@ -27,7 +27,10 @@ data class AlbumEntity(
     val name: String,
     val artist: String,
     val coverUri: String?,
-    @ColumnInfo(defaultValue = "0") val createdAt: Long = 0
+    @ColumnInfo(defaultValue = "0") val createdAt: Long = 0,
+    val titleArtworkPath: String? = null,
+    val titleArtworkCoverPath: String? = null,
+    @ColumnInfo(defaultValue = "0") val titleArtworkEnabled: Boolean = false
 )
 
 // 转换工具：Album <-> Entity
@@ -37,7 +40,10 @@ fun Album.toEntity(): AlbumEntity {
         name = name,
         artist = artist,
         coverUri = coverUri,
-        createdAt = createdAt
+        createdAt = createdAt,
+        titleArtworkPath = titleArtworkPath,
+        titleArtworkCoverPath = titleArtworkCoverPath,
+        titleArtworkEnabled = titleArtworkEnabled
     )
 }
 
@@ -47,6 +53,9 @@ fun AlbumEntity.toAlbum(): Album {
         name = name,
         artist = artist,
         coverUri = coverUri,
-        createdAt = createdAt
+        createdAt = createdAt,
+        titleArtworkPath = titleArtworkPath,
+        titleArtworkCoverPath = titleArtworkCoverPath,
+        titleArtworkEnabled = titleArtworkEnabled
     )
 }

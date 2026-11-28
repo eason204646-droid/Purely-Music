@@ -229,6 +229,22 @@ fun SettingsScreen(
                 )
             }
 
+            SettingsSection(
+                title = if (viewModel.currentLanguage == "zh") "实验性功能" else "Experimental",
+                icon = Icons.Default.Science
+            ) {
+                SettingsSwitch(
+                    title = if (viewModel.currentLanguage == "zh") "专辑艺术字" else "Album title artwork",
+                    subtitle = if (viewModel.currentLanguage == "zh") {
+                        "在资料库长按专辑，即可导入或提取艺术字"
+                    } else {
+                        "Touch and hold an album in the library to import or extract title artwork"
+                    },
+                    checked = viewModel.albumTitleArtworkEnabled,
+                    onCheckedChange = viewModel::setAlbumTitleArtworkPreference
+                )
+            }
+
             // 自动获取源设置
             SettingsSection(
                 title = if (viewModel.currentLanguage == "zh") "自动获取源" else "Auto Fetch Source",
