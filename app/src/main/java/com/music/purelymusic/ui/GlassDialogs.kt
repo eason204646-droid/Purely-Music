@@ -55,7 +55,7 @@ fun GlassAlertDialog(
         title = title,
         text = text,
         shape = shape,
-        containerColor = containerColor.copy(alpha = if (hazeState == null) 0.94f else 0.70f),
+        containerColor = containerColor.copy(alpha = 0.94f),
         tonalElevation = 0.dp,
         properties = properties
     )

@@ -17,13 +17,23 @@
 package com.music.purelymusic.ui
 import androidx.activity.compose.BackHandler
 import android.util.Log
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -31,9 +41,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
@@ -57,6 +67,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -69,6 +80,7 @@ import com.music.purelymusic.R
 import com.music.purelymusic.model.Album
 import com.music.purelymusic.model.Playlist
 import com.music.purelymusic.model.Song
+import com.music.purelymusic.model.artistKey
 import com.music.purelymusic.viewmodel.PlayerViewModel
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.Description
@@ -91,6 +103,7 @@ fun LibraryScreen(
     onNavigateToCreatePlaylist: () -> Unit,
     onNavigateToPlaylistDetail: (Playlist) -> Unit,
     onNavigateToAlbumDetail: (String) -> Unit,
+    onNavigateToArtistDetail: (String) -> Unit,
     onNavigateToPlayer: () -> Unit,
     onPickLrc: () -> Unit
 ) {
@@ -292,6 +305,9 @@ fun LibraryScreen(
                 com.music.purelymusic.ui.utils.WindowSize.MEDIUM -> GridCells.Adaptive(200.dp)
                 else -> GridCells.Fixed(2)
             }
+            val library = viewModel.libraryList
+            val artists = remember(library) { library.groupBy { it.artist.artistKey() }.toSortedMap() }
+            val chinese = viewModel.currentLanguage == "zh"
             LazyVerticalGrid(
                 columns = gridColumns,
                 modifier = Modifier.fillMaxSize(),
@@ -331,35 +347,46 @@ fun LibraryScreen(
                 }
 
                 if (viewModel.albums.isNotEmpty()) {
-                    item(span = { GridItemSpan(2) }) {
-                        Column {
-                            Text(
-                                text = if (viewModel.currentLanguage == "zh") "专辑" else "Albums",
-                                fontSize = AppDimensions.homeSectionTitleSize().value.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(bottom = AppDimensions.paddingCard())
-                            )
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(AppDimensions.spacingM()),
-                                contentPadding = PaddingValues(end = AppDimensions.paddingCard())
-                            ) {
-                                items(viewModel.albums, key = { it.id }) { album ->
-                                    AlbumItem(
-                                        album = album,
-                                        viewModel = viewModel,
-                                        onEditArtwork = if (viewModel.albumTitleArtworkEnabled) {
-                                            { artworkAlbumId = album.id }
-                                        } else null,
-                                        onClick = { onNavigateToAlbumDetail(album.id) }
-                                    )
-                                }
+                    item(key = "albums", span = { GridItemSpan(maxLineSpan) }) {
+                        LibraryShelf(
+                            title = if (chinese) "专辑" else "Albums",
+                            modifier = Modifier.padding(bottom = AppDimensions.paddingScreen())
+                        ) {
+                            items(viewModel.albums, key = { it.id }) { album ->
+                                AlbumItem(
+                                    album = album,
+                                    viewModel = viewModel,
+                                    onEditArtwork = if (viewModel.albumTitleArtworkEnabled) {
+                                        { artworkAlbumId = album.id }
+                                    } else null,
+                                    onClick = { onNavigateToAlbumDetail(album.id) }
+                                )
                             }
-                            Spacer(modifier = Modifier.height(AppDimensions.paddingScreen()))
                         }
                     }
                 }
 
-                item(span = { GridItemSpan(2) }) {
+                if (artists.isNotEmpty()) {
+                    item(key = "artists", span = { GridItemSpan(maxLineSpan) }) {
+                        LibraryShelf(
+                            title = if (chinese) "歌手" else "Artists",
+                            modifier = Modifier.padding(bottom = AppDimensions.paddingScreen())
+                        ) {
+                            items(artists.entries.toList(), key = { it.key }) { (key, songs) ->
+                                LibraryCollectionCard(
+                                    title = songs.first().artist.trim().ifEmpty {
+                                        if (chinese) "未知歌手" else "Unknown artist"
+                                    },
+                                    cover = songs.firstNotNullOfOrNull { it.coverUri },
+                                    songCount = songs.size,
+                                    modifier = Modifier.clickable { onNavigateToArtistDetail(key) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item(key = "songs", span = { GridItemSpan(maxLineSpan) }) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(AppDimensions.spacingM()),
@@ -488,50 +515,15 @@ fun LibraryScreen(
         }
         if (headerHeightPx > 0) {
             CompositionLocalProvider(LocalLiquidGlassHazeState provides importHazeState) {
-                LiquidGlass(
+                LibrarySearchField(
+                    query = viewModel.searchQuery,
+                    onQueryChange = { viewModel.performSearch(it, onlyFavorites = showFavoritesOnly) },
+                    language = viewModel.currentLanguage,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .padding(top = headerHeight, start = AppDimensions.paddingScreen(), end = AppDimensions.paddingScreen())
-                        .fillMaxWidth(),
-                    shape = androidx.compose.foundation.shape.CircleShape,
-                    opacity = 0.72f,
-                    highlightAlpha = 0.22f,
-                    edgeAlpha = 0.36f
-                ) {
-                    TextField(
-                        value = viewModel.searchQuery,
-                        onValueChange = { viewModel.performSearch(it, onlyFavorites = showFavoritesOnly) },
-                        placeholder = {
-                            Text(
-                                if (viewModel.currentLanguage == "zh") "搜索歌曲或歌手..." else "Search songs or artists...",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        },
-                        trailingIcon = {
-                            if (viewModel.searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.performSearch("") }) {
-                                    Icon(Icons.Default.Clear, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        shape = androidx.compose.foundation.shape.CircleShape,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            disabledIndicatorColor = Color.Transparent,
-                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            cursorColor = MaterialTheme.colorScheme.primary
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+                        .fillMaxWidth()
+                )
             }
         }
         if (showMenu) {
@@ -551,22 +543,14 @@ fun LibraryScreen(
         ) {
             CompositionLocalProvider(LocalLiquidGlassHazeState provides importHazeState) {
                 Column(horizontalAlignment = Alignment.End) {
-                    GlassControl(
+                    GlassImportMenuButton(
+                        expanded = showMenu,
+                        language = viewModel.currentLanguage,
                         onClick = { showMenu = !showMenu },
                         modifier = Modifier.size(AppDimensions.iconButtonSizeM()),
-                        shape = androidx.compose.foundation.shape.CircleShape,
-                        dark = androidx.compose.foundation.isSystemInDarkTheme(),
-                        opacity = 0.60f
-                    ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = if (viewModel.currentLanguage == "zh") "添加" else "Add",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(AppDimensions.iconM())
-                        )
-                    }
-                    if (showMenu) Spacer(modifier = Modifier.height(8.dp))
-                    GlassInlineMenu(expanded = showMenu) {
+                        iconSize = AppDimensions.iconM()
+                    )
+                    GlassInlineMenu(expanded = showMenu, modifier = Modifier.padding(top = 8.dp)) {
                         GlassMenuItem(
                             label = if (viewModel.currentLanguage == "zh") "导入歌曲" else "Import Song",
                             icon = Icons.Default.MusicNote,
@@ -587,6 +571,103 @@ fun LibraryScreen(
             }
         }
         }
+    }
+}
+
+@Composable
+internal fun LibraryShelf(
+    title: String,
+    modifier: Modifier = Modifier,
+    content: LazyListScope.() -> Unit
+) {
+    Column(modifier) {
+        LibrarySectionTitle(title, Modifier.padding(bottom = AppDimensions.paddingCard()))
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(AppDimensions.spacingM()),
+            contentPadding = PaddingValues(end = AppDimensions.paddingCard()),
+            content = content
+        )
+    }
+}
+
+@Composable
+internal fun LibrarySectionTitle(title: String, modifier: Modifier = Modifier) {
+    Text(
+        title,
+        fontSize = AppDimensions.homeSectionTitleSize().value.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun LibrarySearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    language: String,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val focused by interactionSource.collectIsFocusedAsState()
+    val focusProgress by animateFloatAsState(
+        targetValue = if (focused) 1f else 0f,
+        animationSpec = tween(180, easing = LinearOutSlowInEasing),
+        label = "glassSearchFocus"
+    )
+    val colors = MaterialTheme.colorScheme
+    val accent = glassAccentColor()
+    val hasQuery = query.isNotEmpty()
+
+    LiquidGlass(
+        modifier = modifier,
+        shape = CircleShape,
+        opacity = 0.92f + 0.05f * focusProgress,
+        highlightAlpha = 0.22f,
+        edgeColor = lerp(colors.outline, accent, focusProgress),
+        edgeAlpha = 0.30f + 0.38f * focusProgress
+    ) {
+        TextField(
+            value = query,
+            onValueChange = onQueryChange,
+            interactionSource = interactionSource,
+            placeholder = {
+                Text(
+                    if (language == "zh") "搜索歌曲或歌手..." else "Search songs or artists...",
+                    color = colors.onSurfaceVariant
+                )
+            },
+            leadingIcon = {
+                Icon(Icons.Default.Search, contentDescription = null, tint = lerp(colors.onSurfaceVariant, accent, focusProgress))
+            },
+            trailingIcon = {
+                AnimatedVisibility(
+                    visible = hasQuery,
+                    enter = fadeIn(tween(140)) + scaleIn(tween(180), initialScale = 0.84f),
+                    exit = fadeOut(tween(100))
+                ) {
+                    IconButton(onClick = { onQueryChange("") }, enabled = hasQuery) {
+                        Icon(
+                            Icons.Default.Clear,
+                            contentDescription = if (language == "zh") "清空搜索" else "Clear search",
+                            tint = colors.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            singleLine = true,
+            shape = CircleShape,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent,
+                focusedTextColor = colors.onSurface,
+                unfocusedTextColor = colors.onSurface,
+                cursorColor = accent
+            ),
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
@@ -1198,6 +1279,85 @@ fun SongGridItem(song: Song, viewModel: PlayerViewModel, onNavigateToPlayer: () 
     }
 }
 
+@Composable
+private fun LibraryCollectionCard(
+    title: String,
+    cover: String?,
+    songCount: Int,
+    subtitle: String? = null,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.width(AppDimensions.libraryPlaylistWidth())) {
+        Box(
+            modifier = Modifier
+                .size(AppDimensions.libraryPlaylistWidth())
+                .clip(RoundedCornerShape(AppDimensions.cornerRadiusL()))
+                .background(
+                    brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                        colors = listOf(
+                            com.music.purelymusic.ui.theme.RedLight,
+                            com.music.purelymusic.ui.theme.RedPrimary
+                        )
+                    )
+                )
+        ) {
+            AsyncImage(
+                model = cover ?: R.drawable.default_cover,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(AppDimensions.cornerRadiusL())),
+                contentScale = ContentScale.Crop
+            )
+
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(AppDimensions.spacingS()),
+                shape = RoundedCornerShape(AppDimensions.cornerRadiusS()),
+                color = Color.Black.copy(alpha = 0.6f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = AppDimensions.spacingS(), vertical = AppDimensions.spacingXS()),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(AppDimensions.iconS())
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "$songCount",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(AppDimensions.spacingXS()))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 4.dp)
+        )
+        if (subtitle != null) {
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AlbumItem(
@@ -1220,80 +1380,16 @@ fun AlbumItem(
     }
 
     Box {
-        Column(
-            modifier = Modifier
-                .width(AppDimensions.libraryPlaylistWidth())
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = { expanded = true }
-                )
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(AppDimensions.libraryPlaylistWidth())
-                    .clip(RoundedCornerShape(AppDimensions.cornerRadiusL()))
-                    .background(
-                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                            colors = listOf(
-                                com.music.purelymusic.ui.theme.RedLight,
-                                com.music.purelymusic.ui.theme.RedPrimary
-                            )
-                        )
-                    )
-            ) {
-                AsyncImage(
-                    model = album.coverUri ?: R.drawable.default_cover,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(AppDimensions.cornerRadiusL())),
-                    contentScale = ContentScale.Crop
-                )
-
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(AppDimensions.spacingS()),
-                    shape = RoundedCornerShape(AppDimensions.cornerRadiusS()),
-                    color = Color.Black.copy(alpha = 0.6f)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = AppDimensions.spacingS(), vertical = AppDimensions.spacingXS()),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(AppDimensions.iconS())
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "$albumSongCount",
-                            color = Color.White,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(AppDimensions.spacingXS()))
-            Text(
-                text = album.name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 4.dp)
+        LibraryCollectionCard(
+            title = album.name,
+            subtitle = album.artist,
+            cover = album.coverUri,
+            songCount = albumSongCount,
+            modifier = Modifier.combinedClickable(
+                onClick = onClick,
+                onLongClick = { expanded = true }
             )
-            Text(
-                text = album.artist,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 4.dp)
-            )
-        }
+        )
 
         GlassDropdownMenu(
             expanded = expanded,

@@ -1,8 +1,15 @@
 package com.music.purelymusic.ui
 
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,9 +27,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ripple
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -36,10 +48,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Icon
@@ -49,9 +63,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.material3.DropdownMenu
+import dev.chrisbanes.haze.ExperimentalHazeApi
+import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 
@@ -72,30 +91,27 @@ fun WithoutLiquidGlassHaze(content: @Composable () -> Unit) {
  * 半透明漫反射层。文字与图标始终绘制在模糊层上方，不参与模糊。
  */
 @Composable
+@OptIn(ExperimentalHazeApi::class)
 fun LiquidGlass(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(28.dp),
     dark: Boolean = isSystemInDarkTheme(),
     contentPadding: PaddingValues = PaddingValues(0.dp),
-    opacity: Float = if (dark) 0.62f else 0.84f,
-    highlightAlpha: Float = if (dark) 0.14f else 0.34f,
-    edgeAlpha: Float = if (dark) 0.14f else 0.30f,
+    opacity: Float = if (dark) 0.86f else 0.90f,
+    highlightAlpha: Float = if (dark) 0.14f else 0.30f,
+    edgeAlpha: Float = if (dark) 0.16f else 0.30f,
     // Transparent surfaces with platform elevation render as a dirty gray halo on Android.
     // Components opt into a shadow only when it is visually justified.
     shadowElevation: Dp = 0.dp,
+    edgeColor: Color = if (dark) Color.White else Color(0xFF87919D),
     content: @Composable BoxScope.() -> Unit = {}
 ) {
-    val base = if (dark) Color(0xFF17171C).copy(alpha = opacity) else Color(0xFFF9F9FC).copy(alpha = opacity)
     // Haze expands the sampled layer beyond the glass bounds to keep blur edges smooth. That
     // expansion needs an opaque fallback color; leaving it unspecified crashes on Android's
     // graphics-layer path before the first frame is presented.
     val hazeBackgroundColor = if (dark) Color(0xFF17171C) else Color(0xFFF9F9FC)
-    val highlight = Color.White.copy(alpha = highlightAlpha)
-    val edge = if (dark) {
-        Color.White.copy(alpha = edgeAlpha)
-    } else {
-        Color(0xFF87919D).copy(alpha = edgeAlpha)
-    }
+    val base = hazeBackgroundColor.copy(alpha = opacity)
+    val highlight = Color.White.copy(alpha = if (dark) highlightAlpha * 0.45f else highlightAlpha)
     val hazeState = LocalLiquidGlassHazeState.current
     Surface(
         modifier = modifier,
@@ -104,10 +120,7 @@ fun LiquidGlass(
         shadowElevation = shadowElevation,
         tonalElevation = 0.dp
     ) {
-        Box(
-            modifier = Modifier
-                .clip(shape)
-        ) {
+        Box {
             // Haze only blurs content drawn behind this layer; controls remain crisp.
             Box(
                 modifier = Modifier
@@ -116,7 +129,8 @@ fun LiquidGlass(
                     .then(
                         if (hazeState != null) {
                             Modifier.hazeEffect(hazeState) {
-                                // A restrained radius keeps navigation and scrolling smooth.
+                                // The blur can sample fewer pixels while the foreground stays at full resolution.
+                                inputScale = HazeInputScale.Fixed(0.6f)
                                 blurRadius = 10.dp
                                 noiseFactor = 0.02f
                                 backgroundColor = hazeBackgroundColor
@@ -126,24 +140,20 @@ fun LiquidGlass(
                         }
                     )
                     .background(
-                        Brush.linearGradient(
-                            listOf(highlight, base.copy(alpha = base.alpha * 0.96f), base.copy(alpha = base.alpha * 0.84f))
-                        )
-                    )
-                    .background(
-                        Brush.radialGradient(
-                            listOf(
-                                Color.White.copy(alpha = if (dark) 0.06f else 0.11f),
-                                Color.Transparent
-                            )
-                        )
+                        Brush.verticalGradient(0f to highlight.compositeOver(base), 0.68f to base)
                     )
             )
             Box(modifier = Modifier.padding(contentPadding), content = content)
-            Box(modifier = Modifier.matchParentSize().border(1.dp, edge, shape))
+            Box(modifier = Modifier.matchParentSize().border(1.dp, edgeColor.copy(alpha = edgeAlpha), shape))
         }
     }
 }
+
+@Composable
+internal fun glassAccentColor(): Color =
+    if (isSystemInDarkTheme()) MaterialTheme.colorScheme.primary else Color(0xFFAB2448)
+
+private val LocalGlassMenuActive = compositionLocalOf { true }
 
 /** In-window menus sample the live page source beneath them. */
 @Composable
@@ -152,16 +162,29 @@ fun GlassInlineMenu(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    if (expanded) {
-        LiquidGlass(
-            modifier = modifier.width(260.dp),
-            shape = RoundedCornerShape(20.dp),
-            contentPadding = PaddingValues(vertical = 6.dp),
-            opacity = 0.72f,
-            highlightAlpha = 0.20f,
-            edgeAlpha = 0.36f
-        ) {
-            Column(content = content)
+    val visibility = remember { MutableTransitionState(false) }
+    visibility.targetState = expanded
+    val pivot = TransformOrigin(
+        pivotFractionX = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 1f else 0f,
+        pivotFractionY = 0f
+    )
+    AnimatedVisibility(
+        visibleState = visibility,
+        modifier = modifier,
+        enter = fadeIn(tween(150)) + scaleIn(tween(210, easing = LinearOutSlowInEasing), 0.96f, pivot),
+        exit = fadeOut(tween(110)) + scaleOut(tween(110), 0.98f, pivot)
+    ) {
+        CompositionLocalProvider(LocalGlassMenuActive provides expanded) {
+            LiquidGlass(
+                modifier = Modifier.width(260.dp),
+                shape = RoundedCornerShape(20.dp),
+                contentPadding = PaddingValues(vertical = 6.dp),
+                opacity = 0.92f,
+                highlightAlpha = 0.20f,
+                edgeAlpha = 0.36f
+            ) {
+                Column(content = content)
+            }
         }
     }
 }
@@ -241,8 +264,13 @@ fun GlassMenuItem(
     destructive: Boolean = false,
     onClick: () -> Unit
 ) {
-    val color = if (destructive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-    GlassPressable(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), onClick = onClick) {
+    val color = if (destructive) glassAccentColor() else MaterialTheme.colorScheme.onSurface
+    GlassPressable(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        enabled = LocalGlassMenuActive.current,
+        shape = RoundedCornerShape(12.dp),
+        onClick = onClick
+    ) {
         Icon(icon, null, tint = color, modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp))
         Text(
             label,
@@ -254,28 +282,61 @@ fun GlassMenuItem(
     }
 }
 
-/** Subtle spring-like press feedback used by glass controls throughout 3.0. */
+/** A quick compression and a softer release, with a touch-local ripple for brief taps. */
 @Composable
 fun GlassPressable(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    shape: Shape = RoundedCornerShape(18.dp),
+    selected: Boolean? = null,
+    feedbackColor: Color = MaterialTheme.colorScheme.onSurface,
     onClick: () -> Unit,
     content: @Composable BoxScope.() -> Unit
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.94f else 1f,
-        animationSpec = tween(170, easing = FastOutSlowInEasing),
+    val scale = animateFloatAsState(
+        targetValue = if (pressed) 0.97f else 1f,
+        animationSpec = if (pressed) {
+            tween(85, easing = LinearOutSlowInEasing)
+        } else {
+            spring(dampingRatio = 0.74f, stiffness = 680f, visibilityThreshold = 0.001f)
+        },
         label = "glassPressScale"
     )
+    val feedback = ripple(color = feedbackColor)
+    val action = if (selected == null) {
+        Modifier.clickable(
+            enabled = enabled,
+            role = Role.Button,
+            interactionSource = interaction,
+            indication = feedback,
+            onClick = onClick
+        )
+    } else {
+        Modifier.selectable(
+            selected = selected,
+            enabled = enabled,
+            role = Role.Tab,
+            interactionSource = interaction,
+            indication = feedback,
+            onClick = onClick
+        )
+    }
     Box(
-        modifier = modifier
-            .scale(scale)
-            .clickable(enabled = enabled, interactionSource = interaction, indication = null, onClick = onClick),
+        modifier = modifier.clip(shape).then(action),
         contentAlignment = Alignment.Center,
-        content = content
-    )
+        propagateMinConstraints = true
+    ) {
+        Box(
+            modifier = Modifier.graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+            },
+            contentAlignment = Alignment.Center,
+            content = content
+        )
+    }
 }
 
 @Composable
@@ -283,19 +344,52 @@ fun GlassControl(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(22.dp),
     dark: Boolean = true,
-    opacity: Float = if (dark) 0.62f else 0.88f,
+    opacity: Float = if (dark) 0.86f else 0.90f,
     onClick: () -> Unit,
     content: @Composable BoxScope.() -> Unit
 ) {
-    GlassPressable(modifier = modifier, onClick = onClick) {
+    GlassPressable(
+        modifier = modifier,
+        shape = shape,
+        feedbackColor = if (dark) Color.White else Color(0xFF17171C),
+        onClick = onClick
+    ) {
         LiquidGlass(
             modifier = Modifier.fillMaxSize(),
             shape = shape,
             dark = dark,
             opacity = opacity,
             highlightAlpha = if (dark) 0.14f else 0.28f,
-            edgeAlpha = if (dark) 0.14f else 0.28f
+            edgeAlpha = if (dark) 0.16f else 0.28f
         )
         content()
+    }
+}
+
+@Composable
+internal fun GlassImportMenuButton(
+    expanded: Boolean,
+    language: String,
+    onClick: () -> Unit,
+    iconSize: Dp,
+    modifier: Modifier = Modifier
+) {
+    val angle = animateFloatAsState(
+        targetValue = if (expanded) 45f else 0f,
+        animationSpec = spring(dampingRatio = 0.86f, stiffness = 500f),
+        label = "glassImportMenuAngle"
+    )
+    val description = if (language == "zh") {
+        if (expanded) "关闭添加菜单" else "添加"
+    } else {
+        if (expanded) "Close add menu" else "Add"
+    }
+    GlassControl(modifier = modifier, shape = CircleShape, dark = isSystemInDarkTheme(), onClick = onClick) {
+        Icon(
+            imageVector = Icons.Default.Add,
+            contentDescription = description,
+            tint = glassAccentColor(),
+            modifier = Modifier.size(iconSize).graphicsLayer { rotationZ = angle.value }
+        )
     }
 }

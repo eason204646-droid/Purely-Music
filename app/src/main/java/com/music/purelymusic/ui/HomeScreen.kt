@@ -33,7 +33,6 @@ import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.PauseCircleFilled
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircleFilled
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.PlaylistAdd
@@ -222,23 +221,16 @@ fun HomeScreen(
         ) {
             CompositionLocalProvider(LocalLiquidGlassHazeState provides importHazeState) {
                 Column(horizontalAlignment = Alignment.End) {
-                    GlassControl(
+                    GlassImportMenuButton(
+                        expanded = showMenu,
+                        language = viewModel.currentLanguage,
                         onClick = { showMenu = !showMenu },
                         modifier = Modifier.size(AppDimensions.iconButtonSizeM()),
-                        shape = CircleShape,
-                        dark = androidx.compose.foundation.isSystemInDarkTheme(),
-                        opacity = 0.60f
-                    ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = if (viewModel.currentLanguage == "zh") "添加" else "Add",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(AppDimensions.iconM())
-                        )
-                    }
-                    if (showMenu) Spacer(modifier = Modifier.height(8.dp))
+                        iconSize = AppDimensions.iconM()
+                    )
                     GlassInlineMenu(
-                        expanded = showMenu
+                        expanded = showMenu,
+                        modifier = Modifier.padding(top = 8.dp)
                     ) {
                         GlassMenuItem(
                             label = if (viewModel.currentLanguage == "zh") "导入歌曲" else "Import Song",
@@ -436,15 +428,18 @@ fun MiniPlayer(viewModel: PlayerViewModel, overDarkContent: Boolean = false, onC
     val dark = overDarkContent || androidx.compose.foundation.isSystemInDarkTheme()
     val foreground = if (overDarkContent) Color(0xFFF5F8F8) else MaterialTheme.colorScheme.onSurface
     val secondary = if (overDarkContent) Color(0xFFBDC8CC) else MaterialTheme.colorScheme.onSurfaceVariant
+    val shape = RoundedCornerShape(28.dp)
     GlassPressable(
         modifier = Modifier.fillMaxWidth().height(AppDimensions.miniPlayerHeight()).padding(horizontal = AppDimensions.miniPlayerPaddingH()),
+        shape = shape,
+        feedbackColor = foreground,
         onClick = onClick
     ) {
         LiquidGlass(
             modifier = Modifier.fillMaxSize(),
-            shape = RoundedCornerShape(28.dp),
+            shape = shape,
             dark = dark,
-            opacity = 0.62f,
+            opacity = 0.88f,
             highlightAlpha = 0.22f
         )
         Row(

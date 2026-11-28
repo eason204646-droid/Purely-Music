@@ -33,7 +33,9 @@ import coil.memory.MemoryCache
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -49,10 +51,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -210,6 +215,9 @@ fun MainScreen(viewModel: PlayerViewModel, window: Window) {
                         onNavigateToAlbumDetail = { albumId ->
                             navController.navigate("album_detail/$albumId")
                         },
+                        onNavigateToArtistDetail = { artistKey ->
+                            navController.navigate("artist_detail?artistKey=${Uri.encode(artistKey)}")
+                        },
                         onNavigateToPlayer = { navController.navigate("player") },
                         onPickLrc = {
                             lrcPickerLauncher.launch("*/*")
@@ -281,6 +289,19 @@ fun MainScreen(viewModel: PlayerViewModel, window: Window) {
                         playlistId = playlistId,
                         viewModel = viewModel,
                         onBack = { navController.popBackStack() }
+                    )
+                }
+
+                composable(
+                    route = "artist_detail?artistKey={artistKey}",
+                    arguments = listOf(navArgument("artistKey") { defaultValue = "" })
+                ) { backStackEntry ->
+                    ArtistDetailScreen(
+                        artistKey = backStackEntry.arguments?.getString("artistKey").orEmpty(),
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() },
+                        onNavigateToAlbumDetail = { albumId -> navController.navigate("album_detail/$albumId") },
+                        onNavigateToPlayer = { navController.navigate("player") }
                     )
                 }
 
@@ -378,32 +399,55 @@ private fun LiquidGlassNavigationBar(
         (if (language == "zh") "资料库" else "Library") to "library",
         (if (language == "zh") "设置" else "Settings") to "settings"
     )
+    val selectedIndex = items.indexOfFirst { (_, route) -> currentRoute == route }.coerceAtLeast(0)
+    val selectionPosition = animateFloatAsState(
+        targetValue = selectedIndex.toFloat(),
+        animationSpec = spring(dampingRatio = 0.91f, stiffness = 230f, visibilityThreshold = 0.001f),
+        label = "glassTabIndicator"
+    )
+    val dark = isSystemInDarkTheme()
+    val accent = glassAccentColor()
+    val primary = MaterialTheme.colorScheme.primary
+    val tabShape = RoundedCornerShape(22.dp)
+    val direction = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 1f else -1f
     LiquidGlass(
         modifier = modifier.fillMaxWidth().height(60.dp),
         shape = RoundedCornerShape(28.dp),
-        opacity = 0.60f,
-        highlightAlpha = 0.20f,
-        edgeAlpha = 0.32f,
-        shadowElevation = 0.dp
+        opacity = 0.92f,
+        highlightAlpha = 0.22f
     ) {
-        Row(modifier = Modifier.fillMaxSize().padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
-            items.forEach { (label, route) ->
-                val selected = currentRoute == route
-                GlassPressable(
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    onClick = { onNavigate(route) }
-                ) {
-                    if (selected) {
-                        Box(
-                            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f), RoundedCornerShape(22.dp))
+        BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(5.dp)) {
+            val tabWidth = maxWidth / items.size
+            Box(
+                modifier = Modifier
+                    .width(tabWidth)
+                    .fillMaxHeight()
+                    .graphicsLayer { translationX = size.width * selectionPosition.value * direction }
+                    .background(primary.copy(alpha = if (dark) 0.17f else 0.13f), tabShape)
+                    .border(1.dp, primary.copy(alpha = if (dark) 0.23f else 0.14f), tabShape)
+            )
+            Row(modifier = Modifier.fillMaxSize().selectableGroup(), verticalAlignment = Alignment.CenterVertically) {
+                items.forEachIndexed { index, (label, route) ->
+                    val selected = index == selectedIndex
+                    val labelColor by animateColorAsState(
+                        targetValue = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                        animationSpec = tween(180),
+                        label = "glassTabLabel"
+                    )
+                    GlassPressable(
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        shape = tabShape,
+                        selected = selected,
+                        feedbackColor = accent,
+                        onClick = { onNavigate(route) }
+                    ) {
+                        Text(
+                            label,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = labelColor
                         )
                     }
-                    Text(
-                        label,
-                        fontSize = 12.sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
         }

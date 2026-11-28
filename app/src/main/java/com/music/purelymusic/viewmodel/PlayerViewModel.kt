@@ -45,12 +45,15 @@ import com.music.purelymusic.BuildConfig
 import com.music.purelymusic.R
 import com.music.purelymusic.data.AppDatabase
 import com.music.purelymusic.data.AppFileStore
+import com.music.purelymusic.data.LyricTranslationCache
 import com.music.purelymusic.data.MetadataRepository
+import com.music.purelymusic.data.hasCompleteLyricTranslation
 import com.music.purelymusic.data.toEntity
 import com.music.purelymusic.data.toPlaylist
 import com.music.purelymusic.data.toSongRefs
 import com.music.purelymusic.data.toAlbum
 import com.music.purelymusic.model.*
+import com.music.purelymusic.utils.LanguageDetector
 import com.music.purelymusic.utils.LrcParser
 import com.music.purelymusic.utils.LyricTranslationParser
 import com.music.purelymusic.utils.NetworkAccess
@@ -426,6 +429,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val playlistDao = database.playlistDao()
     private val albumDao = database.albumDao()
     private val fileStore = AppFileStore(application)
+    private val lyricTranslationCache = LyricTranslationCache(application.cacheDir.resolve("lyric-translations"))
     private val metadataRepository = MetadataRepository(BuildConfig.MUSIC_API_KEY, fileStore)
     private val playbackRuntime = PlaybackRuntime.get(context)
     private var exoPlayer: ExoPlayer? = playbackRuntime.player
@@ -704,6 +708,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     var translateError by mutableStateOf<String?>(null)
     var translateLogs by mutableStateOf<String>("")
     private var translationJob: Job? = null
+    private var lyricsLoadJob: Job? = null
 
     // 语言设置状态（带持久化）
     private var _currentLanguage by mutableStateOf("zh")
@@ -903,55 +908,41 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     // --- 歌词加载与解析 ---
-    private fun loadLyrics(pathOrUri: String) {
-        viewModelScope.launch(Dispatchers.IO) {
+    private fun loadLyrics(pathOrUri: String?) {
+        lyricsLoadJob?.cancel()
+        translationJob?.cancel()
+        lyricLines = emptyList()
+        showTranslation = false
+        canTranslate = false
+        translateError = null
+        translateLogs = ""
+        if (pathOrUri.isNullOrEmpty()) return
+
+        lyricsLoadJob = viewModelScope.launch {
             try {
-                Log.d("LyricLoad", "开始加载歌词: pathOrUri=$pathOrUri")
+                val (lines, cacheHit) = withContext(Dispatchers.IO) {
+                    val bytes = if (pathOrUri.startsWith("/")) {
+                        File(pathOrUri).takeIf(File::isFile)?.readBytes()
+                    } else {
+                        context.contentResolver.openInputStream(Uri.parse(pathOrUri))?.use { it.readBytes() }
+                    }
+                    if (bytes == null || bytes.isEmpty()) return@withContext emptyList<LrcLine>() to false
 
-                val bytes = if (pathOrUri.startsWith("/")) {
-                    val file = File(pathOrUri)
-                    Log.d("LyricLoad", "文件路径: $pathOrUri, 文件存在: ${file.exists()}, 文件大小: ${file.length()}")
-                    if (file.exists()) file.readBytes() else null
-                } else {
-                    Log.d("LyricLoad", "URI路径: $pathOrUri")
-                    context.contentResolver.openInputStream(Uri.parse(pathOrUri))?.use { it.readBytes() }
+                    val utf8Lines = LrcParser.parse(String(bytes, Charsets.UTF_8))
+                    val parsed = utf8Lines.ifEmpty {
+                        LrcParser.parse(String(bytes, Charset.forName("GBK")))
+                    }
+                    val cached = if (parsed.isNotEmpty()) lyricTranslationCache.read(parsed) else null
+                    (cached ?: parsed) to (cached != null)
                 }
-
-                if (bytes == null || bytes.isEmpty()) {
-                    Log.e("LyricLoad", "歌词文件为空或不存在")
-                    withContext(Dispatchers.Main) { lyricLines = emptyList() }
-                    return@launch
-                }
-
-                val rawText = String(bytes, Charsets.UTF_8)
-                Log.d("LyricLoad", "歌词内容长度: ${rawText.length}, 前200字符: ${rawText.take(200)}")
-
-                // 尝试多种编码防止乱码
-                var parsed = LrcParser.parse(rawText)
-                if (parsed.isEmpty()) {
-                    Log.d("LyricLoad", "UTF-8解析失败，尝试GBK编码")
-                    parsed = LrcParser.parse(String(bytes, Charset.forName("GBK")))
-                }
-
-                Log.d("LyricLoad", "解析结果: 共${parsed.size}行歌词")
-                parsed.take(3).forEachIndexed { index, line ->
-                    Log.d("LyricLoad", "  第${index}行: 时间=${line.time}ms, 文本=${line.content}")
-                }
-
-                withContext(Dispatchers.Main) {
-                    lyricLines = parsed
-                    // 检测歌词语言，判断是否可以翻译
-                    val lyricTexts = parsed.map { it.content }
-                    val isChinese = com.music.purelymusic.utils.LanguageDetector.isLyricsChinese(lyricTexts)
-                    canTranslate = !isChinese
-                    Log.d("LyricLoad", "语言检测结果: isChinese=$isChinese, canTranslate=$canTranslate")
-                    // 重置翻译状态
-                    showTranslation = false
-                    translateError = null
-                }
+                lyricLines = lines
+                canTranslate = lines.isNotEmpty() &&
+                    (cacheHit || !LanguageDetector.isLyricsChinese(lines.map { it.content }))
+                if (cacheHit) addLog("命中歌词翻译缓存")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                Log.e("LyricLoad", "Failed: ${e.message}", e)
-                withContext(Dispatchers.Main) { lyricLines = emptyList() }
+                Log.e("LyricLoad", "读取歌词失败", e)
             }
         }
     }
@@ -1010,6 +1001,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (items.isEmpty()) {
             player.clearMediaItems()
             currentSong = null
+            loadLyrics(null)
             currentPosition = 0L
             duration = 0L
             return
@@ -1030,11 +1022,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             lastPlayedTime = playedAt,
             playCount = song.playCount + 1
         )
-        if (!song.lrcPath.isNullOrEmpty()) {
-            loadLyrics(song.lrcPath)
-        } else {
-            lyricLines = emptyList()
-        }
+        loadLyrics(song.lrcPath)
 
         updateBlurBackground(song.coverUri)
 
@@ -1538,8 +1526,11 @@ private fun stop3DSurroundEffect() {
                     currentPlayingList.addAll(activeQueue)
                     val activeId = activePlayer.currentMediaItem?.mediaId?.toLongOrNull()
                     convertedSongs.firstOrNull { it.id == activeId }?.let { activeSong ->
+                        val previousSong = currentSong
                         currentSong = activeSong
-                        activeSong.lrcPath?.let(::loadLyrics)
+                        if (previousSong?.id != activeSong.id || previousSong.lrcPath != activeSong.lrcPath) {
+                            loadLyrics(activeSong.lrcPath)
+                        }
                         updateBlurBackground(activeSong.coverUri)
                         currentPosition = activePlayer.currentPosition
                         duration = activePlayer.duration.coerceAtLeast(0L)
@@ -1580,6 +1571,7 @@ private fun stop3DSurroundEffect() {
                 withContext(Dispatchers.Main) {
                     getOrCreatePlayer().stop()
                     currentSong = null
+                    loadLyrics(null)
                     isPlaying = false
                 }
             }
@@ -1640,6 +1632,7 @@ private fun stop3DSurroundEffect() {
             // 如果正在播放这首歌，更新当前歌曲信息
             if (currentSong?.id == song.id) {
                 currentSong = updatedSong
+                if (newLrcPath != song.lrcPath) loadLyrics(newLrcPath)
                 updateCurrentMediaItemMetadata(updatedSong)
             }
 
@@ -2121,6 +2114,10 @@ private fun stop3DSurroundEffect() {
      * 翻译当前歌词
      */
     fun translateLyrics() {
+        if (hasCompleteLyricTranslation(lyricLines)) {
+            showTranslation = true
+            return
+        }
         if (offlineMode) {
             translateError = if (currentLanguage == "zh") {
                 "离线模式已开启，歌词翻译已暂停"
@@ -2220,9 +2217,17 @@ private fun stop3DSurroundEffect() {
             addLog("❌ 未获得有效翻译")
             return
         }
-        lyricLines = originalLines.mapIndexed { index, line ->
+        val translated = originalLines.mapIndexed { index, line ->
             line.copy(translation = resolved[index]?.let(LyricTranslationParser::sanitizeTranslation))
         }
+        if (hasCompleteLyricTranslation(translated)) {
+            withContext(Dispatchers.IO) {
+                runCatching { lyricTranslationCache.write(translated) }.onFailure {
+                    Log.w("Translate", "保存歌词翻译缓存失败", it)
+                }
+            }
+        }
+        lyricLines = translated
         showTranslation = true
         val omitted = translatable.size - resolved.size
         addLog("✅ 翻译完成：${resolved.size}/${translatable.size} 行${if (omitted > 0) "，仍有 $omitted 行未返回" else ""}")
