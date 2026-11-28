@@ -22,16 +22,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -48,13 +42,18 @@ import androidx.media3.common.util.UnstableApi
 import com.music.purelymusic.R
 import com.music.purelymusic.model.Album
 import com.music.purelymusic.model.Song
+import com.music.purelymusic.ui.utils.CoverDepthAccent
+import com.music.purelymusic.ui.utils.CoverDepthArt
+import com.music.purelymusic.ui.utils.CoverDepthLayers
+import com.music.purelymusic.ui.utils.CoverDepthSurface
+import com.music.purelymusic.ui.utils.buildCoverDepthArt
 import com.music.purelymusic.ui.utils.loadAlbumBitmap
 import com.music.purelymusic.viewmodel.PlayerViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private val AlbumInk = Color(0xFF0C1216)
-private val AlbumWhite = Color(0xFFF5F8F8)
+private val AlbumInk = CoverDepthSurface
+private val AlbumWhite = CoverDepthAccent
 private val AlbumMuted = Color(0xFFBDC8CC)
 private val AlbumRule = Color.White.copy(alpha = 0.13f)
 
@@ -85,11 +84,11 @@ fun AlbumDetailScreen(
         }
     }
     val displayCover = album.titleArtworkCoverPath.takeIf { title != null }
-    val art by produceState<AlbumHeroArt?>(null, displayCover, cover) {
+    val art by produceState<CoverDepthArt?>(null, displayCover, cover) {
         val bitmap = displayCover?.let { loadAlbumBitmap(context, it) }
             ?: cover?.let { loadAlbumBitmap(context, it) }
             ?: loadAlbumBitmap(context, R.drawable.default_cover)
-        value = bitmap?.let { withContext(Dispatchers.Default) { buildAlbumHeroArt(it) } }
+        value = bitmap?.let { withContext(Dispatchers.Default) { buildCoverDepthArt(it) } }
     }
     val canvasColor = art?.surface ?: AlbumInk
     val highlight = art?.accent ?: AlbumWhite
@@ -267,69 +266,14 @@ fun AlbumDetailScreen(
     }
 }
 
-private data class AlbumHeroArt(
-    val sharp: Bitmap,
-    val soft: Bitmap,
-    val surface: Color,
-    val accent: Color
-)
-
-private fun buildAlbumHeroArt(bitmap: Bitmap): AlbumHeroArt {
-    val scale = 24f / maxOf(bitmap.width, bitmap.height)
-    val soft = Bitmap.createScaledBitmap(
-        bitmap, (bitmap.width * scale).toInt().coerceAtLeast(1),
-        (bitmap.height * scale).toInt().coerceAtLeast(1), true
-    )
-    var hue = Color(soft.getPixel(soft.width / 2, soft.height / 2)).copy(alpha = 1f)
-    for (step in 1..4) {
-        val color = Color(soft.getPixel((soft.width - 1) * step / 5, (soft.height - 1) * 3 / 4))
-        hue = lerp(hue, color.copy(alpha = 1f), 0.20f)
-    }
-    return AlbumHeroArt(bitmap, soft, lerp(AlbumInk, hue, 0.16f), lerp(AlbumWhite, hue, 0.15f))
-}
-
 @Composable
-private fun AlbumCoverDepth(art: AlbumHeroArt?, surface: Color, height: Dp, scrollOffset: () -> Float) {
-    Box(Modifier.fillMaxWidth().height(height).clipToBounds()) {
+private fun AlbumCoverDepth(art: CoverDepthArt?, surface: Color, height: Dp, scrollOffset: () -> Float) {
+    Box(Modifier.fillMaxWidth().height(height)) {
         if (art != null) {
-            Image(
-                bitmap = remember(art) { art.soft.asImageBitmap() },
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                alignment = Alignment.TopCenter,
-                modifier = Modifier.fillMaxSize().graphicsLayer {
-                    scaleX = 1.12f
-                    scaleY = 1.12f
-                    translationY = scrollOffset() * 0.55f
-                }
-            )
-            Image(
-                bitmap = remember(art) { art.sharp.asImageBitmap() },
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                alignment = Alignment.TopCenter,
-                modifier = Modifier.fillMaxSize()
-                    .graphicsLayer {
-                        compositingStrategy = CompositingStrategy.Offscreen
-                        translationY = scrollOffset()
-                    }
-                    .drawWithCache {
-                        val focus = Brush.radialGradient(
-                            0f to Color.Black,
-                            0.59f to Color.Black,
-                            1f to Color.Transparent,
-                            center = Offset(size.width * 0.50f, size.height * 0.37f),
-                            radius = size.width * 0.85f
-                        )
-                        onDrawWithContent {
-                            drawContent()
-                            drawRect(brush = focus, blendMode = BlendMode.DstIn)
-                        }
-                    }
-            )
+            CoverDepthLayers(art, Modifier.matchParentSize(), scrollOffset = scrollOffset)
         }
         Box(
-            Modifier.fillMaxSize().drawWithCache {
+            Modifier.matchParentSize().drawWithCache {
                 val shade = Brush.verticalGradient(
                     0f to Color.Black.copy(alpha = 0.37f),
                     0.23f to Color.Transparent,

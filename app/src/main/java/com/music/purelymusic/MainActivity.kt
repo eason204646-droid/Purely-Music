@@ -111,7 +111,8 @@ fun MainScreen(viewModel: PlayerViewModel, window: Window) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val isAlbumRoute = currentRoute == "album_detail/{albumId}"
-    val useDarkSystemBars = isSystemInDarkTheme() || currentRoute == "player" || currentRoute == "equalizer" || isAlbumRoute
+    val isPlayerRoute = currentRoute == "player"
+    val useDarkSystemBars = isSystemInDarkTheme() || isPlayerRoute || currentRoute == "equalizer" || isAlbumRoute
     SideEffect {
         WindowCompat.getInsetsController(window, window.decorView).apply {
             isAppearanceLightStatusBars = !useDarkSystemBars
@@ -170,10 +171,10 @@ fun MainScreen(viewModel: PlayerViewModel, window: Window) {
     Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = if (isAlbumRoute) {
-            WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
-        } else {
-            ScaffoldDefaults.contentWindowInsets
+        contentWindowInsets = when {
+            isPlayerRoute -> WindowInsets(0, 0, 0, 0)
+            isAlbumRoute -> WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
+            else -> ScaffoldDefaults.contentWindowInsets
         }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
@@ -307,7 +308,7 @@ fun MainScreen(viewModel: PlayerViewModel, window: Window) {
             }
 
             AnimatedVisibility(
-                visible = viewModel.currentSong != null && currentRoute != "player" && currentRoute != "equalizer",
+                visible = viewModel.currentSong != null && !isPlayerRoute && currentRoute != "equalizer",
                 enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
                 modifier = Modifier
